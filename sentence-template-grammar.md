@@ -1,6 +1,6 @@
 # Sentence Template Grammar Specification
 
-**Spec ID:** OVOS-INTENT-1 · **Version:** 1 · **Status:** Draft · **Reference implementation:** [padacioso](https://github.com/OpenVoiceOS/padacioso)
+**Spec ID:** OVOS-INTENT-1 · **Version:** 1.1 · **Status:** Draft · **Reference implementation:** [padacioso](https://github.com/OpenVoiceOS/padacioso)
 
 This document defines the *sentence template* grammar used by padatious-like
 intent engines and by the localized resource files of a skill. A sentence
@@ -172,22 +172,28 @@ turn on [(all|every) ]light[s]
 
 ### 3.6 Degenerate and edge forms
 
-A conformant tool MUST handle these forms as follows:
+The following forms are **valid**. They have no practical effect but a
+conformant tool MUST accept them:
 
 - **Single-branch group** — a group with no `|`, e.g. `(word)`, expands to its
-  single branch (`word`). It is permitted but has no effect.
-- **Empty group** — `()` expands to the empty string (it contributes nothing).
-- **All-empty alternatives** — `(|)` expands to the empty string.
+  single branch (`word`).
 - **Slot-only template** — a template consisting solely of `{name}` is valid;
   its sample set is `{name}` itself.
-- **Adjacent slots** — two slots with no literal word between them
-  (`{a} {b}` or `{a}{b}`) are syntactically permitted, but no matcher can
-  delimit them unambiguously. Authors **SHOULD NOT** write adjacent slots; an
-  engine's behaviour for them is **undefined**.
-- **Repeated slot name** — using the same `{name}` twice in one template
-  (`{x} and {x}`) is **discouraged**; the resulting value is **undefined**.
-- **Unbalanced metacharacters** — a template with an unmatched `(`, `)`, `[`,
-  `]`, `{`, or `}` is **malformed**; a tool MUST reject it.
+
+The following forms are **malformed**; a tool MUST reject any template that
+contains one:
+
+- **Unbalanced metacharacters** — an unmatched `(`, `)`, `[`, `]`, `{`, or `}`.
+- **Empty expansion** — a template, or a group within it, that expands to the
+  empty string (`()`, `(|)`, or a line that is empty after expansion). An
+  engine cannot train on an empty sample (§4).
+- **Adjacent slots** — two named slots with no literal word between them,
+  whether written `{a}{b}` or separated only by whitespace (`{a} {b}`). With no
+  literal token to delimit them, a matcher cannot tell where one slot's value
+  ends and the next begins; the two would form a single capture, not two. A
+  literal word MUST separate any two slots.
+- **Repeated slot name** — using the same `{name}` more than once in one
+  template (`{x} and {x}`). A template defines each slot name exactly once.
 
 Empty lines and `#`-comment lines are removed by the file reader before a
 template reaches the grammar (OVOS-INTENT-2 §3); they are not part of a
@@ -221,18 +227,23 @@ reproducible across tools.
 
 The sample set is obtained by:
 
-1. Replace every `[x]` with `(x|)`.
-2. While the template still contains `(`: locate each **innermost** group — a
-   `(...)` containing no nested parentheses — and split its interior on `|` into
-   branches (a branch may be empty; a group with no `|` has one branch). Replace
-   the template with the set of strings produced by substituting, for every
-   group, each of its branches — i.e. the **Cartesian product** over all groups.
-3. **Normalize whitespace** in each resulting string: replace every run of one
-   or more spaces with a single space, and strip leading and trailing spaces.
+1. Replace every `[x]` with `(x|)`. The **working set** is the single resulting
+   string.
+2. While any string in the working set still contains `(`: for each such
+   string, locate its **innermost** groups — each a `(...)` containing no
+   nested parentheses — split each group's interior on `|` into branches (a
+   branch may be empty; a group with no `|` has one branch), and replace that
+   string with the **Cartesian product** of substituting each branch for each
+   of its groups. The working set becomes the union of all strings so produced.
+3. **Normalize whitespace** in each string: replace every run of one or more
+   spaces with a single space, and strip leading and trailing spaces.
 4. Remove duplicates. The remaining distinct strings are the sample set.
 
 Named slots `{...}` are opaque throughout: they are carried through unchanged
 and are **never** expanded.
+
+A template whose sample set contains the empty string is **malformed** (§3.6);
+an engine cannot train on an empty sample.
 
 ### 4.2 Worked example
 
@@ -290,6 +301,12 @@ applies is determined by the file type the slot appears in (§1.1):
 
 A slot's `{name}` is identical in both modes; only the filler differs.
 
+A slot MAY appear inside an optional or alternative group (§3.4), making it an
+**optional slot**. In a sample where that group's slot-free branch is taken the
+slot is simply absent: under match-time fill the engine returns no value for
+that slot name; under caller-supplied fill no value is needed, because the slot
+is not part of the chosen phrase.
+
 ### 5.2 Slot values
 
 A slot value is a **sequence of one or more words**, returned as text. Under
@@ -320,6 +337,22 @@ MAY use that set to constrain or score a match-time-filled slot. A value set is
 an **optional refinement**: a slot with no `.entity` file still fills per §5.2,
 and a slot referencing an undefined value set is **not** an error.
 
+### 5.5 Slot consistency across a definition
+
+A `.intent` or `.dialog` file — and equivalently any set of inline samples
+registered together (§6.1) — defines **one** intent or **one** dialog. Every
+template in that definition MUST declare the **identical set of slot names**. A
+definition MUST NOT mix templates that declare different slots, and MUST NOT mix
+slot-bearing templates with slot-free ones.
+
+This guarantees that an intent's captured slots, or a dialog's required fill
+values, are the same regardless of which template matched or was chosen. If two
+phrasings genuinely need different slots, they are two different intents (or
+dialogs): place them in **separate files** and handle them individually.
+
+A tool MUST reject a definition whose templates do not all declare the same
+slot set.
+
 ---
 
 ## 6. Training-data contract
@@ -345,8 +378,9 @@ On receiving training data a conformant engine **MUST**:
 
 1. Read the file or take the inline samples.
 2. Verify the templates conform to §2–§3 (normalized form, valid tokens).
-3. Expand each template to its sample set per §4.
-4. Use the resulting samples as training data, treating `{...}` slots as
+3. Verify the templates declare a consistent slot set per §5.5.
+4. Expand each template to its sample set per §4.
+5. Use the resulting samples as training data, treating `{...}` slots as
    match-time-filled slots. How the engine learns from and generalizes beyond
    those samples is its own concern (§4).
 

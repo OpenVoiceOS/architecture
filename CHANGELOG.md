@@ -1,0 +1,51 @@
+# Changelog
+
+Each entry records a versioned change to a specification in this repository.
+Every pull request that alters normative content bumps the affected spec's
+`Version` field and adds an entry here.
+
+## OVOS-INTENT-1 — Sentence Template Grammar
+
+### 1.1
+
+- §3.6 — adjacent named slots (`{a}{b}` or `{a} {b}`) and repeated slot names
+  (`{x} … {x}`) are now **malformed**; a tool MUST reject them. A literal word
+  MUST separate any two slots, and a template defines each slot name once.
+- §3.6 — empty-expanding forms (`()`, `(|)`, or any line that expands to the
+  empty string) are now **malformed** rather than treated as useful degenerate
+  forms; an engine cannot train on an empty sample.
+- §4.1 — the expansion algorithm is reworded to operate on a working *set* of
+  strings; the iteration condition is "while any string in the set contains
+  `(`", not "while the template contains `(`".
+- §5.1 — added explicit handling of optional slots (`[{x}]`): when the
+  slot-free branch is taken the slot is absent (no value under match-time fill;
+  no value required under caller-supplied fill).
+- §5.5 (new) — slot consistency: every template in one intent or dialog
+  definition MUST declare the identical set of slot names; mixed-slot or
+  mixed slot-bearing/slot-free definitions MUST be rejected.
+- §6.2 — engine obligations now include verifying slot consistency (§5.5).
+
+### 1
+
+- Initial draft.
+
+## OVOS-INTENT-2 — Locale Resource Formats
+
+### 1.1
+
+- §2 — a resource is identified by the pair **(role, base name)**. Files MAY
+  share a base name across roles (`confirm.intent` and `confirm.dialog`
+  coexist); only files with the same extension must have distinct base names.
+- §2.1 — the root directory of core resources is assistant-defined; only the
+  `locale/<lang>/` layout beneath it is normative.
+- §4.2 — `.dialog` recognizes only the single-brace slot form `{name}`; there
+  is no `{{ }}` double-brace form.
+- §4.3 — the `.blacklist` suppression contract is now defined: scoped to the
+  one `.intent` it is paired with by base name, applying a hard,
+  score-independent rejection.
+- §4.1, §4.2 — every line in a `.intent` or `.dialog` file MUST declare the
+  same set of named slots (OVOS-INTENT-1 §5.5).
+
+### 1
+
+- Initial draft.

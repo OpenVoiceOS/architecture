@@ -1,6 +1,6 @@
 # Locale Resource Formats Specification
 
-**Spec ID:** OVOS-INTENT-2 · **Version:** 1 · **Status:** Draft · **Reference implementation:** [ovos-workshop](https://github.com/OpenVoiceOS/ovos-workshop)
+**Spec ID:** OVOS-INTENT-2 · **Version:** 1.1 · **Status:** Draft · **Reference implementation:** [ovos-workshop](https://github.com/OpenVoiceOS/ovos-workshop)
 
 This document defines the **locale folder layout** and the **plain-text resource
 file formats** a skill ships so a voice assistant can recognize what the user
@@ -81,9 +81,12 @@ my-skill/
         └── …
 ```
 
-A language directory is **flat**: it MUST NOT contain subdirectories, and every
-resource file in it has a unique base name. The **base name is the resource
-identifier**.
+A language directory is **flat**: it MUST NOT contain subdirectories. A
+resource is identified by the pair **(role, base name)** — its file extension
+and its base name together. Two files MAY share a base name when their roles
+differ: `confirm.intent` and `confirm.dialog` are distinct resources and both
+are permitted in the same directory. Two files with the **same extension** in
+one directory MUST have distinct base names.
 
 A resource base name MUST consist only of lowercase ASCII letters, digits, and
 underscores, and MUST NOT contain whitespace. Where a base name names a slot —
@@ -103,8 +106,9 @@ match wins):
 1. **User overrides** — files under a per-skill directory in the platform user
    data path, laid out as `…/<skill_id>/locale/<lang>/`.
 2. **Skill resources** — files bundled in the skill's own `locale/` directory.
-3. **Core resources** — fallback files shipped by the assistant framework, laid
-   out in the same `locale/<lang>/` structure.
+3. **Core resources** — fallback files shipped by the assistant framework. The
+   root directory holding them is assistant-defined; only the `locale/<lang>/`
+   layout beneath that root is normative.
 
 All three use the layout of §2. Overrides apply at **whole-file granularity**:
 an override file replaces the corresponding lower-precedence file entirely.
@@ -153,7 +157,9 @@ grammar — expansion `(a|b)` / `[x]` and named slots `{name}`.
 **Role.** Defines an intent: the templates whose expanded samples train the
 engine to recognize one skill action. Matched against **ASR input**; named slots
 are filled by the engine at match time (OVOS-INTENT-1 §5.1). The file base name
-is the intent name.
+is the intent name. Every line in the file MUST declare the **same set of named
+slots** (OVOS-INTENT-1 §5.5); a phrasing that needs different slots belongs in a
+separate `.intent` file.
 
 **Loads as.** The union of the sample sets of all lines (OVOS-INTENT-1 §4) —
 training data for the intent, with named slots intact. The engine generalizes
@@ -178,14 +184,18 @@ not ASR input, so it MAY contain mixed case and punctuation.
 **Slots.** Named slots in a dialog are filled by the **caller** — the skill —
 *before* the phrase is rendered to TTS (caller-supplied fill, OVOS-INTENT-1
 §5.1). The caller MUST fill **every** slot in the chosen phrase; a phrase with
-an unfilled slot MUST NOT be sent to TTS. This is the normal way to inject
+an unfilled slot MUST NOT be sent to TTS. Every phrase in the file MUST declare
+the **same set of named slots** (OVOS-INTENT-1 §5.5), so the caller supplies the
+same values whichever phrase is chosen. This is the normal way to inject
 **dynamic values** into a spoken response — a weather reading, the current time,
 a computed result. An `.entity` value set is normally *not* involved in filling
 a dialog slot, though an implementation MAY consult one.
 
 **Limitation.** A `.dialog` phrase uses the metacharacters `( ) [ ] { } |`
 structurally and therefore cannot contain any of them as literal spoken text.
-This is an accepted constraint; spoken responses rarely require them.
+This is an accepted constraint; spoken responses rarely require them. A
+`.dialog` file recognizes only the single-brace slot form `{name}` (§4.1);
+there is no `{{ }}` double-brace form.
 
 **Rendering.** To render a dialog, an implementation selects one phrase, fills
 its named slots with caller-supplied values, and expands its `(a|b)` / `[x]`
@@ -222,10 +232,16 @@ with the expanded phrase set:
 | `.voc` | Localized keywords / substrings | Keyword intent engines (e.g. Adapt); skill helpers such as `voc_match` | Base name = the vocabulary name |
 | `.blacklist` | Words whose presence suppresses an intent | Intent engine, as match suppression | Base name = the `.intent` it suppresses |
 
-How a consumer *uses* the phrase set — slot constraint, keyword test, match
-suppression — is engine or skill policy, consistent with matching behaviour
-being out of scope for these specifications. This document defines only the
-file format and the role pairing.
+How an `.entity` or `.voc` phrase set is *used* — slot constraint, keyword
+test — is engine or skill policy, consistent with matching behaviour being out
+of scope for these specifications.
+
+For the `.blacklist` role the suppression contract is defined: a `.blacklist`
+file is paired by base name with exactly one `.intent`, and its expanded phrase
+set scopes to that intent alone. If any phrase from the set occurs in the
+user's utterance, that intent is suppressed — a **hard, score-independent
+rejection**, not a confidence penalty. A `.blacklist` does not affect any other
+intent.
 
 ```
 # weekday.entity        — values for the {weekday} slot
