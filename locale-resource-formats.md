@@ -98,7 +98,8 @@ loader that nonetheless encounters two such files MUST treat the skill as
 malformed.
 
 A resource base name MUST consist only of lowercase ASCII letters, digits, and
-underscores, and MUST NOT contain whitespace. Where a base name names a slot —
+underscores, and MUST NOT contain whitespace; file extensions are likewise
+lowercase. Where a base name names a slot —
 an `.entity` file naming the `{slot}` it supplies — it additionally obeys the
 slot-name rule of OVOS-INTENT-1 §3.4 (lowercase letters, digits, and
 underscores; not beginning with a digit).
@@ -109,9 +110,9 @@ the same language.
 
 ### 2.1 Resolution precedence
 
-A resource may be provided from three places. When the same resource base name
-exists in more than one, a loader resolves it in this precedence order (first
-match wins):
+A resource may be provided from three places. When the same resource — the same
+`(role, base name)` pair — exists in more than one, a loader resolves it in this
+precedence order (first match wins):
 
 1. **User overrides** — files under a per-skill directory in the platform user
    data path, laid out as `…/<skill_id>/locale/<lang>/`.
@@ -156,8 +157,8 @@ below apply *after* this filtering.
 
 A file's **format** is determined by its role (§1): `.intent` and `.dialog` are
 **slot-bearing**; `.entity`, `.voc`, and `.blacklist` are **slot-free**. Every
-file is a list of templates, one per line, parsed per §3, and the file base name
-is the resource identifier (§2).
+file is a list of templates, one per line, parsed per §3; a resource is
+identified by its `(role, base name)` pair (§2).
 
 ### 4.1 `.intent` — intent training samples
 
@@ -290,9 +291,9 @@ A loader for these resources, in any language, **MUST**:
      OVOS-INTENT-1-conformant expander, leaving any named slots intact;
    - `.dialog` — retain each line as a phrase string; expand per-render (§4.2).
 5. **Reject an empty file** — a resource file of any role that yields no
-   templates after step 3, or whose templates all expand to an empty sample
-   set, MUST be treated as malformed. Every file MUST contribute at least one
-   non-empty template; an empty file has no reason to exist.
+   templates after step 3 MUST be treated as malformed: every file MUST
+   contribute at least one template. (Each template must in turn expand to at
+   least one non-empty sample, or it is itself malformed — OVOS-INTENT-1 §3.6.)
 
 A loader **MAY** cache parsed results and **MAY** implement a language-fallback
 policy per §2.2, but **MUST NOT** change the meaning of the formats defined

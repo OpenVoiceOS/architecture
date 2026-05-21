@@ -10,9 +10,9 @@ conformance by satisfying the requirements below.
 
 It serves two roles:
 
-1. The **authoring syntax** skill developers write in `.intent`, `.entity`,
-   `.voc`, and `.dialog` files (see §1.1, and the companion *Locale Resource
-   Formats Specification*, OVOS-INTENT-2).
+1. The **authoring syntax** skill developers write in `.intent`, `.dialog`,
+   `.entity`, `.voc`, and `.blacklist` files (see §1.1, and the companion
+   *Locale Resource Formats Specification*, OVOS-INTENT-2).
 2. The **wire contract** for training data passed from a skill to an intent
    pipeline plugin (§6).
 
@@ -407,8 +407,8 @@ fill more than one role. Conformance constrains how a template is *parsed,
 expanded, and filled* — never how an engine *matches*.
 
 - **Expander.** A tool that turns a template into its sample set. It MUST accept
-  the token set of §3, handle the degenerate forms of §3.6, reject malformed
-  templates, produce exactly the sample set defined by §4, and never expand
+  the token set of §3, accept the valid edge forms of §3.6 and reject the
+  malformed ones, produce exactly the sample set defined by §4, and never expand
   `{...}` slots.
 
 - **Intent engine.** A tool that consumes input-direction templates. It MUST
