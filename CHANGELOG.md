@@ -54,8 +54,8 @@ Every pull request that alters normative content bumps the affected spec's
   resource by searching the directory and all subdirectories recursively.
   Same-extension base names must be unique across the whole language tree;
   a loader encountering a duplicate MUST treat the skill as malformed.
-- §5 — a loader MUST reject an empty `.intent` or `.dialog` definition; an
-  empty `.entity`, `.voc`, or `.blacklist` file is permitted.
+- §5 — a loader MUST reject any empty resource file, of any role; every file
+  MUST contribute at least one non-empty template.
 
 ### 1
 

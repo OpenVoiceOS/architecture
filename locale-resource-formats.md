@@ -289,10 +289,10 @@ A loader for these resources, in any language, **MUST**:
      expand each line to its sample set at load time via an
      OVOS-INTENT-1-conformant expander, leaving any named slots intact;
    - `.dialog` — retain each line as a phrase string; expand per-render (§4.2).
-5. **Reject an empty definition** — a `.intent` or `.dialog` file that yields
-   no templates after step 3 MUST be treated as malformed: an intent or dialog
-   cannot be defined with no content. An empty `.entity`, `.voc`, or
-   `.blacklist` file is permitted and yields an empty set.
+5. **Reject an empty file** — a resource file of any role that yields no
+   templates after step 3, or whose templates all expand to an empty sample
+   set, MUST be treated as malformed. Every file MUST contribute at least one
+   non-empty template; an empty file has no reason to exist.
 
 A loader **MAY** cache parsed results and **MAY** implement a language-fallback
 policy per §2.2, but **MUST NOT** change the meaning of the formats defined
