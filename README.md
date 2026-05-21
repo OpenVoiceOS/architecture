@@ -45,6 +45,10 @@ OVOS-INTENT-3 version 1 builds on OVOS-INTENT-1 and OVOS-INTENT-2 at version
   a slot extractor, and the two definition methods — keyword intents and
   template intents — are non-interoperable but complementary.
 
+Design rationale, comparisons with Home Assistant and Rhasspy, the pipeline
+context, and known gaps are collected in [APPENDIX.md](APPENDIX.md) — a
+non-normative companion document.
+
 ## Glossary
 
 Terms defined across the three specifications, with where each is defined.
