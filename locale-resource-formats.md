@@ -12,10 +12,6 @@ companion *Sentence Template Grammar Specification* (OVOS-INTENT-1). That
 grammar has two facets — *expansion* (`(a|b)` / `[x]`) and *named slots*
 (`{name}`).
 
-The skill *manifest* (machine-readable skill metadata, intent→handler binding,
-language fallback declarations) is **out of scope** for this specification and
-is defined separately.
-
 The key words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are used as in
 RFC 2119.
 
@@ -115,7 +111,8 @@ A resource may be provided from three places. When the same resource — the sam
 precedence order (first match wins):
 
 1. **User overrides** — files under a per-skill directory in the platform user
-   data path, laid out as `…/<skill_id>/locale/<lang>/`.
+   data path, laid out as `…/<skill_id>/locale/<lang>/`, where `<skill_id>` is
+   the skill's unique identifier.
 2. **Skill resources** — files bundled in the skill's own `locale/` directory.
 3. **Core resources** — fallback files shipped by the assistant framework. The
    root directory holding them is assistant-defined; only the `locale/<lang>/`

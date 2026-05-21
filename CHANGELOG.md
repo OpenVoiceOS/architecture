@@ -31,6 +31,10 @@ Every pull request that alters normative content bumps the affected spec's
   consistency (§5.5).
 - §3.4 — slot names may now contain digits (`a`–`z`, `0`–`9`, `_`); a name
   MUST NOT begin with a digit.
+- §6.1 — a registration's name is unique within the registering skill.
+- §7 — clarified that the Intent engine conformance role covers slot-bearing
+  `.intent` templates; a tool consuming only slot-free input resources
+  (`.voc`, `.entity`, `.blacklist`) needs only the Expander role.
 
 ### 1
 
@@ -59,6 +63,16 @@ Every pull request that alters normative content bumps the affected spec's
   a loader encountering a duplicate MUST treat the skill as malformed.
 - §5 — a loader MUST reject any empty resource file, of any role; every file
   MUST contribute at least one non-empty template.
+- Intro — removed the "skill manifest" paragraph (an editorial deletion of a
+  non-normative scope pointer; no requirement changed).
+- §2.1 — note that `<skill_id>` in the override path is the skill's unique
+  identifier.
+
+### 1
+
+- Initial draft.
+
+## OVOS-INTENT-3 — Intent Definition
 
 ### 1
 

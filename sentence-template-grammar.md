@@ -380,8 +380,8 @@ A skill registers an intent or an entity by providing **either**:
 - a list of **inline samples** — strings, each a template; **or**
 - a **path** to an `.intent` / `.entity` resource file.
 
-A registration carries at least a unique **name**, a **language** code, and the
-samples or file path. Vocabulary (`.voc`) and blacklist (`.blacklist`) data,
+A registration carries at least a **name** unique within the registering skill,
+a **language** code, and the samples or file path. Vocabulary (`.voc`) and blacklist (`.blacklist`) data,
 where an engine consumes it, are delivered in the same shape — a name, a
 language, and inline samples or a file path.
 
@@ -409,12 +409,15 @@ expanded, and filled* — never how an engine *matches*.
   the token set of §3, reject the malformed forms of §3.6, produce exactly the
   sample set defined by §4, and never expand `{...}` slots.
 
-- **Intent engine.** A tool that consumes input-direction templates. It MUST
-  embed a conformant expander, assume the input model of §2, honour the
-  training-data contract of §6, treat `{name}` as a match-time-filled slot
-  (§5.1–§5.2), and treat value sets as optional refinements (§5.4). Matching,
-  generalization, and scoring are deliberately unconstrained — an engine MAY add
-  fuzzy matching, neural classification, or any scoring strategy.
+- **Intent engine.** A tool that consumes **slot-bearing** input templates
+  (`.intent`). It MUST embed a conformant expander, assume the input model of
+  §2, honour the training-data contract of §6, treat `{name}` as a
+  match-time-filled slot (§5.1–§5.2), and treat value sets as optional
+  refinements (§5.4). Matching, generalization, and scoring are deliberately
+  unconstrained — an engine MAY add fuzzy matching, neural classification, or
+  any scoring strategy. A tool that consumes only **slot-free** input resources
+  (`.voc`, `.entity`, `.blacklist`) — for example a keyword-based engine — does
+  not take on this role; it needs only the **Expander** role above.
 
 - **Dialog renderer.** A tool that consumes `.dialog` templates. It MUST embed a
   conformant expander, verify that all phrases in a dialog definition declare

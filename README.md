@@ -19,10 +19,14 @@ by voice assistants beyond OVOS.
 |----|----------|---------|--------|-------|
 | OVOS-INTENT-1 | [Sentence Template Grammar](sentence-template-grammar.md) | 1.1 | Draft | The ASR input model, the sentence template grammar (expansion + named slots), expansion into training samples, the slot model, and the skill→pipeline training-data contract. |
 | OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 1.1 | Draft | The `locale/` folder layout and the two resource file formats across five roles: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`. |
+| OVOS-INTENT-3 | [Intent Definition](intent-definition.md) | 1 | Draft | What an intent is, the two definition methods (keyword and template intents), registration, the intent-engine input contract, and the match result. |
 
-OVOS-INTENT-2 **depends on** OVOS-INTENT-1: every resource file is a list of
-sentence templates whose syntax and expansion are defined by the grammar spec.
-Read OVOS-INTENT-1 first.
+**Reading order.** The specifications are numbered in dependency order and are
+meant to be read that way. OVOS-INTENT-1 defines the template grammar;
+OVOS-INTENT-2 builds on it to define the resource files; OVOS-INTENT-3 builds
+on both to define what an intent is. Each depends on the ones before it.
+OVOS-INTENT-3 version 1 builds on OVOS-INTENT-1 and OVOS-INTENT-2 at version
+1.1.
 
 ## Design notes
 
@@ -35,11 +39,39 @@ Read OVOS-INTENT-1 first.
   value is an opaque sequence of words; numbers, dates, and other typed values
   depend on a prescribed normalization of ASR output, which is deferred to a
   future specification (see OVOS-INTENT-1 §5.3).
+- OVOS-INTENT-3 adds the **intent model** on top: an intent is a
+  developer-defined binding from a natural-language command to one handler, not
+  a free-floating event. Every intent engine is conceptually a classifier plus
+  a slot extractor, and the two definition methods — keyword intents and
+  template intents — are non-interoperable but complementary.
+
+## Glossary
+
+Terms defined across the three specifications, with where each is defined.
+
+| Term | Meaning |
+|------|---------|
+| **Template** | A string in the OVOS-INTENT-1 grammar describing a set of sentences (INTENT-1 §3). |
+| **Expansion** | Resolving `(a\|b)` / `[x]` into a finite set of concrete sentences (INTENT-1 §4). |
+| **Sample / sample set** | A concrete sentence produced by expansion; the set of all of them for a template (INTENT-1 §4). |
+| **Slot** | A named placeholder `{name}` filled with a value rather than written out (INTENT-1 §3.4, §5). |
+| **Capture map** | The names→values mapping a match produces — slot names or vocabulary names as keys (INTENT-3 §7). |
+| **Resource file / role** | A skill's plain-text files: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist` (INTENT-2 §1). |
+| **Vocabulary** | A named slot-free phrase set; the unit a keyword intent constrains over (INTENT-3 §4.1). |
+| **Occurrence** | A phrase appearing in an utterance as a contiguous whole-word subsequence (INTENT-2 §4.3, INTENT-3 §4.1). |
+| **Skill** | An app — a self-contained unit of assistant functionality (INTENT-3 §1, §3). |
+| **Skill id** | A skill's identifier, unique across the assistant (INTENT-3 §3). |
+| **Intent** | A developer-defined binding from a natural-language command to one handler (INTENT-3 §1). |
+| **Intent name / qualified name** | The intent's name, unique within its skill / the `skill_id:intent_name` pair (INTENT-3 §3). |
+| **Keyword intent / template intent** | The two definition methods — keyword constraints, or sentence templates (INTENT-3 §2). |
+| **Handler** | The code an intent triggers when its command is recognized (INTENT-3 §1, §6). |
+| **Intent engine** | A classifier + slot extractor: consumes definitions, identifies the triggered intent (INTENT-3 §6.2). |
+| **Host** | The intent system that owns the engines and routes match results to handlers (INTENT-3 §6.1). |
+| **Registration** | Submitting an intent's definition and handler together, as one unit (INTENT-3 §6.1). |
 
 ## Planned
 
 - Text normalization of ASR output (the basis for slot value typing).
-- The skill manifest (metadata, intent→handler binding, language fallback).
 - A machine-checkable conformance corpus for OVOS-INTENT-1 expansion.
 
 ## Changing a specification
