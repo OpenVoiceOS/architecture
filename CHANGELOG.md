@@ -24,6 +24,8 @@ Every pull request that alters normative content bumps the affected spec's
   definition MUST declare the identical set of slot names; mixed-slot or
   mixed slot-bearing/slot-free definitions MUST be rejected.
 - §6.2 — engine obligations now include verifying slot consistency (§5.5).
+- §3.4 — slot names may now contain digits (`a`–`z`, `0`–`9`, `_`); a name
+  MUST NOT begin with a digit.
 
 ### 1
 
@@ -45,6 +47,9 @@ Every pull request that alters normative content bumps the affected spec's
   score-independent rejection.
 - §4.1, §4.2 — every line in a `.intent` or `.dialog` file MUST declare the
   same set of named slots (OVOS-INTENT-1 §5.5).
+- §2 — a language directory MAY contain subdirectories; a loader resolves a
+  resource by searching the directory and all subdirectories recursively.
+  Same-extension base names must be unique across the whole language tree.
 
 ### 1
 

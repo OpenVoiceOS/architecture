@@ -74,24 +74,32 @@ my-skill/
     │   ├── device.entity
     │   ├── turn_on.blacklist
     │   ├── thing.voc
-    │   └── confirm.dialog
+    │   ├── confirm.dialog
+    │   └── dialogs/
+    │       └── greeting.dialog
     ├── pt-BR/
     │   └── …
     └── de-DE/
         └── …
 ```
 
-A language directory is **flat**: it MUST NOT contain subdirectories. A
-resource is identified by the pair **(role, base name)** — its file extension
+A language directory MAY contain **subdirectories**; a skill author MAY use them
+to organize resources in any way they choose. A loader resolves a resource by
+searching the language directory **and all its subdirectories, recursively**.
+Subdirectory names carry no meaning to a loader — they are an authoring
+convenience only.
+
+A resource is identified by the pair **(role, base name)** — its file extension
 and its base name together. Two files MAY share a base name when their roles
-differ: `confirm.intent` and `confirm.dialog` are distinct resources and both
-are permitted in the same directory. Two files with the **same extension** in
-one directory MUST have distinct base names.
+differ: `confirm.intent` and `confirm.dialog` are distinct resources. Two files
+with the **same extension** MUST NOT share a base name anywhere within one
+language directory tree, since subdirectories do not distinguish resources.
 
 A resource base name MUST consist only of lowercase ASCII letters, digits, and
 underscores, and MUST NOT contain whitespace. Where a base name names a slot —
 an `.entity` file naming the `{slot}` it supplies — it additionally obeys the
-slot-name rule of OVOS-INTENT-1 §3.4 (lowercase letters and underscores only).
+slot-name rule of OVOS-INTENT-1 §3.4 (lowercase letters, digits, and
+underscores; not beginning with a digit).
 
 Language directories are named with **BCP-47** tags in `language-REGION` form
 (`en-US`, `pt-BR`, `zh-Hans`). Tag comparison is **case-insensitive**: `en-us`
@@ -267,8 +275,9 @@ trailer
 A loader for these resources, in any language, **MUST**:
 
 1. **Discover languages** — list the language directories under `locale/`.
-2. **Locate a file** — within the resolved language directory, find a file by
-   its base name, honouring the override precedence of §2.1.
+2. **Locate a file** — within the resolved language directory, searching its
+   subdirectories recursively, find a file by its base name and extension,
+   honouring the override precedence of §2.1.
 3. **Apply the common reader** — UTF-8, accept `LF`/`CRLF`, strip lines, skip
    blanks and `#`-comments (§3).
 4. **Apply the per-format rule**:

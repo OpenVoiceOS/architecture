@@ -150,8 +150,9 @@ A curly-brace token is a **named slot** — a placeholder that is not written ou
 but *filled* with a value. The same `{name}` syntax is used everywhere a slot
 appears; only *who fills it and when* differs by file type (§5.1).
 
-A slot **name** MUST consist only of lowercase ASCII letters and underscores
-(`a`–`z`, `_`), with no whitespace inside the braces. A slot MAY appear anywhere
+A slot **name** MUST consist only of lowercase ASCII letters, digits, and
+underscores (`a`–`z`, `0`–`9`, `_`), MUST NOT begin with a digit, and MUST NOT
+contain whitespace inside the braces. A slot MAY appear anywhere
 a literal word may, including inside an alternative or optional group:
 
 ```
