@@ -1,6 +1,6 @@
 # Locale Resource Formats Specification
 
-**Spec ID:** OVOS-INTENT-2 · **Version:** 1.1 · **Status:** Draft · **Reference implementation:** [ovos-workshop](https://github.com/OpenVoiceOS/ovos-workshop)
+**Spec ID:** OVOS-INTENT-2 · **Version:** 1.1 · **Status:** Draft · **Basis:** [ovos-workshop](https://github.com/OpenVoiceOS/ovos-workshop) (closest existing implementation; does not yet fully conform)
 
 This document defines the **locale folder layout** and the **plain-text resource
 file formats** a skill ships so a voice assistant can recognize what the user
@@ -93,7 +93,9 @@ A resource is identified by the pair **(role, base name)** — its file extensio
 and its base name together. Two files MAY share a base name when their roles
 differ: `confirm.intent` and `confirm.dialog` are distinct resources. Two files
 with the **same extension** MUST NOT share a base name anywhere within one
-language directory tree, since subdirectories do not distinguish resources.
+language directory tree, since subdirectories do not distinguish resources. A
+loader that nonetheless encounters two such files MUST treat the skill as
+malformed.
 
 A resource base name MUST consist only of lowercase ASCII letters, digits, and
 underscores, and MUST NOT contain whitespace. Where a base name names a slot —
@@ -101,9 +103,9 @@ an `.entity` file naming the `{slot}` it supplies — it additionally obeys the
 slot-name rule of OVOS-INTENT-1 §3.4 (lowercase letters, digits, and
 underscores; not beginning with a digit).
 
-Language directories are named with **BCP-47** tags in `language-REGION` form
-(`en-US`, `pt-BR`, `zh-Hans`). Tag comparison is **case-insensitive**: `en-us`
-and `en-US` denote the same language.
+Language directories are named with **BCP-47** language tags (`en-US`, `pt-BR`,
+`zh-Hans`). Tag comparison is **case-insensitive**: `en-us` and `en-US` denote
+the same language.
 
 ### 2.1 Resolution precedence
 
@@ -246,10 +248,12 @@ of scope for these specifications.
 
 For the `.blacklist` role the suppression contract is defined: a `.blacklist`
 file is paired by base name with exactly one `.intent`, and its expanded phrase
-set scopes to that intent alone. If any phrase from the set occurs in the
-user's utterance, that intent is suppressed — a **hard, score-independent
-rejection**, not a confidence penalty. A `.blacklist` does not affect any other
-intent.
+set scopes to that intent alone. A blacklist phrase **occurs** in an utterance
+when its words appear there as a **contiguous sequence of whole words** — a
+token subsequence, not a raw substring (the phrase `art` does not occur within
+the word `start`). If any phrase from the set occurs in the user's utterance,
+that intent is suppressed — a **hard, score-independent rejection**, not a
+confidence penalty. A `.blacklist` does not affect any other intent.
 
 ```
 # weekday.entity        — values for the {weekday} slot
@@ -285,6 +289,10 @@ A loader for these resources, in any language, **MUST**:
      expand each line to its sample set at load time via an
      OVOS-INTENT-1-conformant expander, leaving any named slots intact;
    - `.dialog` — retain each line as a phrase string; expand per-render (§4.2).
+5. **Reject an empty definition** — a `.intent` or `.dialog` file that yields
+   no templates after step 3 MUST be treated as malformed: an intent or dialog
+   cannot be defined with no content. An empty `.entity`, `.voc`, or
+   `.blacklist` file is permitted and yields an empty set.
 
 A loader **MAY** cache parsed results and **MAY** implement a language-fallback
 policy per §2.2, but **MUST NOT** change the meaning of the formats defined

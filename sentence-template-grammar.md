@@ -1,6 +1,6 @@
 # Sentence Template Grammar Specification
 
-**Spec ID:** OVOS-INTENT-1 · **Version:** 1.1 · **Status:** Draft · **Reference implementation:** [padacioso](https://github.com/OpenVoiceOS/padacioso)
+**Spec ID:** OVOS-INTENT-1 · **Version:** 1.1 · **Status:** Draft · **Basis:** [padacioso](https://github.com/OpenVoiceOS/padacioso) (closest existing implementation; does not yet fully conform)
 
 This document defines the *sentence template* grammar used by padatious-like
 intent engines and by the localized resource files of a skill. A sentence
@@ -185,14 +185,21 @@ The following forms are **malformed**; a tool MUST reject any template that
 contains one:
 
 - **Unbalanced metacharacters** — an unmatched `(`, `)`, `[`, `]`, `{`, or `}`.
-- **Empty expansion** — a template, or a group within it, that expands to the
-  empty string (`()`, `(|)`, or a line that is empty after expansion). An
-  engine cannot train on an empty sample (§4).
+- **Empty sample** — a template whose sample set (§4) contains the empty
+  string: for some combination of branches it yields a sample with no literal
+  words and no slots. The simplest cases are a template consisting only of
+  `()`, `(|)`, or `[x]`. An engine cannot train on an empty sample. This
+  concerns the *whole sample only*: a group with an empty branch inside an
+  otherwise non-empty template — such as the optional `[the]` — is valid and
+  unaffected.
 - **Adjacent slots** — two named slots with no literal word between them,
   whether written `{a}{b}` or separated only by whitespace (`{a} {b}`). With no
   literal token to delimit them, a matcher cannot tell where one slot's value
   ends and the next begins; the two would form a single capture, not two. A
-  literal word MUST separate any two slots.
+  literal word MUST separate any two slots, and MUST do so in **every sample**:
+  the check applies to the expanded sample set (§4), not only the template
+  surface. A template such as `{a} [foo] {b}`, whose empty-`foo` branch yields
+  the adjacent pair `{a} {b}`, is therefore malformed.
 - **Repeated slot name** — using the same `{name}` more than once in one
   template (`{x} and {x}`). A template defines each slot name exactly once.
 
@@ -333,7 +340,8 @@ a **future, separate specification**. Until then there is exactly one slot form,
 ### 5.4 Value sets
 
 A skill MAY supply a set of example values for a named slot through an `.entity`
-file (OVOS-INTENT-2), whose lines are expansion-only templates (§1.1). An engine
+file (OVOS-INTENT-2 §4.3) — a file named after the slot it supplies — whose
+lines are expansion-only templates (§1.1). An engine
 MAY use that set to constrain or score a match-time-filled slot. A value set is
 an **optional refinement**: a slot with no `.entity` file still fills per §5.2,
 and a slot referencing an undefined value set is **not** an error.
@@ -345,6 +353,11 @@ registered together (§6.1) — defines **one** intent or **one** dialog. Every
 template in that definition MUST declare the **identical set of slot names**. A
 definition MUST NOT mix templates that declare different slots, and MUST NOT mix
 slot-bearing templates with slot-free ones.
+
+A template *declares* a slot name if that name appears anywhere in the
+template. Optionality does not change this: a slot inside an optional group
+(`[{x}]`, §5.1) is still declared, so a template `say [{x}]` and a template
+`say {x}` declare the **same** slot set and may coexist in one definition.
 
 This guarantees that an intent's captured slots, or a dialog's required fill
 values, are the same regardless of which template matched or was chosen. If two
@@ -406,7 +419,8 @@ expanded, and filled* — never how an engine *matches*.
   fuzzy matching, neural classification, or any scoring strategy.
 
 - **Dialog renderer.** A tool that consumes `.dialog` templates. It MUST embed a
-  conformant expander and fill `{name}` slots by caller-supplied values before
+  conformant expander, verify that all phrases in a dialog definition declare
+  the same slot set (§5.5), fill `{name}` slots by caller-supplied values before
   rendering, and MUST NOT emit a phrase containing an unfilled slot (§5.1).
 
 No tool may change the meaning of the tokens defined here. A machine-checkable

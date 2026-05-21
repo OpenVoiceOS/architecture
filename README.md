@@ -52,7 +52,12 @@ directly. Each PR that alters normative content **MUST** bump the spec's
 a document, so implementations and conformance results can name the version
 they target.
 
-## Reference implementations
+## Implementations
+
+These specifications are **prescriptive**: they define a target, not a
+description of current software. No implementation fully conforms yet. The
+projects below are the closest existing implementations and the basis these
+specs were drawn from; bringing them into conformance is planned work.
 
 - [padacioso](https://github.com/OpenVoiceOS/padacioso) — sentence template
   grammar and expansion.
