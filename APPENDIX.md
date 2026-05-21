@@ -62,12 +62,16 @@ distinctive about the OVOS approach is everything around the grammar.
 - **Reusable template fragments.** `hassil` has `expansion_rules` and Rhasspy
   has `<rule>` references — named, reusable sub-templates that let authors share
   common fragments (politeness prefixes, articles, recurring phrasings). The
-  OVOS grammar has no equivalent; every template is self-contained, which means
-  duplication across a large skill set. This is a genuine ergonomic gap (§5).
-- **Operational i18n.** HA's community `intents` repository is a large, managed,
-  professionally-translated corpus covering many languages. OVOS-INTENT-2
-  defines the i18n *file format* well, but a format is not a corpus —
-  translation operations and tooling are a separate, ongoing ecosystem effort.
+  OVOS grammar has no equivalent today; every template is self-contained, which
+  means duplication across a large skill set. Adding one — as an inline
+  vocabulary reference rather than a new construct — is tracked as issue #1
+  (see §5).
+- **i18n corpus maturity.** HA's community `intents` repository is a large,
+  managed, professionally-translated corpus covering many languages. OVOS has
+  the tooling counterpart in **ovos-localize** (§6) — a GitHub-native
+  localization platform built around the OVOS-INTENT-2 resource roles — so the
+  gap here is the *scale and maturity* of the corpus, not the absence of
+  tooling.
 - **Concrete, testable completeness.** HA and Rhasspy ship systems where the
   hard parts — matching, number and range handling, slot typing — are solved
   concretely. The OVOS specs deliberately defer some of these (slot typing to a
@@ -99,9 +103,10 @@ better.
 OVOS is not out-designed by HA or Rhasspy at the architecture level — at the
 pipeline layer (§3) it is ahead of both, and its intent-as-handler-binding
 model is the correct consequence of being an open platform. HA's real advantage
-is operational: curation and a managed translation corpus — an ecosystem
-investment, not an architectural one. The grammar itself is a commodity shared
-by all three; the OVOS bet is the engine-agnostic contract and the pipeline.
+is the maturity and scale of its translation corpus — an ecosystem investment,
+not an architectural one, and one OVOS now has tooling for in ovos-localize
+(§6). The grammar itself is a commodity shared by all three; the OVOS bet is the
+engine-agnostic contract and the pipeline.
 
 ---
 
@@ -184,8 +189,10 @@ reasoning, not the requirement.
 ## 5. Known gaps and planned work
 
 - **Reusable template fragments.** The grammar has no equivalent of `hassil`'s
-  `expansion_rules`. This is a real ergonomic gap (§2.2) and a candidate
-  addition to a future OVOS-INTENT-1 revision.
+  `expansion_rules` (§2.2). The planned addition is an **inline vocabulary
+  reference** — a `<name>` token that expands a named `.voc` in place, reusing
+  the existing slot-free format rather than introducing a new file role.
+  Tracked as issue #1; targets an OVOS-INTENT-1 v2.
 - **A pipeline specification.** Stage ordering, the confidence-tier model, and
   the contracts for `converse`, `fallback`, `common_query`, `ocp`, and
   `persona` stages are unspecified (§3). This is the highest-value next spec.
@@ -197,6 +204,32 @@ reasoning, not the requirement.
 - **An end-to-end worked example.** The specs have local examples; none shows a
   single skill defining one keyword intent and one template intent through the
   whole path — files, registration, match, handler.
-- **i18n operations.** OVOS-INTENT-2 defines the locale file format; a managed
-  translation corpus and tooling, of the kind Home Assistant maintains, is a
-  separate ecosystem effort that the format alone does not provide.
+- **i18n corpus.** OVOS-INTENT-2 defines the locale file format, and
+  ovos-localize (§6) provides the operations layer; what remains is the *scale*
+  of the translated corpus — an ongoing community effort, not a missing piece
+  of design or tooling.
+
+---
+
+## 6. Ecosystem tooling: ovos-localize
+
+The specifications define formats and contracts; turning those into a working
+i18n operation takes tooling. **ovos-localize** is that layer — a GitHub-native
+localization platform for OVOS skills, built specifically around the resource
+roles of OVOS-INTENT-2.
+
+It scans skill repositories for locale files; analyzes each skill's Python
+source (via AST) to recover the **handler context** of a resource — which
+function uses a file, what its slots mean, what dialog it triggers, which is
+exactly the intent↔handler binding of OVOS-INTENT-3 §1; validates translations
+against a rule set (slot preservation, expansion validity, variant counts); and
+lets translators browse, edit, preview, and submit translations as pull
+requests. It also exports a unified intent/dialog/vocabulary dataset.
+
+ovos-localize is the OVOS counterpart to Home Assistant's managed `intents`
+repository. Two honest notes: it is currently **descriptive** of real OVOS
+skills — it also handles legacy file types these specs deliberately drop — so
+as the specs and the ecosystem converge, its file-type coverage and the specs
+will need to meet in the middle; and its translation validators are a natural
+home for spec conformance checks, distinct from but related to the planned
+grammar-level conformance corpus (§5).
