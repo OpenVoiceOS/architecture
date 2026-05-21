@@ -15,6 +15,9 @@ Every pull request that alters normative content bumps the affected spec's
 - §3.6 — a template whose sample set contains the empty string is **malformed**
   ("empty sample"); this never affects a group with an empty branch inside an
   otherwise non-empty template, such as the optional `[the]`.
+- §3.6 — a single-branch group (`(word)`, `()`) and a slot-only template
+  (`{name}` alone) are now **malformed**: a group MUST offer a choice, and a
+  template MUST carry at least one literal word.
 - §4.1 — the expansion algorithm is reworded to operate on a working *set* of
   strings; the iteration condition is "while any string in the set contains
   `(`", not "while the template contains `(`".

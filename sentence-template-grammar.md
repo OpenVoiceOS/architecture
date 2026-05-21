@@ -122,7 +122,8 @@ turn on the lights
 ### 3.2 Alternatives `( | )`
 
 Parentheses enclose **branches** separated by the pipe `|`. Each combination
-takes exactly one branch from each group.
+takes exactly one branch from each group. A group MUST contain at least one `|`
+(that is, at least two branches); a group with no `|` is malformed (§3.6).
 
 ```
 (turn on|switch on|enable) the lights
@@ -171,27 +172,25 @@ alternatives, and a branch of an alternative may contain optional segments:
 turn on [(all|every) ]light[s]
 ```
 
-### 3.6 Degenerate and edge forms
-
-The following forms are **valid**. They have no practical effect but a
-conformant tool MUST accept them:
-
-- **Single-branch group** — a group with no `|`, e.g. `(word)`, expands to its
-  single branch (`word`).
-- **Slot-only template** — a template consisting solely of `{name}` is valid;
-  its sample set is `{name}` itself.
+### 3.6 Malformed forms
 
 The following forms are **malformed**; a tool MUST reject any template that
 contains one:
 
 - **Unbalanced metacharacters** — an unmatched `(`, `)`, `[`, `]`, `{`, or `}`.
+- **Single-branch group** — a parenthesised group with no `|`, e.g. `(word)`
+  or the empty `()`. A group expresses a *choice between branches*; with a
+  single branch there is no choice. Write the branch as plain literal text
+  instead.
 - **Empty sample** — a template whose sample set (§4) contains the empty
   string: for some combination of branches it yields a sample with no literal
   words and no slots. The simplest cases are a template consisting only of
-  `()`, `(|)`, or `[x]`. An engine cannot train on an empty sample. This
-  concerns the *whole sample only*: a group with an empty branch inside an
-  otherwise non-empty template — such as the optional `[the]` — is valid and
-  unaffected.
+  `(|)` or `[x]`. An engine cannot train on an empty sample. This concerns the
+  *whole sample only*: a group with an empty branch inside an otherwise
+  non-empty template — such as the optional `[the]` — is valid and unaffected.
+- **Slot-only template** — a template that is a single named slot and nothing
+  else (`{name}`). A template MUST carry at least one literal word; a bare slot
+  gives an engine no anchoring text to learn from or match against.
 - **Adjacent slots** — two named slots with no literal word between them,
   whether written `{a}{b}` or separated only by whitespace (`{a} {b}`). With no
   literal token to delimit them, a matcher cannot tell where one slot's value
@@ -240,9 +239,9 @@ The sample set is obtained by:
 2. While any string in the working set still contains `(`: for each such
    string, locate its **innermost** groups — each a `(...)` containing no
    nested parentheses — split each group's interior on `|` into branches (a
-   branch may be empty; a group with no `|` has one branch), and replace that
-   string with the **Cartesian product** of substituting each branch for each
-   of its groups. The working set becomes the union of all strings so produced.
+   branch may be empty), and replace that string with the **Cartesian product**
+   of substituting each branch for each of its groups. The working set becomes
+   the union of all strings so produced.
 3. **Normalize whitespace** in each string: replace every run of one or more
    spaces with a single space, and strip leading and trailing spaces.
 4. Remove duplicates. The remaining distinct strings are the sample set.
@@ -407,9 +406,8 @@ fill more than one role. Conformance constrains how a template is *parsed,
 expanded, and filled* — never how an engine *matches*.
 
 - **Expander.** A tool that turns a template into its sample set. It MUST accept
-  the token set of §3, accept the valid edge forms of §3.6 and reject the
-  malformed ones, produce exactly the sample set defined by §4, and never expand
-  `{...}` slots.
+  the token set of §3, reject the malformed forms of §3.6, produce exactly the
+  sample set defined by §4, and never expand `{...}` slots.
 
 - **Intent engine.** A tool that consumes input-direction templates. It MUST
   embed a conformant expander, assume the input model of §2, honour the
