@@ -61,10 +61,10 @@ distinctive about the OVOS approach is everything around the grammar.
 - **Reusable template fragments.** `hassil` has `expansion_rules` and Rhasspy
   has `<rule>` references — named, reusable sub-templates that let authors share
   common fragments (politeness prefixes, articles, recurring phrasings). The
-  OVOS grammar has no equivalent today; every template is self-contained, which
-  means duplication across a large skill set. Adding one — as an inline
-  vocabulary reference rather than a new construct — is tracked as issue #1
-  (see §5).
+  version-1 OVOS grammar had no equivalent. **OVOS-INTENT-1 version 2 closes
+  this** with the `<name>` inline vocabulary reference (issue #1), which expands
+  a named `.voc` in place — reusing the existing slot-free format rather than
+  adding a new construct (see §4).
 - **i18n corpus maturity.** HA's community `intents` repository is a large,
   managed, professionally-translated corpus covering many languages. OVOS has
   the tooling counterpart in **ovos-localize** (§6) — a GitHub-native
@@ -182,16 +182,16 @@ reasoning, not the requirement.
 - **No regular expressions** (OVOS-INTENT-3 §4.4). Free-form structured text is
   a slot — use a template intent and the slot extractor. Regexes are also
   notoriously hard to localize, which conflicts with the per-language model.
+- **Inline vocabulary references reuse `.voc`** (OVOS-INTENT-1 §3.7). A
+  reusable template fragment and a keyword vocabulary are the same thing — a
+  named, slot-free phrase set — so `<name>` resolves to a `.voc` rather than
+  introducing a new file role. The change is one grammar token plus an
+  expander step.
 
 ---
 
 ## 5. Known gaps and planned work
 
-- **Reusable template fragments.** The grammar has no equivalent of `hassil`'s
-  `expansion_rules` (§2.2). The planned addition is an **inline vocabulary
-  reference** — a `<name>` token that expands a named `.voc` in place, reusing
-  the existing slot-free format rather than introducing a new file role.
-  Tracked as issue #1; targets an OVOS-INTENT-1 v2.
 - **A pipeline specification.** Stage ordering, the confidence-tier model, and
   the contracts for `converse`, `fallback`, `common_query`, `ocp`, and
   `persona` stages are unspecified (§3). This is the highest-value next spec.
@@ -294,9 +294,9 @@ The one feature that is *not* a formalization of existing behaviour is the
 `<name>` inline vocabulary reference — the equivalent of Home Assistant's
 `expansion_rules` (§2.2). It reuses the existing `.voc` role rather than
 adding a separate file type, so the change is one grammar token plus an
-expander step. It is tracked as issue #1 and proposed in PR #2. Because a
-`<name>` template cannot be expanded by a version-1 tool, it is a breaking
-change and so carries a major version bump.
+expander step. It arrived with OVOS-INTENT-1 version 2 (issue #1, PR #2).
+Because a `<name>` template cannot be expanded by a version-1 tool, it is a
+breaking change, and so version 2 is a major version bump.
 
 ### 7.5 The reference implementation
 

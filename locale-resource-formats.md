@@ -1,6 +1,6 @@
 # Locale Resource Formats Specification
 
-**Spec ID:** OVOS-INTENT-2 · **Version:** 1 · **Status:** Draft
+**Spec ID:** OVOS-INTENT-2 · **Version:** 2 · **Status:** Draft
 
 This document defines the **locale folder layout** and the **plain-text resource
 file formats** a skill ships so a voice assistant can recognize what the user
@@ -9,7 +9,7 @@ assistant, in any language, can adopt this layout and these formats.
 
 Every resource file is a list of **sentence templates** as defined by the
 companion *Sentence Template Grammar Specification* (OVOS-INTENT-1). That
-grammar has two facets — *expansion* (`(a|b)` / `[x]`) and *named slots*
+grammar has two facets — *expansion* (`(a|b)` / `[x]` / `<name>`) and *named slots*
 (`{name}`).
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are used as in
@@ -37,7 +37,7 @@ loader how to parse it.
 | Intent | `.intent` | slot-bearing | Templates for utterances that trigger a skill action |
 | Dialog | `.dialog` | slot-bearing | Phrases the assistant speaks in response |
 | Entity | `.entity` | slot-free | Example values that can fill a named slot |
-| Vocabulary | `.voc` | slot-free | Localized keywords / substrings |
+| Vocabulary | `.voc` | slot-free | A named set of localized phrasings |
 | Blacklist | `.blacklist` | slot-free | Words that suppress an intent |
 
 The slot-bearing roles map onto the data path of a voice interaction:
@@ -237,12 +237,16 @@ with the expanded phrase set:
 | Extension | Role | Consumed by | Pairing |
 |-----------|------|-------------|---------|
 | `.entity` | Example values that can fill a `{slot}` | Intent engine, as a slot value set (OVOS-INTENT-1 §5.4) | Base name = the `{slot}` name it supplies |
-| `.voc` | Localized keywords / substrings | Keyword intent engines (e.g. Adapt); skill helpers such as `voc_match` | Base name = the vocabulary name |
+| `.voc` | A named set of localized phrasings | Keyword intent engines (e.g. Adapt); skill helpers such as `voc_match`; inline `<name>` references in templates (OVOS-INTENT-1 §3.7) | Base name = the vocabulary name |
 | `.blacklist` | Words whose presence suppresses an intent | Intent engine, as match suppression | Base name = the `.intent` it suppresses |
 
 How an `.entity` or `.voc` phrase set is *used* — slot constraint, keyword
 test — is engine or skill policy, consistent with matching behaviour being out
 of scope for these specifications.
+
+A `.voc` may additionally be referenced inline from a template by the `<name>`
+token (OVOS-INTENT-1 §3.7), which expands it in place; a `.voc` may itself
+contain such references.
 
 For the `.blacklist` role the suppression contract is defined: a `.blacklist`
 file is paired by base name with exactly one `.intent`, and its expanded phrase
