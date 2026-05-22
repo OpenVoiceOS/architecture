@@ -5,13 +5,12 @@ assistant ecosystem. Each specification describes a format or contract
 generically, so it can be implemented by any tool, in any language, and adopted
 by voice assistants beyond OVOS.
 
-> ⚠️ **Early draft — do not depend on these specs yet.** Every specification
-> here is at **Draft** status. The grammar, file formats, and contracts are
-> still under active review and may change in incompatible ways between
-> versions. While you can see this notice, treat these documents as a request
-> for comment, not a stable contract: do not build implementations that rely on
-> them remaining unchanged. The notice will be removed when a spec reaches a
-> stable status.
+> ⚠️ **Draft — implementations are still catching up.** These specifications
+> are at **Draft** status and may still change. The OVOS repositories are being
+> brought into conformance progressively, so current OVOS behaviour may not yet
+> match these documents. Where it diverges, that is a known implementation bug
+> being worked through (see *Authority* below) — not a defect in the
+> specification. The notice will be removed when a spec reaches a stable status.
 
 ## Authority
 
@@ -45,8 +44,31 @@ meant to be read that way. OVOS-INTENT-1 defines the template grammar;
 OVOS-INTENT-2 builds on it to define the resource files; OVOS-INTENT-3 builds
 on both to define what an intent is. Each depends on the ones before it.
 
-Each specification is versioned independently, starting at version 1. The
-`Version` column above is the current version of each.
+## Versions
+
+Each specification carries its own integer **`Version`**, shown in the table
+above. A version starts at 1 and is bumped whenever a pull request changes
+normative content (see *Changing a specification*); the
+[CHANGELOG](CHANGELOG.md) records every bump.
+
+The architecture as a whole is also spoken of at three **compatibility
+levels** — the levels a tool may target, and the levels the `ovos-spec-lint`
+linter checks against:
+
+- **V0** — *informal.* The undocumented, de-facto behaviour of Mycroft- and
+  OVOS-derived code from before these specifications existed. V0 is not
+  specified anywhere; it is the baseline the formalization started from, named
+  here only so tools can refer to "pre-spec" behaviour. V0 has no notion of
+  the `.blacklist` resource role or of `<name>` references.
+- **V1** — the specifications as first formalized: OVOS-INTENT-1, -2 and -3,
+  each at version 1. V1's headline addition over V0 is the `.blacklist` role —
+  formalized intent suppression.
+- **V2** — V1 plus **inline vocabulary references** (the `<name>` token):
+  OVOS-INTENT-1 and OVOS-INTENT-2 at version 2. A V2 template cannot be
+  expanded by a V1 tool, so V2 is not backward compatible with V1.
+
+A specification that does not change between levels keeps its lower version
+number — OVOS-INTENT-3 is at version 1 in both V1 and V2.
 
 ## Design notes
 
@@ -107,15 +129,3 @@ directly. Each PR that alters normative content **MUST** bump the spec's
 [`CHANGELOG.md`](CHANGELOG.md). A version identifies an exact, citable state of
 a document, so implementations and conformance results can name the version
 they target.
-
-## Implementations
-
-These specifications are **prescriptive**: they define a target, not a
-description of current software. No implementation fully conforms yet. The
-projects below are the closest existing implementations and the basis these
-specs were drawn from; bringing them into conformance is planned work.
-
-- [padacioso](https://github.com/OpenVoiceOS/padacioso) — sentence template
-  grammar and expansion.
-- [ovos-workshop](https://github.com/OpenVoiceOS/ovos-workshop) — locale folder
-  layout and resource file loaders.

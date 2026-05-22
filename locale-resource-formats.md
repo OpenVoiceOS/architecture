@@ -1,6 +1,6 @@
 # Locale Resource Formats Specification
 
-**Spec ID:** OVOS-INTENT-2 · **Version:** 1 · **Status:** Draft · **Basis:** [ovos-workshop](https://github.com/OpenVoiceOS/ovos-workshop) (closest existing implementation; does not yet fully conform)
+**Spec ID:** OVOS-INTENT-2 · **Version:** 1 · **Status:** Draft
 
 This document defines the **locale folder layout** and the **plain-text resource
 file formats** a skill ships so a voice assistant can recognize what the user

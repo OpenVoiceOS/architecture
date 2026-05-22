@@ -22,10 +22,9 @@ and adopted by other assistants.
 This matters for how to read them. They are **prescriptive** — each spec states
 a clean target, and where it diverges from current OVOS behaviour the
 divergence is a deliberate cleanup — but they are not speculative. The target
-is a lightly-cleaned version of a working system, not a greenfield design. The
-specs' "Basis" headers name the closest existing implementations (padacioso,
-ovos-workshop); those implementations do not yet fully conform, and bringing
-them into conformance is planned work.
+is a lightly-cleaned version of a working system, not a greenfield design.
+padacioso and ovos-workshop are the closest existing implementations; neither
+yet fully conforms, and bringing them into conformance is planned work.
 
 ---
 

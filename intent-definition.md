@@ -1,6 +1,6 @@
 # Intent Definition Specification
 
-**Spec ID:** OVOS-INTENT-3 · **Version:** 1 · **Status:** Draft · **Basis:** [ovos-workshop](https://github.com/OpenVoiceOS/ovos-workshop) (closest existing implementation; does not yet fully conform)
+**Spec ID:** OVOS-INTENT-3 · **Version:** 1 · **Status:** Draft
 
 This document defines what an **intent** is, the two methods a developer uses
 to define one, how an intent is registered, and the input contract an **intent
