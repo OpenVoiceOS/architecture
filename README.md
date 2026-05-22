@@ -129,3 +129,12 @@ directly. Each PR that alters normative content **MUST** bump the spec's
 [`CHANGELOG.md`](CHANGELOG.md). A version identifies an exact, citable state of
 a document, so implementations and conformance results can name the version
 they target.
+
+## Credits
+
+These specifications were produced as part of a documentation and
+interoperability effort for OpenVoiceOS, funded by NLnet's
+[NGI0 Commons Fund](https://nlnet.nl/project/OpenVoiceOS) under grant
+agreement No [101135429](https://cordis.europa.eu/project/id/101135429).
+
+![NGI0 / NLnet](./ngi.png)
