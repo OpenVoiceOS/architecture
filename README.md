@@ -35,8 +35,8 @@ Adoption is voluntary; conformance, once adopted, is not.
 
 | ID | Document | Version | Status | Scope |
 |----|----------|---------|--------|-------|
-| OVOS-INTENT-1 | [Sentence Template Grammar](sentence-template-grammar.md) | 1 | Draft | The ASR input model, the sentence template grammar (expansion + named slots), expansion into training samples, the slot model, and the skill→pipeline training-data contract. |
-| OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 1 | Draft | The `locale/` folder layout and the two resource file formats across five roles: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`. |
+| OVOS-INTENT-1 | [Sentence Template Grammar](sentence-template-grammar.md) | 2 | Draft | The ASR input model, the sentence template grammar (expansion + named slots), expansion into training samples, the slot model, and the skill→pipeline training-data contract. |
+| OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 2 | Draft | The `locale/` folder layout and the two resource file formats across five roles: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`. |
 | OVOS-INTENT-3 | [Intent Definition](intent-definition.md) | 1 | Draft | What an intent is, the two definition methods (keyword and template intents), registration, the intent-engine input contract, and the match result. |
 
 **Reading order.** The specifications are numbered in dependency order and are

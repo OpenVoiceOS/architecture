@@ -1,6 +1,6 @@
 # Sentence Template Grammar Specification
 
-**Spec ID:** OVOS-INTENT-1 · **Version:** 1 · **Status:** Draft
+**Spec ID:** OVOS-INTENT-1 · **Version:** 2 · **Status:** Draft
 
 This document defines the *sentence template* grammar used by padatious-like
 intent engines and by the localized resource files of a skill. A sentence
@@ -26,8 +26,9 @@ RFC 2119.
 A template uses a small set of grammar tokens to express, compactly, many
 concrete sentences. The grammar has exactly two facets:
 
-- **Expansion** — `(a|b)` alternatives and `[x]` optionals — which make one
-  template stand for many variant sentences (§3.2–§3.3, §4).
+- **Expansion** — `(a|b)` alternatives, `[x]` optionals, and `<name>`
+  vocabulary references — which make one template stand for many variant
+  sentences (§3.2–§3.3, §3.7, §4).
 - **Named slots** — `{name}` — placeholders that are *filled* with a value
   rather than written out (§3.4, §5).
 
@@ -74,7 +75,7 @@ by the time it reaches the engine, be **normalized** to:
 
 - **lowercase** characters only;
 - **alphanumeric word tokens** separated by **single spaces**;
-- **no punctuation** and **no bracket characters** (`( ) [ ] { } |`).
+- **no punctuation** and **no bracket characters** (`( ) [ ] { } | < >`).
 
 Normalization (lowercasing, punctuation and apostrophe stripping, whitespace
 collapsing, locale-specific transliteration) is performed **upstream** of the
@@ -86,7 +87,7 @@ Two consequences follow:
 
 - **Input-direction templates MUST be authored in the same normalized form**:
   literal words are lowercase, alphanumeric, single-space separated.
-- The grammar metacharacters `( ) [ ] { } |` **cannot occur as literal input**.
+- The grammar metacharacters `( ) [ ] { } | < >` **cannot occur as literal input**.
   They are therefore exclusively structural, and **no escape mechanism is
   needed or provided**. This is a deliberate consequence of the voice-input
   scope.
@@ -107,6 +108,7 @@ A template is literal text interspersed with the tokens below.
 | Alternatives | `(a\|b\|c)` | expansion | A choice of branches (§3.2). |
 | Optional | `[x]` | expansion | An optional segment; equivalent to `(x\|)`. |
 | Named slot | `{name}` | slot | A placeholder filled with a value (§5). |
+| Vocabulary reference | `<name>` | expansion | Expands to a named vocabulary (§3.7). |
 
 There is no slot-typing syntax, no digit token, no legacy wildcard, and no
 brace-escaping form.
@@ -177,7 +179,8 @@ turn on [(all|every) ]light[s]
 The following forms are **malformed**; a tool MUST reject any template that
 contains one:
 
-- **Unbalanced metacharacters** — an unmatched `(`, `)`, `[`, `]`, `{`, or `}`.
+- **Unbalanced metacharacters** — an unmatched `(`, `)`, `[`, `]`, `{`, `}`,
+  `<`, or `>`.
 - **Single-branch group** — a parenthesised group with no `|`, e.g. `(word)`
   or the empty `()`. A group expresses a *choice between branches*; with a
   single branch there is no choice. Write the branch as plain literal text
@@ -201,10 +204,48 @@ contains one:
   the adjacent pair `{a} {b}`, is therefore malformed.
 - **Repeated slot name** — using the same `{name}` more than once in one
   template (`{x} and {x}`). A template defines each slot name exactly once.
+- **Undefined vocabulary reference** — a `<name>` (§3.7) for which no
+  vocabulary `name` is available to the expander.
+- **Cyclic vocabulary reference** — a chain of inline vocabulary references
+  that includes itself; its resolution would not terminate.
 
 Empty lines and `#`-comment lines are removed by the file reader before a
 template reaches the grammar (OVOS-INTENT-2 §3); they are not part of a
 template.
+
+### 3.7 Inline vocabulary reference `< >`
+
+An angle-bracket token `<name>` is an **inline vocabulary reference**. During
+expansion it is replaced by a named **vocabulary** — a slot-free phrase set,
+supplied as a `.voc` resource (OVOS-INTENT-2) or as inline data. The reference
+expands to a choice over the vocabulary's members, exactly as if those members
+had been written as an alternative group in its place.
+
+`name` obeys the same charset as a slot name (§3.4): lowercase ASCII letters,
+digits, and underscores, and MUST NOT begin with a digit.
+
+A vocabulary is itself written in this grammar (slot-free), so a referenced
+vocabulary MAY contain further `<…>` references; resolution recurses (§4.1). A
+`<name>` reference MAY appear anywhere a literal word may, including inside an
+alternative or optional group; it MUST NOT appear inside a named slot, and it
+never introduces one — a vocabulary is slot-free.
+
+An inline vocabulary reference is purely an **authoring** convenience: the
+expander resolves it before producing the sample set (§4.1), so a `<name>`
+token never reaches an intent engine. Resolving a reference requires the
+referenced vocabulary; an expander is given the vocabularies alongside the
+template.
+
+```
+<greeting> [there] {name}
+```
+
+Given a vocabulary `greeting` whose members are `hello`, `hi`, and
+`good morning`, this template is equivalent to:
+
+```
+(hello|hi|good morning) [there] {name}
+```
 
 ---
 
@@ -234,17 +275,23 @@ reproducible across tools.
 
 The sample set is obtained by:
 
-1. Replace every `[x]` with `(x|)`. The **working set** is the single resulting
+1. **Resolve inline vocabulary references.** Replace each `<name>` (§3.7) with
+   the alternative group `(m₁|m₂|…|mₖ)`, where `m₁…mₖ` are the members of the
+   referenced vocabulary's sample set. A referenced vocabulary is itself a
+   template set expanded by this same procedure, so a vocabulary may contain
+   further `<…>` references; resolution recurses. A reference to an unavailable
+   vocabulary, or a reference cycle, is malformed (§3.6).
+2. Replace every `[x]` with `(x|)`. The **working set** is the single resulting
    string.
-2. While any string in the working set still contains `(`: for each such
+3. While any string in the working set still contains `(`: for each such
    string, locate its **innermost** groups — each a `(...)` containing no
    nested parentheses — split each group's interior on `|` into branches (a
    branch may be empty), and replace that string with the **Cartesian product**
    of substituting each branch for each of its groups. The working set becomes
    the union of all strings so produced.
-3. **Normalize whitespace** in each string: replace every run of one or more
+4. **Normalize whitespace** in each string: replace every run of one or more
    spaces with a single space, and strip leading and trailing spaces.
-4. Remove duplicates. The remaining distinct strings are the sample set.
+5. Remove duplicates. The remaining distinct strings are the sample set.
 
 Named slots `{...}` are opaque throughout: they are carried through unchanged
 and are **never** expanded.
@@ -406,8 +453,9 @@ fill more than one role. Conformance constrains how a template is *parsed,
 expanded, and filled* — never how an engine *matches*.
 
 - **Expander.** A tool that turns a template into its sample set. It MUST accept
-  the token set of §3, reject the malformed forms of §3.6, produce exactly the
-  sample set defined by §4, and never expand `{...}` slots.
+  the token set of §3, resolve inline vocabulary references (§3.7, §4.1 step 1),
+  reject the malformed forms of §3.6, produce exactly the sample set defined by
+  §4, and never expand `{...}` slots.
 
 - **Intent engine.** A tool that consumes **slot-bearing** input templates
   (`.intent`). It MUST embed a conformant expander, assume the input model of
