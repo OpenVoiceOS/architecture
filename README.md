@@ -13,6 +13,25 @@ by voice assistants beyond OVOS.
 > them remaining unchanged. The notice will be removed when a spec reaches a
 > stable status.
 
+## Authority
+
+These specifications are **prescriptive, not descriptive**. They define the
+intended architecture; they are not a transcript of how any current code
+behaves. This repository is the **source of truth**: where an implementation —
+in OpenVoiceOS or in any other project — diverges from a specification here,
+that divergence is a **bug in the implementation**, not in the specification.
+
+The specifications describe **architecture and contracts only**. They do not
+mandate *how* to implement anything — programming language, internal design,
+and engineering choices are entirely the implementer's. What they fix is the
+observable contract: the formats, the grammar, and the behaviour a conformant
+tool must exhibit.
+
+Anyone is free to **adopt** these specifications — they are written to be
+implementation-agnostic and usable by voice assistants beyond OVOS — and anyone
+is free to **propose changes** to them (see *Changing a specification* below).
+Adoption is voluntary; conformance, once adopted, is not.
+
 ## Specifications
 
 | ID | Document | Version | Status | Scope |
