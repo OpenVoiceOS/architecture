@@ -17,16 +17,17 @@ by voice assistants beyond OVOS.
 
 | ID | Document | Version | Status | Scope |
 |----|----------|---------|--------|-------|
-| OVOS-INTENT-1 | [Sentence Template Grammar](sentence-template-grammar.md) | 1.1 | Draft | The ASR input model, the sentence template grammar (expansion + named slots), expansion into training samples, the slot model, and the skill→pipeline training-data contract. |
-| OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 1.1 | Draft | The `locale/` folder layout and the two resource file formats across five roles: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`. |
+| OVOS-INTENT-1 | [Sentence Template Grammar](sentence-template-grammar.md) | 1 | Draft | The ASR input model, the sentence template grammar (expansion + named slots), expansion into training samples, the slot model, and the skill→pipeline training-data contract. |
+| OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 1 | Draft | The `locale/` folder layout and the two resource file formats across five roles: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`. |
 | OVOS-INTENT-3 | [Intent Definition](intent-definition.md) | 1 | Draft | What an intent is, the two definition methods (keyword and template intents), registration, the intent-engine input contract, and the match result. |
 
 **Reading order.** The specifications are numbered in dependency order and are
 meant to be read that way. OVOS-INTENT-1 defines the template grammar;
 OVOS-INTENT-2 builds on it to define the resource files; OVOS-INTENT-3 builds
 on both to define what an intent is. Each depends on the ones before it.
-OVOS-INTENT-3 version 1 builds on OVOS-INTENT-1 and OVOS-INTENT-2 at version
-1.1.
+
+Each specification is versioned independently, starting at version 1. The
+`Version` column above is the current version of each.
 
 ## Design notes
 

@@ -283,11 +283,11 @@ decisions, resolved explicitly:
 
 ### 7.3 Audit-driven refinement
 
-The specs were revised across several review rounds before circulation.
-OVOS-INTENT-1 moved from version 1 to 1.1, and OVOS-INTENT-2 to 1.2, as
-consistency fixes were applied — the malformed-form rules, the expansion
-algorithm, slot handling, cross-spec terminology. The CHANGELOG records each
-versioned change.
+Before the first release the specs were revised across several review rounds —
+the malformed-form rules, the expansion algorithm, slot handling, and
+cross-spec terminology were all tightened. Those rounds happened pre-release,
+so they left no intermediate version numbers behind: the audited result *is*
+version 1. The CHANGELOG records versioned changes from there on.
 
 ### 7.4 OVOS-INTENT-1 version 2 — inline vocabulary references
 

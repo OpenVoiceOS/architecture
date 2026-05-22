@@ -1,6 +1,6 @@
 # Sentence Template Grammar Specification
 
-**Spec ID:** OVOS-INTENT-1 · **Version:** 1.1 · **Status:** Draft · **Basis:** [padacioso](https://github.com/OpenVoiceOS/padacioso) (closest existing implementation; does not yet fully conform)
+**Spec ID:** OVOS-INTENT-1 · **Version:** 1 · **Status:** Draft · **Basis:** [padacioso](https://github.com/OpenVoiceOS/padacioso) (closest existing implementation; does not yet fully conform)
 
 This document defines the *sentence template* grammar used by padatious-like
 intent engines and by the localized resource files of a skill. A sentence
