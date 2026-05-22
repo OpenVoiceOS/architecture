@@ -70,6 +70,15 @@ linter checks against:
 A specification that does not change between levels keeps its lower version
 number — OVOS-INTENT-3 is at version 1 in both V1 and V2.
 
+## Reference implementation
+
+[**ovos-spec-tools**](https://github.com/OpenVoiceOS/ovos-spec-tools) is the
+reference implementation of these specifications — a dependency-light Python
+package providing the sentence-template expander, the locale resource loader,
+the dialog renderer, language matching, and the `ovos-spec-lint` linter. It is
+the conformance target a tool can depend on instead of reimplementing the
+machinery, and the home of the planned conformance corpus.
+
 ## Design notes
 
 - These specs define the **shape of training data and resource files**, not
