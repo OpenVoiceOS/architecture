@@ -233,3 +233,90 @@ as the specs and the ecosystem converge, its file-type coverage and the specs
 will need to meet in the middle; and its translation validators are a natural
 home for spec conformance checks, distinct from but related to the planned
 grammar-level conformance corpus (§5).
+
+---
+
+## 7. Design history
+
+How the specification set was arrived at — context that explains the *why*,
+but that has no place in a normative document.
+
+### 7.1 Three specs, in dependency order
+
+The set was built bottom-up, each spec depending on the one before it:
+
+- **OVOS-INTENT-1** formalizes the sentence template grammar — the
+  bracket-expansion syntax that padatious-like engines and skill resource
+  files already used informally.
+- **OVOS-INTENT-2** builds on it to formalize the `locale/` folder and the
+  resource file roles.
+- **OVOS-INTENT-3** builds on both to define what an intent *is* — a
+  developer's binding from a natural-language command to a handler — and the
+  two ways to define one (keyword and template).
+
+Each was a formalization pass over machinery already running in production
+(§1), not a greenfield design.
+
+### 7.2 Prescriptive, not descriptive
+
+The specs describe a **clean target**, not current OVOS behaviour in full.
+Where the existing system carried accidental inconsistencies or legacy cruft,
+the specs diverge deliberately — they are something for OVOS to grow into, not
+a transcript of what it does. A handful of those divergences were genuine
+decisions, resolved explicitly:
+
+- **Nested locale directories** are allowed — a `locale/<lang>/` tree may have
+  subdirectories, resolved by recursive search. This matches current
+  behaviour, and was kept rather than forcing a flat layout.
+- **Legacy file types are dropped.** `.rx`, `.value`, `.list`, `.word`,
+  `.template`, and `.qml` are not resource roles in OVOS-INTENT-2. Regex
+  entities in particular are recommended against — they localize poorly.
+- **`.blacklist` is new.** Intent suppression was previously ad hoc (a list of
+  `.voc` files passed as `voc_blacklist`); the `.blacklist` role and the
+  keyword `excluded` constraint formalize it. This is a prescriptive addition
+  for OVOS to adopt, not a description of today.
+- **Slot names may contain digits**, aligning the rule with what skills
+  already write.
+- **The `{{ }}` double-brace dialog form is dropped** — a
+  backward-compatibility artifact; only the single-brace `{name}` is
+  recognized.
+
+### 7.3 Audit-driven refinement
+
+The specs were revised across several review rounds before circulation.
+OVOS-INTENT-1 moved from version 1 to 1.1, and OVOS-INTENT-2 to 1.2, as
+consistency fixes were applied — the malformed-form rules, the expansion
+algorithm, slot handling, cross-spec terminology. The CHANGELOG records each
+versioned change.
+
+### 7.4 OVOS-INTENT-1 version 2 — inline vocabulary references
+
+The one feature that is *not* a formalization of existing behaviour is the
+`<name>` inline vocabulary reference — the equivalent of Home Assistant's
+`expansion_rules` (§2.2). It reuses the existing `.voc` role rather than
+adding a separate file type, so the change is one grammar token plus an
+expander step. It is tracked as issue #1 and proposed in PR #2. Because a
+`<name>` template cannot be expanded by a version-1 tool, it is a breaking
+change and so carries a major version bump.
+
+### 7.5 The reference implementation
+
+The specifications are implementation-agnostic, but a spec benefits from one
+conformant implementation to point at. **ovos-spec-tools** is that — the
+expander, the resource loader, the dialog renderer, language matching, and a
+locale linter, in one dependency-light package. It exists because the same
+machinery had been reimplemented and had drifted across the ecosystem: bracket
+expansion alone existed in six separate copies, and language matching in
+several more. ovos-spec-tools is the single conformant implementation those
+components are meant to converge on, and the intended home of the planned
+conformance corpus (§5).
+
+### 7.6 What was deliberately left out
+
+Two things were consciously deferred rather than rushed:
+
+- **Slot value typing** — interpreting a slot as a number or a date — is left
+  unspecified, because it is inseparable from a normalization of ASR output
+  that does not yet exist (§4; OVOS-INTENT-1 §5.3).
+- **The pipeline** — the ordered, multi-stage intent-resolution chain — is the
+  largest unformalized piece, and the natural next specification (§3).
