@@ -221,6 +221,14 @@ reasoning, not the requirement.
   (MSG-1 §3.3). The bus is not a security boundary. Layer-2 systems
   (HiveMind) build authentication and routing enforcement on top of
   the pair without OVOS itself learning about peers.
+- **The boundary is user ↔ assistant, not core ↔ handler.** The
+  `(source, destination)` pair marks who is currently talking to whom
+  across one boundary only: the external participant (user, chat UI,
+  satellite client, test harness) on one side, the assistant — OVOS
+  core *and* every skill handler — on the other. Skills are not on the
+  other side of this boundary from OVOS core; from the user's
+  perspective the assistant is one thing. The flip happens **once**
+  per conversational turn (§5.1), not on every internal hop.
 - **`session_id == "default"` is the only normative-magic value**
   (MSG-1 §4.1). It marks "originated by the device itself" and is the
   hook `ovos-audio` already uses to decide whether to play TTS
@@ -245,33 +253,153 @@ MSG-1's `source`/`destination`/`session` model it is also the
 **substrate higher-level systems plug into**. Two design choices make
 this work:
 
-- **The OVOS / handler-code boundary is explicit in every Message**
-  (MSG-1 §3.1). `source` and `destination` flip as the conversation
-  crosses the boundary — emitter → OVOS → handler → OVOS → emitter —
-  so any observer can answer *"which side is talking right now?"*
-  without engine-specific knowledge.
+- **There is one boundary, and the routing pair marks it** (MSG-1
+  §3). `source` and `destination` distinguish *the user side* from
+  *the assistant side* — and the assistant side is OVOS core
+  together with every skill handler. The pair flips **once** per
+  conversational turn, at the moment the assistant decides to
+  respond (§5.1). Any observer can read the pair and answer *"which
+  side is talking right now?"* without engine-specific knowledge.
 - **Identity is layered, not centralized** (MSG-1 §3.4, §4.4). OVOS
-  itself doesn't know whether an emitter is a microphone, a chat UI,
-  or a HiveMind peer; it only knows the opaque `source` /
+  itself doesn't know whether the user side is a microphone, a chat
+  UI, or a remote satellite; it only knows the opaque `source` /
   `destination` strings and the opaque `session.session_id`. The
   semantics of those strings — who the peer is, whether they're
   authenticated, where the session came from — are filled in by the
   layer above.
 
-This is what makes **HiveMind** possible without forking OVOS.
-HiveMind mints peer identifiers, populates `source`/`destination` and
-per-peer `session_id` values, and enforces authentication and
-authorization at its layer — and from OVOS's perspective the bus
-looks the same as for a local user. The pre-existing
-`session_id == "default"` rule then correctly keeps device-local TTS
-on the device's own speakers, because remote HiveMind sessions carry
-their own `session_id` values and never `"default"`.
+### 5.1 The single-flip routing model (how it actually works)
 
-The bus contracts intentionally stay out of the way of this layering.
-MSG-1 §3 / §4 specify only what they have to (boundary marking,
-session carrying, the single reserved value) and explicitly defer the
-rest to "layer-2 systems built on top." That is the OVOS bus's
-distinctive feature.
+This is the most important bus-level invariant in OVOS and the one
+that most often gets reinvented incorrectly when implementers reason
+about it for the first time. The flip happens **exactly once per turn**,
+performed by **ovos-core**, before the intent dispatch is emitted.
+After the flip, every handler-side emission is *already* addressed
+back at the user.
+
+The full sequence:
+
+1. **The user side emits.** An external component — microphone
+   service, chat UI, satellite client, test harness — emits an
+   utterance Message (e.g. `recognizer_loop:utterance`) with
+   `source` set to itself and (usually) no `destination` set:
+
+       context: { source: "audio", destination: null, session: {...} }
+
+2. **ovos-core flips the pair, then dispatches.** When the intent
+   service matches an intent it derives the dispatch via
+   `Message.reply(match_type, data)`
+   (`ovos-core/ovos_core/intent_services/service.py:340`). The
+   `.reply` semantics of MSG-1 §5.2 swap `source` and `destination`,
+   producing:
+
+       context: { source: "ovos-core", destination: "audio", session: {...} }
+
+   The dispatch goes out on the per-intent topic
+   `<skill_id>:<intent_name>` (the skill subscribes by topic, not
+   by `destination`). At this moment the swap has already
+   classified the dispatch as *going back at the user*, even though
+   a skill handler is the one about to run.
+
+3. **The handler emits via `.forward`, preserving the swap.** Every
+   message the skill emits in response — `speak`, the handler
+   lifecycle trio (`mycroft.skill.handler.start/complete/error`),
+   GUI events, follow-up dialogs — uses `Message.forward(...)`
+   (`ovos-workshop/ovos_workshop/skills/ovos.py:1461, 1472, 1502,
+   1567, …`). `.forward` preserves `context` unchanged. So every
+   handler-emitted message carries:
+
+       context: { source: "ovos-core", destination: "audio", session: {...} }
+
+   — already addressed back at the original user-side component.
+
+The handler **does not need to know** who the user was, where the
+session came from, or how routing back to them works. It just
+`.forward`s, and the addressing is correct because ovos-core did
+the flip up-front.
+
+### 5.2 Why this matters
+
+Two consequences fall out of single-flip routing — both load-bearing
+for layer-2 systems:
+
+- **The boundary is user ↔ assistant, not core ↔ handler.** A reader
+  of one Message in isolation can tell which side of the boundary
+  produced it (`source`) and which side it is addressed to
+  (`destination`) — *but the handler and the core are on the same
+  side*. From outside, OVOS is one thing. This matches how
+  conversations actually work: the user doesn't know or care which
+  skill answered them, only that "the assistant" did.
+- **Handler authors never write addressing code.** Because `.forward`
+  preserves the already-flipped pair, no skill anywhere needs to
+  understand `source` / `destination` to talk back to the user
+  correctly. Get the inversion wrong inside ovos-core once, and
+  everything downstream is broken; get it right (and OVOS does),
+  and skill code stays clean.
+
+### 5.3 Why HiveMind works
+
+HiveMind is the canonical layer-2 system this design enables. A
+HiveMind satellite client is just another user-side emitter — it
+sets `source` to its peer ID, populates `session` with a per-peer
+session, and emits a Message. Inside OVOS:
+
+- ovos-core runs the same `.reply` flip (step 2 of §5.1) — now
+  `destination` is the satellite's peer ID instead of the local
+  microphone.
+- Every skill `.forward`s as usual (step 3) — `destination` stays as
+  the satellite ID through every handler emission.
+- HiveMind, watching the bus from its layer-2 vantage point, sees
+  each message addressed to its peer and routes it back over the
+  HiveMind transport.
+
+The pre-existing `session_id == "default"` rule then correctly
+keeps device-local TTS on the device's own speakers, because remote
+HiveMind sessions carry their own `session_id` values and never
+`"default"` — `ovos-audio`'s `require_default_session` decorator
+declines to play satellite-bound TTS on the host hardware.
+
+None of this required HiveMind to modify OVOS core. The mechanism
+that makes it work — single-flip routing addressing every
+handler-side message back at whoever spoke first — is built into
+MSG-1 §5.2 (the `.reply` rule) and was already implemented in
+`ovos-bus-client/message.py:194-198`. MSG-1 just names it.
+
+### 5.4 What this rules out
+
+The single-flip model implies several things the spec deliberately
+does *not* do:
+
+- **No per-hop addressing.** A handler does not pick its own
+  `destination`. Doing so would shadow ovos-core's flip and break
+  layer-2 routing.
+- **No "reply to the skill" messages.** Because every handler
+  emission is addressed at the user, a follow-up arriving at a skill
+  uses the topic to route, not `destination` — which is why
+  `<skill_id>:<intent_name>` is the dispatch topic at all (the topic
+  selects the handler; the `destination` belongs to the user).
+- **No second flip on response.** A skill emitting `.speak` does not
+  `.reply` to the dispatch (which would re-flip and address the
+  message back at OVOS); it `.forward`s, preserving the user-bound
+  pair.
+
+These are not arbitrary stylistic rules — they fall out of the
+single-flip invariant. Implementers who use `.reply` where `.forward`
+is appropriate (or vice-versa) produce subtly mis-routed messages
+that work in local-only tests but silently break HiveMind and
+similar layer-2 systems.
+
+### 5.5 Summary
+
+The bus contracts intentionally stay out of the way of layer-2
+layering. MSG-1 §3 / §4 specify only what they have to (boundary
+marking, session carrying, the single reserved value) and explicitly
+defer the rest to "layer-2 systems built on top." The
+single-flip routing model of §5.1 is the mechanism that makes that
+deferral coherent: as long as ovos-core does one flip and every
+handler `.forward`s, layer-2 systems get all the addressing
+information they need without OVOS itself needing to know they
+exist. That is the OVOS bus's distinctive feature.
 
 ---
 
