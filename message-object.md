@@ -21,12 +21,8 @@ assistant. It covers:
 It is implementation-agnostic: any process, in any language, on any
 transport, can produce and consume conformant Messages. Every key and
 derivation defined here already exists in current OVOS code paths; this
-specification only formalizes them. No new fields are introduced.
-
-It is the foundation other bus specifications build on. The *Intent and
-Entity Registration and Dispatch Bus Contract* (OVOS-INTENT-4) defines
-concrete topics for the intent lifecycle — registration, match, and
-dispatch — on top of this envelope.
+specification only formalizes them. No new fields are introduced. 
+It is the foundation other bus specifications build on.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and
 **MAY** are used as in RFC 2119.
@@ -54,7 +50,7 @@ This specification defines:
 It does **not** define:
 
 - *which* message topics exist — that is the domain of other
-  specifications (notably OVOS-INTENT-4) and of each component's own
+  specifications and of each component's own
   contract;
 - the shape of a Message's `data` payload — fixed per-topic by the
   specification that defines the topic;
@@ -102,7 +98,7 @@ match the syntax:
 - lowercase RECOMMENDED for new topics.
 
 Dot- and colon-separated segments are common in OVOS topics —
-`ovos.intent.register.keyword`, `speak.response` — and have no normative
+`ovos.intent.register.keyword`, `XXX.response` — and have no normative
 semantics here; segmenting is a convention used by the specifications
 that define topics, not a feature of the envelope.
 
@@ -155,18 +151,14 @@ Message crosses the boundary:
 
 1. An **emitter** (a microphone service, a chat UI, a HiveMind client,
    a test harness) sends an utterance Message and sets `source` to
-   itself. The Message is going *external → OVOS*; OVOS is the
-   consumer.
-2. OVOS classifies the utterance and matches an intent. It first emits
-   a broadcast notification (`ovos.intent.matched`, OVOS-INTENT-4 §10)
-   identifying itself as `source`, and then dispatches the handler on
-   the per-intent topic `<skill_id>:<intent_name>` (OVOS-INTENT-4 §11)
-   with `source` = OVOS and the skill addressable via `destination`.
-   The Message is now going *OVOS → external handler code*.
-3. The skill's handler runs and announces its outcome through the
-   broadcast lifecycle trio (OVOS-INTENT-4 §12), preserving the
-   dispatch's `source` so observers see the original conversational
-   chain intact.
+   itself. The Message is going *user → OVOS*; OVOS is the
+   consumer. **A -> B**
+2. OVOS classifies the utterance and matches an intent. It dispatches 
+   the handler on the per-intent topic `<skill_id>:<intent_name>` via `.reply`.
+   The Message is now going *OVOS → user*. **B -> A**
+3. The skill's handler runs and announces its outcome, preserving the
+   dispatch's `context` via `.forward`. Observers still see 
+   the emitter as `destination`. **B -> A**
 
 At each step the pair `(source, destination)` answers one question
 unambiguously: *which side of the OVOS boundary is talking, and to
@@ -198,7 +190,7 @@ envelope.
 `source` and `destination` are **opaque strings** from the perspective
 of this specification. A consumer **MUST NOT** parse or ascribe
 structure to their values beyond string equality. How identifiers are
-minted (UUID, hostname-derived, HiveMind peer ID, etc.) is a deployment
+minted (UUID, hostname-derived, etc.) is a deployment
 concern.
 
 Because the pair cleanly identifies *who is on the external side of
@@ -284,8 +276,7 @@ Spanish command inside an English-preferred session: `data.lang` =
 `es-ES`, `session.lang` = `en-US`. A consumer reading one should not
 assume it equals the other.
 
-Topics that carry a `data.lang` field are defined elsewhere (notably
-OVOS-INTENT-4 for registration and match-result Messages); this
+Topics that carry a `data.lang` field are defined elsewhere; this
 specification owns only the session-level `lang`.
 
 ### 4.3 Propagation and the absent-session default
@@ -504,11 +495,5 @@ semantics beyond the opaque layer-2 substrate of §3.4 / §4.4.
 
 ## See also
 
-- *Intent and Entity Registration and Dispatch Bus Contract*
-  (OVOS-INTENT-4) — the first specification to define concrete topics
-  on top of this envelope, and the source of the `data.lang` field
-  referenced by §4.2.
-- *Intent Definition Specification* (OVOS-INTENT-3) — referenced by
-  OVOS-INTENT-4 for intent identity.
 - `ovos-bus-client` — the reference Python implementation of this
   envelope and of the derivations of §5.
