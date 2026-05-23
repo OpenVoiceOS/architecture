@@ -6,9 +6,8 @@ systems, the catalogue of *deliberate* divergences from current OVOS
 code, and topics worth discussing that do not belong in a normative
 specification. Nothing here is binding — OVOS-INTENT-1, OVOS-INTENT-2,
 OVOS-INTENT-3, OVOS-INTENT-4, and OVOS-MSG-1 are the only normative
-documents. This
-appendix exists so the specs themselves can stay terse and
-requirement-focused.
+documents. This appendix exists so the specs themselves can stay
+terse and requirement-focused.
 
 ---
 
@@ -523,6 +522,14 @@ changes:
   (INTENT-4 §3.3). Today rejection responses are ad-hoc free-form
   strings (when emitted at all). The spec defines five normative
   codes.
+- **`ovos.utterance.handled` on the handler-error path** (INTENT-4
+  §15.4). Current `ovos-workshop`'s `_on_event_error` emits
+  `mycroft.skill.handler.error` but does **not** emit
+  `ovos.utterance.handled`, breaking the "every utterance terminates
+  with `ovos.utterance.handled`" invariant ovos-core upholds on its
+  other terminal paths. INTENT-4 §15.4 declares the invariant
+  normative; the workshop fix is tracked separately as an
+  implementation bug.
 
 ### 6.5 New, no legacy
 

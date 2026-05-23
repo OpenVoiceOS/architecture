@@ -69,6 +69,14 @@ It does **not** define:
   language exactly. Fallback policy is a host concern, expected to be
   formalized in a future specification together with text normalization
   (OVOS-INTENT-1 §5.3 and the planned text-normalization spec);
+- the broader **utterance lifecycle** beyond intent matching and
+  handler dispatch — STT input, transformer cancellation, no-match
+  failure, and the universal `ovos.utterance.handled` end-marker
+  (§15). These are formalized by OVOS-PIPELINE-1, which sits
+  around this spec at the host layer;
+- the **intent-layer failure signal** (`complete_intent_failure`
+  in current OVOS) — distinct from a handler-layer error (§12),
+  and out of scope here (formalized by OVOS-PIPELINE-1 §9.3);
 - legacy topics from earlier Mycroft- and OVOS-derived code paths. These
   are collected in *Appendix A* as a non-normative implementer aid only.
 
@@ -798,6 +806,38 @@ messages (acknowledgements, streaming updates, partial speech) are a
 deployment concern outside the scope of this specification, and may be
 specified separately.
 
+### 12.6 This trio is handler-layer only
+
+The trio of §12 is the **handler lifecycle** — it covers what the
+skill's bound code did once a dispatch reached it. It is one of three
+distinct lifecycle layers OVOS surfaces around an utterance, and
+implementers should not confuse them:
+
+| Layer | What it tracks | Where formalized |
+|-------|----------------|------------------|
+| **Utterance** | The whole turn from STT input to terminal state — including transformer cancellation, no-match, and successful handler completion. The universal end-marker is `ovos.utterance.handled`. | Not formalized by this spec — see §15. |
+| **Intent matching** | The pipeline's attempt to select an intent for a given utterance. Positive outcome: `ovos.intent.matched` (§10). Negative outcome: `complete_intent_failure` (current OVOS), not formalized here — see §15. | §10 covers the positive case only. |
+| **Handler** | One dispatched handler's execution. `start` / `complete` / `error` — the trio of §12. | This section. |
+
+The handler trio fires only when an intent matched **and** the host
+dispatched it to a skill. Implementers building fallback logic,
+analytics, or transcript viewers need to consume all three layers to
+get a complete picture:
+
+- An utterance that no pipeline matched produces no handler trio at
+  all — `complete_intent_failure` is the signal that the intent layer
+  gave up, not `ovos.intent.handler.error`.
+- An utterance the user cancelled mid-flight produces no handler
+  trio either — `ovos.utterance.cancelled` is the signal, fired by
+  the host before any pipeline runs.
+- A handler that raised reports `ovos.intent.handler.error` (this
+  layer) and the utterance layer reports its own end-marker
+  (`ovos.utterance.handled` — see §15 for the asymmetry note).
+
+§15 covers what this spec does *not* formalize about the utterance
+and intent-matching layers, and the forward references to the
+planned pipeline specification.
+
 ---
 
 ## 13. Introspection
@@ -920,6 +960,104 @@ are deliberately **unconstrained** — an engine MAY use any strategy
 
 ---
 
+## 15. Other utterance-lifecycle messages (out of scope)
+
+This specification deliberately covers only the **intent**-layer and
+**handler**-layer of the utterance lifecycle. The full utterance
+lifecycle — from STT (or chat, or test harness) input to terminal
+state — is broader, and is **not** formalized here. It is the
+natural subject of a future **pipeline specification**.
+
+Current OVOS emits the following utterance-layer messages that this
+spec does *not* claim normative authority over. They are documented
+here so implementers understand which lifecycle level a message
+belongs to:
+
+| Topic | Role | Current emitter |
+|-------|------|-----------------|
+| `recognizer_loop:utterance` | Entry point — STT or other producer hands an utterance to the intent layer. | listener / CLI / chat bridge / test harness |
+| `ovos.utterance.cancelled` | An utterance transformer requested cancellation; no pipeline runs. | `ovos-core` `send_cancel_event` |
+| `complete_intent_failure` | The pipeline iterated every stage and none matched. The intent layer gave up. | `ovos-core` `send_complete_intent_failure` |
+| `ovos.utterance.handled` | **Universal end-marker** — fires on every terminal path: cancellation, no-match, and successful handler completion. | `ovos-core` (cancel + no-match paths); `ovos-workshop` `_on_event_end` (successful handler path) |
+
+Two things follow from this:
+
+### 15.1 `ovos.utterance.handled` is utterance-layer, not handler-layer
+
+`ovos.utterance.handled` and `ovos.intent.handler.complete` (§12) are
+**at different lifecycle levels** and one does **not** subsume the
+other:
+
+- `ovos.intent.handler.complete` fires only when a handler ran. It
+  is silent for cancelled utterances and for utterances with no
+  matching intent.
+- `ovos.utterance.handled` fires on **every terminal path**, whether
+  or not a handler ran. It is the signal an observer subscribes to
+  to count completed turns or to know "the system is now idle for
+  this session."
+
+Observers wanting to know "did anything successful happen?" need to
+correlate `ovos.utterance.handled` with the presence/absence of
+`ovos.intent.matched` (§10) within the same `session` since the
+preceding `recognizer_loop:utterance`. This spec does not formalize
+that correlation; the planned pipeline spec is the right home for
+it.
+
+### 15.2 `complete_intent_failure` and handler error are different failures
+
+A reader of §12 might assume `ovos.intent.handler.error` is "OVOS's
+way of reporting a failed intent." It is not. There are two distinct
+failure modes for an utterance, emitted by different components at
+different lifecycle stages:
+
+- **Intent-layer failure** — no pipeline matched the utterance. The
+  intent layer never dispatched a handler. Signal:
+  `complete_intent_failure` (current legacy name).
+- **Handler-layer failure** — a handler was dispatched and its code
+  raised. Signal: `ovos.intent.handler.error` (§12, this spec).
+
+An analytics consumer, a fallback router, or a transcript viewer
+must distinguish these. The intent-layer signal is **not**
+formalized by this specification — it is formalized by
+OVOS-PIPELINE-1 §9.3, which keeps the legacy name
+`complete_intent_failure` as the v1 prescribed topic.
+
+### 15.3 The deferred trio
+
+OVOS's broader async-pattern observation: every action layer tends
+to expose a `start` / `success` / `failure` triplet of signals,
+implicit or explicit. Three such triplets exist around an
+utterance:
+
+| Layer | Start | Success | Failure | Formalized here? |
+|-------|-------|---------|---------|------------------|
+| **Utterance** | `recognizer_loop:utterance` | `ovos.utterance.handled` | `ovos.utterance.cancelled` (transformer) / no-match implicit via absence of intent | No — §15 documents only |
+| **Intent matching** | implicit (pipeline tick) | `ovos.intent.matched` | `complete_intent_failure` | Half — positive case only (§10) |
+| **Handler** | `ovos.intent.handler.start` | `ovos.intent.handler.complete` | `ovos.intent.handler.error` | Yes (§12) |
+
+This specification formalizes the handler trio in full and the
+intent-matching trio's positive case, and explicitly defers the
+utterance trio and the intent-matching trio's negative case to the
+pipeline spec. The signals listed in §15 above continue to fire under
+current legacy names in v1-conformant deployments.
+
+### 15.4 A known asymmetry in current OVOS
+
+Current `ovos-workshop` emits `ovos.utterance.handled` after
+`mycroft.skill.handler.complete` (in `_on_event_end`) but **not**
+after `mycroft.skill.handler.error` (in `_on_event_error`). This
+breaks the "every utterance terminates with `ovos.utterance.handled`"
+invariant ovos-core upholds in its other terminal paths.
+
+Per the *Authority* section of the repository README, this is a
+known implementation bug being worked through — not a defect in
+this specification. A v1-conformant implementation **SHOULD** emit
+`ovos.utterance.handled` on every terminal path, including the
+handler-error path. Tracking this fix is an ovos-workshop concern;
+the spec just records the expected invariant.
+
+---
+
 ## Appendix A — Legacy topic mapping (non-normative)
 
 This appendix is **non-normative**. It documents the legacy Mycroft- and
@@ -940,7 +1078,10 @@ replacement. It exists only to help implementers migrate. New code
 | `mycroft.skill.handler.start` | `ovos.intent.handler.start` (§12) | Renamed for uniformity with the `ovos.intent.*` namespace. Payload shape is unchanged in spirit (skill + handler identity), tightened to a normative `(skill_id, intent_name)` pair. |
 | `mycroft.skill.handler.complete` | `ovos.intent.handler.complete` (§12) | Same rename. |
 | `mycroft.skill.handler.error` | `ovos.intent.handler.error` (§12) | Same rename; `exception` field is normative. |
-| `ovos.utterance.handled` | (subsumed by `ovos.intent.handler.complete`) | Legacy end-of-intent marker emitted alongside `complete`; the trio of §12 is sufficient on its own. |
+| `ovos.utterance.handled` | **unchanged** (see §15.1) | Utterance-layer end-marker, not subsumed by the handler trio. Operates at a different lifecycle level — fires on every terminal path, including cancellation and no-match. Continues to fire under its current legacy name in v1-conformant deployments. |
+| `complete_intent_failure` | **unchanged** (see §15.2) | Intent-layer failure signal. Formalized by OVOS-PIPELINE-1 §9.3, which keeps the legacy name. Continues to fire under its current legacy name in v1-conformant deployments. |
+| `ovos.utterance.cancelled` | **unchanged** (see §15) | Utterance-layer cancellation signal emitted by transformer-driven cancel paths. Out of scope here. |
+| `recognizer_loop:utterance` | **unchanged** (see §15) | Utterance-layer entry point. Out of scope here. |
 | `add_context` / `remove_context` | (out of scope) | Adapt conversational context is not part of the intent registration contract. A separate specification may define it. |
 
 Per the repository's *Authority* section, current OVOS code that still emits
