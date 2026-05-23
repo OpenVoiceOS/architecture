@@ -76,3 +76,33 @@ tool does not recognize the token and cannot expand the template.
   authentication, authorization, retry, delivery and ordering
   guarantees, session lifecycle, and the internal shape of `session`
   beyond `session_id` and `lang` are explicitly out of scope.
+
+## OVOS-PIPELINE-1 — Utterance Lifecycle and Pipeline
+
+### 1
+
+- Initial draft. Defines the **orchestrator** and the
+  **pipeline plugin** abstraction: opaque-`pipeline_id` black
+  boxes the orchestrator iterates in `session.pipeline_stages`
+  order per utterance, first-match-wins. Plugins expose one
+  operation — `match(utterance, session) → Match | None`,
+  side-effect-free; the orchestrator handles dispatch,
+  notifications, and terminal events.
+- Dispatch topic: `<owner_id>:<intent_name>` where `owner_id` is
+  either a `skill_id` (skill-owned handler) or a `pipeline_id`
+  (plugin-bundled handler). Plugins and skills are equivalent
+  handler owners from the bus's perspective.
+- Utterance-layer events: `recognizer_loop:utterance` (entry),
+  `ovos.intent.matched` (positive match notification),
+  `ovos.utterance.cancelled` (transformer cancellation),
+  `complete_intent_failure` (no plugin claimed),
+  `ovos.utterance.handled` (universal end-marker, fires on every
+  terminal path).
+- Handler-lifecycle trio: `ovos.intent.handler.start` / `.complete`
+  / `.error`, emitted by whoever runs the handler (skill or
+  plugin).
+- Transformer chain: pre-pipeline modification or cancellation
+  via `context["canceled"]`.
+- Per-plugin behavioural contracts (converse, fallback,
+  common_query, persona, language-model plugins, etc.) are out
+  of scope — plugins are black boxes; each defines itself.
