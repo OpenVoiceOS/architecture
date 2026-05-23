@@ -238,11 +238,15 @@ reasoning, not the requirement.
   Code paths that never set a session shouldn't accidentally get
   treated as untrusted; the rule makes the substrate forgiving for
   in-process subsystems while keeping the policy hook intact.
-- **No per-message correlation identifier** (MSG-1 §5.4). OVOS already
-  correlates request/response chains by *topic and session*, which
-  works because at most one request per topic per session is
-  outstanding at a time. Introducing `message_id` / `in_reply_to`
-  would be a new field with no consumer.
+- **No central correlation, no central state** (MSG-1 §5.4). The bus
+  is fully asynchronous. There is no per-message ID, no
+  in-reply-to chain, no host-managed request/response index, and no
+  spec-level state tracking of any kind. Components that need to
+  correlate or remember things do it themselves, keyed on
+  `session.session_id` (the interaction-channel identifier — §5.6
+  below). Multi-turn conversation, intent context, cross-skill
+  state, and similar concerns are deferred to future specifications;
+  see §5.6 for the model and §7 for the list of planned work.
 
 ---
 
@@ -389,17 +393,105 @@ is appropriate (or vice-versa) produce subtly mis-routed messages
 that work in local-only tests but silently break HiveMind and
 similar layer-2 systems.
 
-### 5.5 Summary
+### 5.5 Why the layer-2 model needs this
 
 The bus contracts intentionally stay out of the way of layer-2
 layering. MSG-1 §3 / §4 specify only what they have to (boundary
-marking, session carrying, the single reserved value) and explicitly
-defer the rest to "layer-2 systems built on top." The
+marking, session carrying, the single reserved value) and
+explicitly defer the rest to "layer-2 systems built on top." The
 single-flip routing model of §5.1 is the mechanism that makes that
 deferral coherent: as long as ovos-core does one flip and every
 handler `.forward`s, layer-2 systems get all the addressing
 information they need without OVOS itself needing to know they
-exist. That is the OVOS bus's distinctive feature.
+exist.
+
+### 5.6 Fully async — no central correlation, no central state
+
+The other half of why the layer-2 model works is that the bus is
+**fully asynchronous**. Beyond the single flip of §5.1, OVOS does
+**not** centrally correlate request/response chains, and does
+**not** centrally track per-conversation state. There is no
+per-message identifier, no in-reply-to field, no host-side index
+mapping a `.response` back to its request, no shared "current
+conversation" record sitting somewhere in OVOS core.
+
+`session.session_id` is the sole identifier the spec defines, and
+it identifies an **interaction channel** — not a conversation
+state, not an outstanding request, not a transaction. Two messages
+sharing a `session_id` are on the same channel; nothing more is
+guaranteed by this specification.
+
+#### What components do instead
+
+Every component — skills, pipeline plugins, intent engines,
+external clients, layer-2 systems like HiveMind — is responsible
+for any state it needs:
+
+- An asker that wants to match a request to its `.response` keeps
+  its own outstanding-request table, keyed however it likes
+  (typically by `(topic, session_id)` because that's enough for
+  the at-most-one-outstanding-request-per-topic case OVOS lives
+  in today).
+- A skill that wants conversational memory keeps its own
+  per-session store, keyed on `session_id`.
+- A pipeline plugin that needs cross-stage state does the same.
+- A layer-2 system that needs per-peer state keys on `session_id`
+  (which it minted itself when the peer connected).
+
+Whatever state a later consumer of a Message needs is either
+**inside the Message** (`data` / `context` / `session`) or **out
+of band** in some component's own bookkeeping. There is no third
+path through a hidden host-side correlation index.
+
+#### Why fully-async matters
+
+This is what lets layer-2 systems plug in cleanly. If OVOS kept a
+central correlation index or a central conversation state, every
+layer-2 system would need to either replicate it, hook into it,
+or work around it. Because OVOS keeps neither, a HiveMind
+satellite, a chat bridge, or a test harness can each maintain
+their own state at their layer, keyed on the same `session_id`
+the rest of the bus already sees, and the layers compose without
+contention.
+
+It also makes the bus genuinely async-friendly: components can
+process messages in any order, fan out, queue, retry, replay —
+the bus contract makes no commitments those would violate.
+
+#### What this defers
+
+The async-by-default stance leaves several real concerns
+deliberately unspecified, to be picked up by future specs as the
+ecosystem decides how it wants them:
+
+- **Multi-turn conversation.** When a skill asks the user a
+  question and waits for the next utterance, *something* needs
+  to track that the next utterance belongs to that pending
+  question. Today this is `converse` plus skill-side state,
+  loosely organized; a future conversation specification is
+  expected to formalize it.
+- **Intent context.** Adapt's context mechanism (`add_context` /
+  `remove_context`) lets one intent's match affect a later
+  intent's eligibility. It is currently an informal Adapt
+  feature, not formalized at the spec level.
+- **Other session knobs.** The `session` object today carries
+  preferences (`pipeline`, `site_id`, `persona_id`, `time_format`,
+  `date_format`, `system_unit`, `tts_preferences`, etc.) beyond
+  `session_id` and `lang`. None of those are normative under
+  MSG-1 v1, but the future session specification (§7) is expected
+  to pick them up.
+- **Conversational state shape.** Whatever a future spec
+  formalizes here — turn history, slot memory, active-skill
+  stacking, pending prompts — will live in `session` (per MSG-1
+  §4's extensibility) and will be carried by the same propagation
+  rules MSG-1 already defines. The async-by-default model means
+  that future spec only has to define *what* the state is, not
+  *how* it travels.
+
+The current spec does **not** prescribe any of those. Naming
+them here is not a promise to define them in any particular form
+or order — it is an honest accounting of what is currently
+informal so implementers know which conventions are temporary.
 
 ---
 
@@ -470,9 +562,23 @@ current code:
   model, and the contracts for `converse`, `fallback`,
   `common_query`, `ocp`, and `persona` stages are unspecified (§3).
 - **A session specification.** MSG-1 §4 carries `session` opaquely
-  and names only `session_id` and `lang`. The full session lifecycle
-  (start, end, expiry, resumption) and its internal shape are
-  deferred.
+  and names only `session_id` and `lang`. Everything else about the
+  session is deferred — see §5.6 for the explicit list: session
+  lifecycle (start, end, expiry, resumption), the full set of
+  session preferences current OVOS already carries (`pipeline`,
+  `site_id`, `persona_id`, `time_format`, `date_format`,
+  `system_unit`, `tts_preferences`, …), and the shape of any
+  conversational state. The future session specification will pick
+  these up; MSG-1's job is to make sure the carrier is in place.
+- **A multi-turn conversation specification.** When a skill asks a
+  question and waits for the next utterance, the "next utterance
+  belongs to that pending question" link is not formalized today
+  (handled informally by `converse` + skill-side state). MSG-1's
+  async-by-default stance (§5.6) leaves room for this to be
+  formalized either in the session spec or as a separate one.
+- **Intent context.** Adapt's `add_context` / `remove_context`
+  feature — where one intent's match influences a later intent's
+  eligibility — is not formalized at the spec level. See §5.6.
 - **Text normalization of ASR output.** The basis for slot value
   typing (OVOS-INTENT-1 §5.3). Deferred to its own specification.
 - **A machine-checkable conformance corpus** of `template → sample

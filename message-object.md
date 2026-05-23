@@ -13,8 +13,8 @@ assistant. It covers:
   including `session_id` (with the reserved `"default"` value) and
   `lang`, and the absent-session default rule;
 - the **derivations** that produce a new Message from an existing one
-  (§5) — `forward`, `reply`, `response`, and the topic+session
-  correlation model;
+  (§5) — `forward`, `reply`, `response`, and the explicit absence
+  of any central correlation mechanism (messages are fully async);
 - **serialization** rules (§6);
 - **conformance** (§7).
 
@@ -42,8 +42,9 @@ This specification defines:
 - the three normative Message derivations `forward`, `reply`, and
   `response`, which propagate or rewrite the routing and session keys
   above (§5);
-- the topic+session **correlation model** for request/response chains
-  (§5.4);
+- the explicit non-prescription of any central correlation model —
+  messages are fully asynchronous, askers correlate their own
+  request/response chains if they need to (§5.4);
 - serialization rules (§6);
 - conformance (§7).
 
@@ -59,9 +60,15 @@ It does **not** define:
   expires, what additional preferences or state it carries. `session`
   is a carrier; lifecycle and full structure are deferred to a future
   session specification;
-- **per-message correlation identifiers** — OVOS does not use one;
-  replies and responses are correlated by topic and shared `session`
-  (§5.4);
+- any **central correlation mechanism** — no per-message identifier,
+  no in-reply-to chain, no host-managed request/response bookkeeping.
+  The bus is fully asynchronous; askers that need correlation handle
+  it themselves using the raw material this spec provides (§5.4);
+- any **state tracking** — components that need per-conversation
+  state track it themselves keyed on `session.session_id`, or
+  arrange it out of band. Multi-turn conversation, intent context,
+  cross-skill state, and similar concerns are deferred to future
+  specifications;
 - how identifiers are **assigned** or **resolved** — `source`,
   `destination`, and the `session` content are opaque to this
   specification;
@@ -397,21 +404,38 @@ whose topic is the source topic suffixed with `.response`. Topics
 defined in other specifications **MAY** rely on the `.response`
 suffix convention to mark a Message as the answer to a prior one.
 
-### 5.4 Correlation model
+### 5.4 No central correlation
 
-OVOS correlates request/response pairs by **topic and shared
-session**, not by a per-message identifier:
+Messages on the bus are **fully asynchronous**. This specification
+defines **no** central correlation mechanism: no per-message
+identifier, no in-reply-to chain, no host-managed
+request/response bookkeeping.
+
+What the spec *does* provide is the raw material an asker can use
+to do its own correlation, if it wants to:
 
 - the response is emitted on `<request_type>.response` (§5.3);
-- `session` is preserved across `reply` / `response` / `forward`
-  (§4, §5.1–§5.2), so the asker matches on
-  `(<request_type>.response, session)`.
+- `session` (§4) is preserved across `reply` / `response` /
+  `forward` (§5.1–§5.2), so an asker can match an incoming
+  `<request_type>.response` against an outstanding request in the
+  same `session`.
 
-This works because, within a session, there is typically at most one
-outstanding request per topic at a time. Producers that need a
-different correlation discipline are responsible for it themselves —
-this specification does not define one, in keeping with current OVOS
-practice.
+Whether to do that, and how, is entirely the asker's
+responsibility. Each component (skills, pipeline plugins, external
+clients) tracks its own state as needed, keyed on
+`session.session_id` (§4.1) when it cares about per-channel
+continuity. Components that need richer discrimination than
+topic + session — for example, multiple parallel requests on the
+same topic in the same session — carry whatever they need in
+`context` themselves or arrange it out of band.
+
+A consequence: a Message on the bus is **self-contained**. Any
+state a later consumer needs is either inside the Message (`data`
+for topic-specific payload, `context` for cross-topic metadata,
+`session` for per-channel carrier) or kept by some component out
+of band — never recovered by a hidden host-side correlation
+index. This keeps the bus async-friendly and is what makes the
+layer-2 routing model viable.
 
 ---
 
