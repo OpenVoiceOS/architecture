@@ -472,3 +472,6 @@ deliberately **unconstrained**: an engine MAY use any strategy.
   named-slot model, and the training-data contract.
 - *Locale Resource Formats Specification* (OVOS-INTENT-2) — the `.intent`,
   `.voc`, and `.entity` resource files an intent is defined from.
+- *Intent and Entity Registration and Dispatch Bus Contract*
+  (OVOS-INTENT-4) — the bus-level realization of the registration and
+  dispatch concepts of §6, and the match-result message of §7.

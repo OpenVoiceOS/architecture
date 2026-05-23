@@ -5,7 +5,8 @@ specifications. It records design rationale, comparisons with other
 systems, the catalogue of *deliberate* divergences from current OVOS
 code, and topics worth discussing that do not belong in a normative
 specification. Nothing here is binding — OVOS-INTENT-1, OVOS-INTENT-2,
-OVOS-INTENT-3, and OVOS-MSG-1 are the only normative documents. This
+OVOS-INTENT-3, OVOS-INTENT-4, and OVOS-MSG-1 are the only normative
+documents. This
 appendix exists so the specs themselves can stay terse and
 requirement-focused.
 
@@ -124,15 +125,19 @@ engine-agnostic contract and the pipeline.
 
 ## 3. The pipeline — what these specs do not cover
 
-The intent specs (OVOS-INTENT-1/2/3) formalize **intent definition**:
-the grammar, the resource files, what an intent is, the intent-engine
-contract. OVOS-MSG-1 formalizes the bus that carries the result.
-The piece that sits *around* both — the multi-stage **pipeline** that
-decides which intent engine even gets a turn, interleaves
-confidence tiers, runs `converse` / `fallback` / `common_query` /
-`ocp` / `persona` stages, and produces the universal
-`ovos.utterance.handled` end-marker — is not formalized by any spec
-in this repository yet.
+The intent specs (OVOS-INTENT-1/2/3/4) formalize **intent definition
+and delivery**: the grammar, the resource files, what an intent is,
+the intent-engine contract, and the bus messages that carry
+registration, match, and dispatch. OVOS-MSG-1 formalizes the bus
+that carries the result. The piece that sits *around* both — the
+multi-stage **pipeline** that decides which intent engine even gets
+a turn, interleaves confidence tiers, runs `converse` / `fallback` /
+`common_query` / `ocp` / `persona` stages, and produces the
+universal `ovos.utterance.handled` end-marker — is not formalized
+by any spec in this repository yet. (OVOS-INTENT-3 references the
+"host"; OVOS-INTENT-4 §2 designates a single host as the sole
+consumer of registration topics; both stop at the pipeline
+boundary.)
 
 That gap is what makes OVOS structurally distinctive (HA and Rhasspy
 have no equivalent layer), and what most reviewers ask about
@@ -236,6 +241,34 @@ reasoning, not the requirement.
   below). Multi-turn conversation, intent context, cross-skill
   state, and similar concerns are deferred to future specifications;
   see §5.2 for the model and §7 for the list of planned work.
+
+### Intent registration and dispatch (INTENT-4)
+
+- **Host as sole bus consumer of registration topics** (INTENT-4 §2).
+  Engines are pluggable below the bus. This makes engine swap-out a
+  host-local change, invisible to skills and external observers — and
+  cleanly puts method-rejection on the host, where the routing
+  decision already lives.
+- **Single atomic registration per intent**, not the vocab-then-intent
+  dance of today (INTENT-4 §5–§7). The legacy multi-message ordering
+  is racy and undocumented; folding the constraints and their
+  vocabularies into one message removes the race.
+- **`<skill_id>:<intent_name>` kept as the dispatch topic** (INTENT-4
+  §11). The qualified name is already unique per handler (INTENT-3
+  §3), the topic itself selects exactly one consumer, and every
+  existing OVOS skill already subscribes to it. Renaming would be
+  pointless churn.
+- **Handler outcome via the broadcast trio, not a `.response`**
+  (INTENT-4 §12). The host doesn't need a directed reply — it needs
+  to know what the handler did, and so do loggers, fallback chains,
+  and analytics. A broadcast trio (`start` / `complete` / `error`)
+  serves all of them with one set of messages; a `.response` would
+  duplicate that information for only the host.
+- **The trio renamed into `ovos.intent.*`** (INTENT-4 §12, Appendix
+  A). Today's legacy names (`mycroft.skill.handler.*`) are the only
+  ones still carrying the `mycroft.` prefix in the intent layer.
+  Renaming for uniformity is cheap (workshop is the single emitter)
+  and removes a Mycroft-era footgun.
 
 ---
 
@@ -378,9 +411,9 @@ These specifications are *prescriptive*. Some of what they prescribe
 matches what runs in OVOS today verbatim; some is a deliberate
 cleanup the implementations are expected to grow into. This section
 catalogues every known divergence so implementers know what to
-migrate and reviewers know what to expect. (OVOS-MSG-1 is by far the
-spec closest to current code; the catalogue below is correspondingly
-short. Later specs will add more entries.)
+migrate and reviewers know what to expect. OVOS-MSG-1 is largely
+aligned; OVOS-INTENT-4 is where most of the prescriptive divergence
+lives.
 
 ### 6.1 Already aligned
 
@@ -402,39 +435,127 @@ current OVOS code paths and need no implementation change:
   `ovos-bus-client.Message.{forward,reply,response}`.
 - The `.response` suffix convention — pervasive across OVOS topics
   today.
+- `<skill_id>:<intent_name>` as the dispatch topic — matches
+  `ovos-core.intent_services.service`'s `reply(match.match_type,
+  ...)` where `match_type` is the qualified name.
+- The handler-lifecycle trio's start/complete/error shape — matches
+  `ovos-workshop.skills.ovos`'s `_on_event_{start,end,error}` emit
+  pattern, modulo the rename in §6.2 below.
 
-### 6.2 New, no legacy
+### 6.2 Prescriptive renames (topic names)
 
-The only thing OVOS-MSG-1 introduces that has no direct precedent in
-current code:
+Topic names OVOS-INTENT-4 renames from existing OVOS practice. Skills
+and engines need to rename their subscriptions and emits. Appendix A
+of OVOS-INTENT-4 has the full mapping.
+
+| Legacy topic | v1 topic |
+|--------------|----------|
+| `register_vocab` | folded into `ovos.intent.register.keyword` |
+| `register_intent` (Adapt) | `ovos.intent.register.keyword` |
+| `padatious:register_intent` | `ovos.intent.register.template` |
+| `padatious:register_entity` | `ovos.entity.register` |
+| `detach_intent` | `ovos.intent.deregister` |
+| `detach_skill` | `ovos.skill.deregister` |
+| `enable_intent` / `disable_intent` | `ovos.intent.enable` / `ovos.intent.disable` |
+| `mycroft.skill.handler.start` | `ovos.intent.handler.start` |
+| `mycroft.skill.handler.complete` | `ovos.intent.handler.complete` |
+| `mycroft.skill.handler.error` | `ovos.intent.handler.error` |
+| `ovos.utterance.handled` | subsumed by `ovos.intent.handler.complete` |
+
+### 6.3 Prescriptive shape changes (payloads)
+
+Where the legacy shape differs from the prescribed shape, on top of
+the topic rename:
+
+- **Keyword intent registration**. Today: one or more `register_vocab`
+  messages followed by a `register_intent` carrying an Adapt
+  `IntentBuilder.__dict__`. Prescribed: one atomic
+  `ovos.intent.register.keyword` Message carrying the structured
+  `{required, optional, one_of, excluded}` arrays of vocabulary
+  descriptors (INTENT-4 §5.2). This is the largest single shape
+  change.
+- **Template intent registration**. Today: `padatious:register_intent`
+  with `{name, samples, file_name, lang, blacklisted_words}`.
+  Prescribed: `ovos.intent.register.template` with `{skill_id,
+  intent_name, lang, samples|file, blacklist|blacklist_file}` — field
+  renames (`name` is split into `(skill_id, intent_name)`, `file_name`
+  → `file`, `blacklisted_words` → `blacklist`).
+- **Entity registration**. Today: `padatious:register_entity` with
+  `{name, samples, file_name, lang}`. Prescribed: `ovos.entity.register`
+  with `{skill_id, entity_name, lang, samples|file}` (same field
+  renames as template registration).
+- **Handler-lifecycle payload**. Today: `{name: <handler_func_name>}`
+  plus `exception` on error; `skill_id` carried only in `context`.
+  Prescribed: `{skill_id, intent_name, optional exception}` in
+  `data` — the identity moves into the payload so observers can
+  consume it without inspecting `context`.
+- **Deregister payload**. Today: `detach_intent` carries the munged
+  `skill_id:intent_name` string. Prescribed: the structured triple
+  `{skill_id, intent_name, lang}`.
+
+### 6.4 Architectural divergences
+
+Differences that are not just topic or shape changes but model
+changes:
+
+- **Engines do not subscribe to bus topics** (INTENT-4 §2). Today
+  some engines (e.g. `jurebes`) subscribe directly to
+  `padatious:register_*`. Prescribed: only the host consumes
+  registration topics; the host delegates to engines via a
+  host-internal interface. This makes engine plug-out / swap
+  invisible on the bus.
+- **No `<skill_id>.activate` notification**. Today
+  `ovos-core.intent_services.service` emits
+  `<skill_id>.activate` alongside the dispatch. The bus specs do not
+  define this topic; whether it survives, gets formalized, or
+  migrates into the dispatch is left to the future pipeline spec.
+- **The dispatch carries a structured `captures` map** (INTENT-4
+  §11.2). Today the dispatch `data` is `match.match_data` merged
+  with the original message `data` — engine-specific shape. The
+  spec prescribes a uniform `{captures: {string: string}}`. Engines
+  and the host need to converge on the canonical capture map.
+- **A single `ovos.intent.matched` broadcast notification**
+  (INTENT-4 §10). Today there is no positive-match equivalent of
+  `complete_intent_failure`; observers learn about matches by
+  watching every `<skill_id>:<intent_name>` topic or by the metrics
+  hook. The spec prescribes one canonical observable.
+- **Structured `error_code` enum on registration `.response`**
+  (INTENT-4 §3.3). Today rejection responses are ad-hoc free-form
+  strings (when emitted at all). The spec defines five normative
+  codes.
+
+### 6.5 New, no legacy
+
+Things the specs define that have no existing OVOS analog:
 
 - The **materialize-default-session** rule on `forward` / `reply` /
   `response` (MSG-1 §4.3) — formalizes a "MAY" convenience for
   in-process subsystems; not currently implemented, but compatible
-  with current behaviour (today `session` is propagated only when
-  present, never materialized).
+  with current behaviour.
+- `ovos.intent.list` and `ovos.intent.describe` introspection topics
+  (INTENT-4 §13).
+- `ovos.entity.deregister` (INTENT-4 §8.3).
 
-### 6.3 Things the spec does *not* change
+### 6.6 Things the specs do *not* change
 
+These were considered and deliberately left as-is in current OVOS to
+avoid pointless churn:
+
+- `<skill_id>:<intent_name>` as the dispatch topic name (INTENT-4
+  §11) — keeping the legacy form means no skill needs to migrate its
+  handler subscription.
+- The Mycroft-era `mycroft.*` topic prefix outside the intent layer
+  (e.g. `mycroft.audio.*`) — these are not part of any spec here and
+  are out of scope.
 - The session object's internal shape beyond `session_id` and `lang`
   — every other field current OVOS puts inside `context.session`
   remains opaque under this spec until the future session
   specification.
-- The Mycroft-era `mycroft.*` topic prefix outside the intent layer
-  (e.g. `mycroft.audio.*`) — these are not part of any spec here and
-  are out of scope.
 
 ---
 
 ## 7. Known gaps and planned work
 
-- **A bus-level intent registration and dispatch spec.** OVOS-MSG-1
-  defines the envelope and the routing/session keys, but the
-  *concrete topics* for intent registration, match notification,
-  handler dispatch, and the handler-lifecycle messages
-  (`mycroft.skill.handler.{start,complete,error}` etc.) are still
-  informal. The natural next bus spec is OVOS-INTENT-4, which builds
-  on OVOS-MSG-1 + OVOS-INTENT-3.
 - **A pipeline specification.** Stage ordering, the confidence-tier
   model, and the contracts for `converse`, `fallback`,
   `common_query`, `ocp`, and `persona` stages are unspecified (§3).
@@ -509,7 +630,8 @@ Built bottom-up in two stacks:
 
 - The **intent stack**, in dependency order: OVOS-INTENT-1 (template
   grammar) → OVOS-INTENT-2 (resource files built on it) →
-  OVOS-INTENT-3 (the intent concept, built on both).
+  OVOS-INTENT-3 (the intent concept, built on both) →
+  OVOS-INTENT-4 (the bus-level realization, also built on MSG-1).
 - The **bus stack**, anchored on existing `ovos-bus-client` wire
   format: OVOS-MSG-1 formalizes the envelope, routing, session
   carrier, and `forward`/`reply`/`response` derivations.
@@ -540,10 +662,10 @@ spec.
 Before initial release, each spec was revised across several review
 rounds — malformed-form rules, the expansion algorithm, slot
 handling, the envelope/routing split (later un-split, see §9.1),
-cross-spec terminology. Those rounds happened pre-release, so they
-left no intermediate version numbers behind: the audited result
-*is* version 1. The CHANGELOG records versioned changes from there
-on.
+the trio source semantics in INTENT-4, cross-spec terminology.
+Those rounds happened pre-release, so they left no intermediate
+version numbers behind: the audited result *is* version 1. The
+CHANGELOG records versioned changes from there on.
 
 ---
 

@@ -36,3 +36,6 @@ open a PR adding it.
 | **Message** | The unit of communication on the bus: a JSON object with `type`, `data`, `context` ([MSG-1 §2](message-object.md)). |
 | **Context** | The assistant-metadata object on a Message; an extensible JSON object whose keys are defined by companion specs ([MSG-1 §2.3](message-object.md)). |
 | **Session** | The per-conversation carrier in `context.session`; carries `session_id` (with `"default"` reserved for "originates from the device itself") and `lang` (the user's preferred language, distinct from any `data.lang` describing the payload's own language) ([MSG-1 §4](message-object.md)). |
+| **Registration message** | A bus message that submits a keyword intent, template intent, or entity to the host ([INTENT-4 §§5–7](intent-registration.md)). |
+| **Dispatch message** | A Message on the per-intent topic `<skill_id>:<intent_name>` — the host's instruction to a skill to run its handler for a matched intent ([INTENT-4 §11](intent-registration.md)). |
+| **Match-result message** | `ovos.intent.matched` — the host's notification that an intent matched an utterance ([INTENT-4 §10](intent-registration.md)). |
