@@ -122,43 +122,32 @@ engine-agnostic contract and the pipeline.
 
 ---
 
-## 3. What these specifications do not cover — the pipeline
+## 3. The pipeline — what these specs do not cover
 
-OVOS-INTENT-1, -2, and -3 formalize **intent definition**: the grammar, the
-resource files, what an intent is, and the intent-engine contract. That is one
-slice of the OVOS intent stack.
+The intent specs (OVOS-INTENT-1/2/3) formalize **intent definition**:
+the grammar, the resource files, what an intent is, the intent-engine
+contract. OVOS-MSG-1 formalizes the bus that carries the result.
+The piece that sits *around* both — the multi-stage **pipeline** that
+decides which intent engine even gets a turn, interleaves
+confidence tiers, runs `converse` / `fallback` / `common_query` /
+`ocp` / `persona` stages, and produces the universal
+`ovos.utterance.handled` end-marker — is not formalized by any spec
+in this repository yet.
 
-The larger structure is the **pipeline**. In OVOS, intent resolution is an
-ordered, user-configurable chain of stages tried in priority order until one
-matches. The stages include far more than intent engines:
+That gap is what makes OVOS structurally distinctive (HA and Rhasspy
+have no equivalent layer), and what most reviewers ask about
+first. The natural next formalization is a pipeline / utterance-
+lifecycle specification; see §7 known gaps.
 
-- `stop` — halt active skills;
-- `converse` — route a follow-up utterance to a skill that is mid-dialogue;
-- `padatious` and `adapt` — template and keyword intent engines, each tried at
-  high, medium, and low confidence tiers, interleaved;
-- `common_query` — route factual questions to question-answering skills;
-- `fallback` — generic handlers when nothing else matched;
-- `ocp` — media playback requests;
-- `persona` — an LLM-backed conversational agent (see below).
-
-Keyword and template intent engines are two stage kinds among roughly eight.
-The pipeline's ordering, its high/medium/low tier model, and the contracts for
-the non-intent stages are **not yet specified**. OVOS-INTENT-3 references the
-"host" and a "pipeline plugin" but stops at the intent-engine boundary.
-
-This is the natural next formalization. The pipeline is what makes OVOS
-distinctive relative to HA and Rhasspy, and it is currently undocumented.
-
-**ovos-persona** is worth singling out: it is an LLM-backed persona system that
-plugs into the pipeline as a first-class stage (`persona-high`, `persona-low`),
-not as a bolt-on. OVOS-INTENT-3 §6.2's non-normative note — "an installation
-may load an LLM- or chatbot-based engine" — is not hypothetical; it describes
-something that already ships. The engine-agnostic contract is already realized.
-
-The confidence tiers plus the ordered fallback chain (deterministic Adapt
-before fuzzy Padatious before an LLM persona last) are also how the system
-*manages* the open-endedness of engine generalization: generalization is not
-unconstrained in practice, it is bounded by where an engine sits in the chain.
+One observation worth flagging here: **the engine-agnostic intent
+contract is already realized**, not hypothetical. `ovos-persona` plugs
+into the pipeline as a first-class LLM stage (`persona-high`,
+`persona-low`) — the OVOS-INTENT-3 §6.2 non-normative note about
+LLM-backed engines describes something that ships today. The
+ordered confidence-tier chain (deterministic Adapt before fuzzy
+Padatious before an LLM persona last) is also how the system
+*bounds* engine generalization in practice: generalization is not
+unconstrained, it is bounded by where an engine sits.
 
 ---
 
@@ -243,255 +232,143 @@ reasoning, not the requirement.
   in-reply-to chain, no host-managed request/response index, and no
   spec-level state tracking of any kind. Components that need to
   correlate or remember things do it themselves, keyed on
-  `session.session_id` (the interaction-channel identifier — §5.6
+  `session.session_id` (the interaction-channel identifier — §5.2
   below). Multi-turn conversation, intent context, cross-skill
   state, and similar concerns are deferred to future specifications;
-  see §5.6 for the model and §7 for the list of planned work.
+  see §5.2 for the model and §7 for the list of planned work.
 
 ---
 
 ## 5. The OVOS bus as a substrate
 
-The bus is not just "how OVOS components talk to each other" — under
-MSG-1's `source`/`destination`/`session` model it is also the
-**substrate higher-level systems plug into**. Two design choices make
-this work:
+Under MSG-1's `source` / `destination` / `session` model, the bus is
+not just an internal transport — it is the **substrate higher-level
+systems plug into without modifying OVOS**. Two mechanics make that
+work: **single-flip routing** (§5.1), which keeps the routing pair
+correct end-to-end without per-component effort; and **no central
+state or correlation** (§5.2), which makes layer-2 systems
+composable. HiveMind is the canonical example of what both
+together enable (§5.3).
 
-- **There is one boundary, and the routing pair marks it** (MSG-1
-  §3). `source` and `destination` distinguish *the user side* from
-  *the assistant side* — and the assistant side is OVOS core
-  together with every skill handler. The pair flips **once** per
-  conversational turn, at the moment the assistant decides to
-  respond (§5.1). Any observer can read the pair and answer *"which
-  side is talking right now?"* without engine-specific knowledge.
-- **Identity is layered, not centralized** (MSG-1 §3.4, §4.4). OVOS
-  itself doesn't know whether the user side is a microphone, a chat
-  UI, or a remote satellite; it only knows the opaque `source` /
-  `destination` strings and the opaque `session.session_id`. The
-  semantics of those strings — who the peer is, whether they're
-  authenticated, where the session came from — are filled in by the
-  layer above.
+### 5.1 The single-flip routing model
 
-### 5.1 The single-flip routing model (how it actually works)
+The most important bus invariant in OVOS, and the one most often
+reinvented incorrectly. The routing pair (`source`, `destination`)
+flips **exactly once per conversational turn**, performed by
+ovos-core, before the intent dispatch is emitted. From that point
+on, every handler-side emission is *already* addressed back at the
+user.
 
-This is the most important bus-level invariant in OVOS and the one
-that most often gets reinvented incorrectly when implementers reason
-about it for the first time. The flip happens **exactly once per turn**,
-performed by **ovos-core**, before the intent dispatch is emitted.
-After the flip, every handler-side emission is *already* addressed
-back at the user.
-
-The full sequence:
+Three steps:
 
 1. **The user side emits.** An external component — microphone
    service, chat UI, satellite client, test harness — emits an
-   utterance Message (e.g. `recognizer_loop:utterance`) with
-   `source` set to itself and (usually) no `destination` set:
+   utterance with `source` set to itself:
 
        context: { source: "audio", destination: null, session: {...} }
 
-2. **ovos-core flips the pair, then dispatches.** When the intent
-   service matches an intent it derives the dispatch via
-   `Message.reply(match_type, data)`
-   (`ovos-core/ovos_core/intent_services/service.py:340`). The
-   `.reply` semantics of MSG-1 §5.2 swap `source` and `destination`,
-   producing:
+2. **ovos-core flips, then dispatches.** When the intent service
+   matches an intent it derives the dispatch via
+   `Message.reply(match_type, data)` (`ovos-core/.../service.py:340`).
+   The `.reply` rule of MSG-1 §5.2 swaps the routing pair:
 
        context: { source: "ovos-core", destination: "audio", session: {...} }
 
    The dispatch goes out on the per-intent topic
-   `<skill_id>:<intent_name>` (the skill subscribes by topic, not
-   by `destination`). At this moment the swap has already
-   classified the dispatch as *going back at the user*, even though
-   a skill handler is the one about to run.
+   `<skill_id>:<intent_name>`. The flip has already classified the
+   message as *going back at the user*, even though a skill handler
+   is what actually runs.
 
-3. **The handler emits via `.forward`, preserving the swap.** Every
-   message the skill emits in response — `speak`, the handler
-   lifecycle trio (`mycroft.skill.handler.start/complete/error`),
-   GUI events, follow-up dialogs — uses `Message.forward(...)`
-   (`ovos-workshop/ovos_workshop/skills/ovos.py:1461, 1472, 1502,
-   1567, …`). `.forward` preserves `context` unchanged. So every
-   handler-emitted message carries:
+3. **The handler `.forward`s.** Every message the skill emits in
+   response — `speak`, the handler lifecycle trio, GUI events —
+   uses `Message.forward(...)` (`ovos-workshop/.../ovos.py:1461,
+   1472, …`). `.forward` preserves `context` unchanged, so every
+   handler emission is already addressed back at the original
+   user-side component.
 
-       context: { source: "ovos-core", destination: "audio", session: {...} }
+Two consequences fall out:
 
-   — already addressed back at the original user-side component.
+- **The boundary is user ↔ assistant, not core ↔ handler.** Skill
+  handlers are on OVOS's side of the boundary; from outside, OVOS
+  is one thing. The user doesn't know or care which skill answered
+  them.
+- **Handler authors never write addressing code.** Because
+  `.forward` preserves the flipped pair, no skill anywhere needs
+  to understand `source` / `destination`. Get the inversion right
+  once in ovos-core, and every downstream skill is automatically
+  correct.
 
-The handler **does not need to know** who the user was, where the
-session came from, or how routing back to them works. It just
-`.forward`s, and the addressing is correct because ovos-core did
-the flip up-front.
+What this rules out: no per-hop addressing (handlers don't pick
+their own `destination`); no second flip (handlers `.forward`,
+they don't `.reply` to the dispatch); the dispatch topic
+`<skill_id>:<intent_name>` selects the handler, not `destination`
+(the destination belongs to the user). Implementers using `.reply`
+where `.forward` is appropriate produce mis-routed messages that
+work in local tests but silently break layer-2 routing.
 
-### 5.2 Why this matters
+### 5.2 No central correlation, no central state
 
-Two consequences fall out of single-flip routing — both load-bearing
-for layer-2 systems:
+The bus is **fully asynchronous**. OVOS does not centrally
+correlate request/response chains, and does not centrally track
+per-conversation state. There is no per-message identifier, no
+in-reply-to field, no host-side index mapping a `.response` back to
+its request, no shared "current conversation" record.
 
-- **The boundary is user ↔ assistant, not core ↔ handler.** A reader
-  of one Message in isolation can tell which side of the boundary
-  produced it (`source`) and which side it is addressed to
-  (`destination`) — *but the handler and the core are on the same
-  side*. From outside, OVOS is one thing. This matches how
-  conversations actually work: the user doesn't know or care which
-  skill answered them, only that "the assistant" did.
-- **Handler authors never write addressing code.** Because `.forward`
-  preserves the already-flipped pair, no skill anywhere needs to
-  understand `source` / `destination` to talk back to the user
-  correctly. Get the inversion wrong inside ovos-core once, and
-  everything downstream is broken; get it right (and OVOS does),
-  and skill code stays clean.
+`session.session_id` identifies an **interaction channel** —
+nothing more. Two messages sharing a `session_id` are on the same
+channel, but the spec guarantees nothing about ordering, state
+continuity, or pending requests.
+
+Every component — skills, pipeline plugins, external clients,
+layer-2 systems — owns whatever state it needs. An asker that
+wants `.response` correlation keeps its own outstanding-request
+table; a skill that wants conversational memory keeps its own
+per-session store; a layer-2 system that wants per-peer state
+keys on `session_id`. Whatever a later consumer needs is **in the
+Message** (`data` / `context` / `session`) or **out of band** —
+never recovered from a hidden host-side index.
+
+This is what lets layer-2 systems plug in cleanly: if OVOS kept a
+central correlation index or a central conversation state, every
+layer-2 system would have to replicate it, hook into it, or work
+around it. Because OVOS keeps neither, they compose without
+contention.
+
+Several real concerns are deferred by this stance and are listed
+under §7 known gaps: multi-turn conversation, intent context
+(adapt's `add_context`/`remove_context`), the other session knobs
+current OVOS carries beyond `session_id` and `lang` (`pipeline`,
+`site_id`, `persona_id`, `time_format`, `date_format`,
+`system_unit`, `tts_preferences`, …), and the eventual shape of
+conversational state. The async-by-default model means those
+future specs only need to define *what* the state is, not *how*
+it travels.
 
 ### 5.3 Why HiveMind works
 
 HiveMind is the canonical layer-2 system this design enables. A
-HiveMind satellite client is just another user-side emitter — it
-sets `source` to its peer ID, populates `session` with a per-peer
+HiveMind satellite is just another user-side emitter — it sets
+`source` to its peer ID, populates `session` with a per-peer
 session, and emits a Message. Inside OVOS:
 
-- ovos-core runs the same `.reply` flip (step 2 of §5.1) — now
-  `destination` is the satellite's peer ID instead of the local
-  microphone.
-- Every skill `.forward`s as usual (step 3) — `destination` stays as
-  the satellite ID through every handler emission.
-- HiveMind, watching the bus from its layer-2 vantage point, sees
-  each message addressed to its peer and routes it back over the
-  HiveMind transport.
+- ovos-core runs the same `.reply` flip (§5.1 step 2) —
+  `destination` becomes the satellite's peer ID instead of the
+  local microphone.
+- Skills `.forward` as usual — `destination` stays the satellite
+  ID through every handler emission.
+- HiveMind, watching the bus, sees each message addressed to its
+  peer and routes it back over the HiveMind transport.
 
-The pre-existing `session_id == "default"` rule then correctly
-keeps device-local TTS on the device's own speakers, because remote
-HiveMind sessions carry their own `session_id` values and never
-`"default"` — `ovos-audio`'s `require_default_session` decorator
-declines to play satellite-bound TTS on the host hardware.
+The pre-existing `session_id == "default"` rule keeps device-local
+TTS on the device's speakers (per `ovos-audio/utils.py`'s
+`require_default_session`), because remote HiveMind sessions
+carry their own `session_id` and never `"default"`.
 
 None of this required HiveMind to modify OVOS core. The mechanism
-that makes it work — single-flip routing addressing every
-handler-side message back at whoever spoke first — is built into
-MSG-1 §5.2 (the `.reply` rule) and was already implemented in
-`ovos-bus-client/message.py:194-198`. MSG-1 just names it.
-
-### 5.4 What this rules out
-
-The single-flip model implies several things the spec deliberately
-does *not* do:
-
-- **No per-hop addressing.** A handler does not pick its own
-  `destination`. Doing so would shadow ovos-core's flip and break
-  layer-2 routing.
-- **No "reply to the skill" messages.** Because every handler
-  emission is addressed at the user, a follow-up arriving at a skill
-  uses the topic to route, not `destination` — which is why
-  `<skill_id>:<intent_name>` is the dispatch topic at all (the topic
-  selects the handler; the `destination` belongs to the user).
-- **No second flip on response.** A skill emitting `.speak` does not
-  `.reply` to the dispatch (which would re-flip and address the
-  message back at OVOS); it `.forward`s, preserving the user-bound
-  pair.
-
-These are not arbitrary stylistic rules — they fall out of the
-single-flip invariant. Implementers who use `.reply` where `.forward`
-is appropriate (or vice-versa) produce subtly mis-routed messages
-that work in local-only tests but silently break HiveMind and
-similar layer-2 systems.
-
-### 5.5 Why the layer-2 model needs this
-
-The bus contracts intentionally stay out of the way of layer-2
-layering. MSG-1 §3 / §4 specify only what they have to (boundary
-marking, session carrying, the single reserved value) and
-explicitly defer the rest to "layer-2 systems built on top." The
-single-flip routing model of §5.1 is the mechanism that makes that
-deferral coherent: as long as ovos-core does one flip and every
-handler `.forward`s, layer-2 systems get all the addressing
-information they need without OVOS itself needing to know they
-exist.
-
-### 5.6 Fully async — no central correlation, no central state
-
-The other half of why the layer-2 model works is that the bus is
-**fully asynchronous**. Beyond the single flip of §5.1, OVOS does
-**not** centrally correlate request/response chains, and does
-**not** centrally track per-conversation state. There is no
-per-message identifier, no in-reply-to field, no host-side index
-mapping a `.response` back to its request, no shared "current
-conversation" record sitting somewhere in OVOS core.
-
-`session.session_id` is the sole identifier the spec defines, and
-it identifies an **interaction channel** — not a conversation
-state, not an outstanding request, not a transaction. Two messages
-sharing a `session_id` are on the same channel; nothing more is
-guaranteed by this specification.
-
-#### What components do instead
-
-Every component — skills, pipeline plugins, intent engines,
-external clients, layer-2 systems like HiveMind — is responsible
-for any state it needs:
-
-- An asker that wants to match a request to its `.response` keeps
-  its own outstanding-request table, keyed however it likes
-  (typically by `(topic, session_id)` because that's enough for
-  the at-most-one-outstanding-request-per-topic case OVOS lives
-  in today).
-- A skill that wants conversational memory keeps its own
-  per-session store, keyed on `session_id`.
-- A pipeline plugin that needs cross-stage state does the same.
-- A layer-2 system that needs per-peer state keys on `session_id`
-  (which it minted itself when the peer connected).
-
-Whatever state a later consumer of a Message needs is either
-**inside the Message** (`data` / `context` / `session`) or **out
-of band** in some component's own bookkeeping. There is no third
-path through a hidden host-side correlation index.
-
-#### Why fully-async matters
-
-This is what lets layer-2 systems plug in cleanly. If OVOS kept a
-central correlation index or a central conversation state, every
-layer-2 system would need to either replicate it, hook into it,
-or work around it. Because OVOS keeps neither, a HiveMind
-satellite, a chat bridge, or a test harness can each maintain
-their own state at their layer, keyed on the same `session_id`
-the rest of the bus already sees, and the layers compose without
-contention.
-
-It also makes the bus genuinely async-friendly: components can
-process messages in any order, fan out, queue, retry, replay —
-the bus contract makes no commitments those would violate.
-
-#### What this defers
-
-The async-by-default stance leaves several real concerns
-deliberately unspecified, to be picked up by future specs as the
-ecosystem decides how it wants them:
-
-- **Multi-turn conversation.** When a skill asks the user a
-  question and waits for the next utterance, *something* needs
-  to track that the next utterance belongs to that pending
-  question. Today this is `converse` plus skill-side state,
-  loosely organized; a future conversation specification is
-  expected to formalize it.
-- **Intent context.** Adapt's context mechanism (`add_context` /
-  `remove_context`) lets one intent's match affect a later
-  intent's eligibility. It is currently an informal Adapt
-  feature, not formalized at the spec level.
-- **Other session knobs.** The `session` object today carries
-  preferences (`pipeline`, `site_id`, `persona_id`, `time_format`,
-  `date_format`, `system_unit`, `tts_preferences`, etc.) beyond
-  `session_id` and `lang`. None of those are normative under
-  MSG-1 v1, but the future session specification (§7) is expected
-  to pick them up.
-- **Conversational state shape.** Whatever a future spec
-  formalizes here — turn history, slot memory, active-skill
-  stacking, pending prompts — will live in `session` (per MSG-1
-  §4's extensibility) and will be carried by the same propagation
-  rules MSG-1 already defines. The async-by-default model means
-  that future spec only has to define *what* the state is, not
-  *how* it travels.
-
-The current spec does **not** prescribe any of those. Naming
-them here is not a promise to define them in any particular form
-or order — it is an honest accounting of what is currently
-informal so implementers know which conventions are temporary.
+that makes it work — single-flip routing + opaque per-session
+identifiers + no central state — was already in
+`ovos-bus-client/message.py:194-198`; MSG-1 just names and
+formalizes it.
 
 ---
 
@@ -563,7 +440,7 @@ current code:
   `common_query`, `ocp`, and `persona` stages are unspecified (§3).
 - **A session specification.** MSG-1 §4 carries `session` opaquely
   and names only `session_id` and `lang`. Everything else about the
-  session is deferred — see §5.6 for the explicit list: session
+  session is deferred — see §5.2 for the explicit list: session
   lifecycle (start, end, expiry, resumption), the full set of
   session preferences current OVOS already carries (`pipeline`,
   `site_id`, `persona_id`, `time_format`, `date_format`,
@@ -574,11 +451,11 @@ current code:
   question and waits for the next utterance, the "next utterance
   belongs to that pending question" link is not formalized today
   (handled informally by `converse` + skill-side state). MSG-1's
-  async-by-default stance (§5.6) leaves room for this to be
+  async-by-default stance (§5.2) leaves room for this to be
   formalized either in the session spec or as a separate one.
 - **Intent context.** Adapt's `add_context` / `remove_context`
   feature — where one intent's match influences a later intent's
-  eligibility — is not formalized at the spec level. See §5.6.
+  eligibility — is not formalized at the spec level. See §5.2.
 - **Text normalization of ASR output.** The basis for slot value
   typing (OVOS-INTENT-1 §5.3). Deferred to its own specification.
 - **A machine-checkable conformance corpus** of `template → sample
@@ -623,101 +500,91 @@ grammar-level conformance corpus (§7).
 
 ## 9. Design history
 
-How the specification set was arrived at — context that explains the *why*,
-but that has no place in a normative document.
+How the specification set was arrived at — context that explains
+the *why*, but that has no place in a normative document.
 
-### 9.1 Four specs, in two stacks
+### 9.1 The set, in two stacks
 
-The set was built bottom-up in two stacks:
+Built bottom-up in two stacks:
 
-- The **intent stack**, in dependency order:
-  - **OVOS-INTENT-1** formalizes the sentence template grammar — the
-    bracket-expansion syntax that padatious-like engines and skill
-    resource files already used informally.
-  - **OVOS-INTENT-2** builds on it to formalize the `locale/` folder
-    and the resource file roles.
-  - **OVOS-INTENT-3** builds on both to define what an intent *is* — a
-    developer's binding from a natural-language command to a handler
-    — and the two ways to define one (keyword and template).
-- The **bus stack**, anchored on the existing `ovos-bus-client` wire
-  format:
-  - **OVOS-MSG-1** formalizes the bus message — envelope, routing,
-    session carrier, and the `forward`/`reply`/`response`
-    derivations. Originally drafted as two specs (envelope +
-    session/routing) and merged once it became clear the derivations
-    could only meaningfully be defined where the routing keys lived.
+- The **intent stack**, in dependency order: OVOS-INTENT-1 (template
+  grammar) → OVOS-INTENT-2 (resource files built on it) →
+  OVOS-INTENT-3 (the intent concept, built on both).
+- The **bus stack**, anchored on existing `ovos-bus-client` wire
+  format: OVOS-MSG-1 formalizes the envelope, routing, session
+  carrier, and `forward`/`reply`/`response` derivations.
+  Originally drafted as two specs (envelope + session/routing) and
+  merged once it became clear the derivations could only
+  meaningfully be defined where the routing keys lived.
 
 Each was a formalization pass over machinery already running in
-production (§1), not a greenfield design. The two stacks meet in the
-planned next spec on bus-level intent registration and dispatch (§7).
+production (§1), not a greenfield design.
 
-### 9.2 Prescriptive, not descriptive
+### 9.2 The reference implementation
 
-The specs describe a **clean target**, not current OVOS behaviour in full.
-Where the existing system carried accidental inconsistencies or legacy cruft,
-the specs diverge deliberately — they are something for OVOS to grow into, not
-a transcript of what it does. A handful of those divergences were genuine
-decisions, resolved explicitly:
+The specs are implementation-agnostic, but a spec benefits from
+one conformant implementation. **ovos-spec-tools** is that for the
+intent stack — expander, resource loader, dialog renderer, language
+matching, locale linter, in one dependency-light package. It
+exists because the same machinery had drifted across six separate
+copies in the ecosystem; ovos-spec-tools is what those components
+are meant to converge on, and the intended home of the planned
+conformance corpus.
 
-- **Nested locale directories** are allowed — a `locale/<lang>/` tree may have
-  subdirectories, resolved by recursive search. This matches current
-  behaviour, and was kept rather than forcing a flat layout.
-- **Legacy file types are dropped.** `.rx`, `.value`, `.list`, `.word`,
-  `.template`, and `.qml` are not resource roles in OVOS-INTENT-2. Regex
-  entities in particular are recommended against — they localize poorly.
-- **`.blacklist` is new.** Intent suppression was previously ad hoc (a list of
-  `.voc` files passed as `voc_blacklist`); the `.blacklist` role and the
-  keyword `excluded` constraint formalize it. This is a prescriptive addition
-  for OVOS to adopt, not a description of today.
-- **Slot names may contain digits**, aligning the rule with what skills
-  already write.
-- **The `{{ }}` double-brace dialog form is dropped** — a
-  backward-compatibility artifact; only the single-brace `{name}` is
-  recognized.
+The bus stack does not yet have a comparable reference;
+`ovos-bus-client` is the closest match for MSG-1 but predates the
+spec.
 
 ### 9.3 Audit-driven refinement
 
-Before the first release the specs were revised across several review rounds —
-the malformed-form rules, the expansion algorithm, slot handling, and
-cross-spec terminology were all tightened. Those rounds happened pre-release,
-so they left no intermediate version numbers behind: the audited result *is*
-version 1. The CHANGELOG records versioned changes from there on.
+Before initial release, each spec was revised across several review
+rounds — malformed-form rules, the expansion algorithm, slot
+handling, the envelope/routing split (later un-split, see §9.1),
+cross-spec terminology. Those rounds happened pre-release, so they
+left no intermediate version numbers behind: the audited result
+*is* version 1. The CHANGELOG records versioned changes from there
+on.
 
-### 9.4 OVOS-INTENT-1 version 2 — inline vocabulary references
+---
 
-The one feature that is *not* a formalization of existing behaviour is the
-`<name>` inline vocabulary reference — the equivalent of Home Assistant's
-`expansion_rules` (§2.2). It reuses the existing `.voc` role rather than
-adding a separate file type, so the change is one grammar token plus an
-expander step. It arrived with OVOS-INTENT-1 version 2 (issue #1, PR #2).
-Because a `<name>` template cannot be expanded by a version-1 tool, it is a
-breaking change, and so version 2 is a major version bump.
+## 10. Compatibility levels
 
-### 9.5 The reference implementation
+Each specification carries its own integer `Version`, bumped per
+PR per the contributing rules in the README. The architecture as a
+whole is also spoken of at **compatibility levels** — versioned
+snapshots a tool may target, and that `ovos-spec-lint` checks
+against.
 
-The specifications are implementation-agnostic, but a spec benefits from one
-conformant implementation to point at. **ovos-spec-tools** is that — the
-expander, the resource loader, the dialog renderer, language matching, and a
-locale linter, in one dependency-light package. It exists because the same
-machinery had been reimplemented and had drifted across the ecosystem: bracket
-expansion alone existed in six separate copies, and language matching in
-several more. ovos-spec-tools is the single conformant implementation those
-components are meant to converge on, and the intended home of the planned
-conformance corpus (§7). The bus stack (MSG-1) does not yet have a
-comparable reference implementation; `ovos-bus-client` is the closest
-existing match for MSG-1 but predates the spec.
+The levels defined to date apply to the **intent stack**
+(OVOS-INTENT-1/2/3):
 
-### 9.6 What was deliberately left out
+- **V0** — *informal.* The undocumented, de-facto behaviour of
+  Mycroft- and OVOS-derived code from before these specifications
+  existed. V0 is not specified anywhere; it is the baseline the
+  formalization started from, named here only so tools can refer to
+  "pre-spec" behaviour. V0 has no notion of the `.blacklist`
+  resource role or of `<name>` references.
+- **V1** — the specifications as first formalized: OVOS-INTENT-1,
+  -2 and -3, each at version 1. V1's headline addition over V0 is
+  the `.blacklist` role — formalized intent suppression.
+- **V2** — V1 plus **inline vocabulary references** (the `<name>`
+  token): OVOS-INTENT-1 and OVOS-INTENT-2 at version 2. A V2
+  template cannot be expanded by a V1 tool, so V2 is not backward
+  compatible with V1.
 
-Three things were consciously deferred rather than rushed:
+A specification that does not change between levels keeps its
+lower version number — OVOS-INTENT-3 is at version 1 in both V1
+and V2.
 
-- **Slot value typing** — interpreting a slot as a number or a date —
-  is left unspecified, because it is inseparable from a normalization
-  of ASR output that does not yet exist (§4; OVOS-INTENT-1 §5.3).
-- **The pipeline** — the ordered, multi-stage intent-resolution chain
-  — is the largest unformalized piece, and a natural next
-  specification (§3).
-- **The session lifecycle** — when sessions begin, end, expire, and
-  what their internal shape carries beyond `session_id` and `lang` —
-  is deferred to a future session specification. MSG-1 §4 only defines
-  `session` as a carrier with two normative internal fields.
+### How the bus stack will be layered in
+
+OVOS-MSG-1 introduces the bus envelope, which is structurally
+orthogonal to the intent stack — a tool can implement the intent
+stack without the bus envelope and vice versa. As more bus-layer
+specs land, the compatibility-level model is expected to evolve;
+the current V0–V2 ladder may grow a second axis or be replaced
+with per-stack ladders.
+
+Until that's settled, the bus-layer specs (OVOS-MSG-1 and the
+others in the pipeline behind it) are versioned individually but
+not yet placed on a compatibility ladder.

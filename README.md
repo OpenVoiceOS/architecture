@@ -1,156 +1,131 @@
 # OVOS Formal Specifications
 
-Formal, implementation-agnostic specifications for the OpenVoiceOS voice
-assistant ecosystem. Each specification describes a format or contract
-generically, so it can be implemented by any tool, in any language, and adopted
-by voice assistants beyond OVOS.
+Formal, implementation-agnostic specifications for the OpenVoiceOS
+voice assistant ecosystem.
 
-> ⚠️ **Draft — implementations are still catching up.** These specifications
-> are at **Draft** status and may still change. The OVOS repositories are being
-> brought into conformance progressively, so current OVOS behaviour may not yet
-> match these documents. Where it diverges, that is a known implementation bug
-> being worked through (see *Authority* below) — not a defect in the
-> specification. The notice will be removed when a spec reaches a stable status.
+This repository is the **source of truth** for how OVOS components
+talk to each other and what their data shapes mean. The specs are
+written generically so they can be implemented by any tool, in any
+language, and adopted by voice assistants beyond OVOS.
+
+> ⚠️ **Draft.** Specs in this repository are at **Draft** status.
+> Implementations are being brought into conformance progressively;
+> current OVOS behaviour may not yet match these documents. Where
+> it diverges, that is a known implementation bug — not a defect in
+> the specification (see *Authority* below). The notice will be
+> removed when a spec reaches a stable status.
+
+---
+
+## Goals
+
+The specs exist to make three things possible:
+
+- **Interoperability.** Multiple implementations — engines, hosts,
+  plugins, even non-OVOS assistants — can target the same observable
+  contract instead of reverse-engineering each other's code.
+- **Stability.** Implementation churn no longer drifts the contract.
+  Each spec is a versioned document; behaviour changes go through
+  a pull request with a version bump.
+- **Adoption beyond OVOS.** The specs are written
+  implementation-agnostically so other voice-assistant projects can
+  adopt the same formats, grammar, and bus contracts without
+  buying into OVOS as a whole.
+
+The specs cover formats and contracts only. They do not mandate
+implementation choices — programming language, internal design,
+storage, threading, transport — those are the implementer's. What
+they fix is the **observable contract**.
+
+---
 
 ## Authority
 
-These specifications are **prescriptive, not descriptive**. They define the
-intended architecture; they are not a transcript of how any current code
-behaves. This repository is the **source of truth**: where an implementation —
-in OpenVoiceOS or in any other project — diverges from a specification here,
-that divergence is a **bug in the implementation**, not in the specification.
+These specifications are **prescriptive, not descriptive**. They
+define the intended architecture; they are not a transcript of how
+any current code behaves. Where an implementation — in OpenVoiceOS
+or any other project — diverges from a spec here, that divergence
+is a **bug in the implementation**, not in the specification.
 
-The specifications describe **architecture and contracts only**. They do not
-mandate *how* to implement anything — programming language, internal design,
-and engineering choices are entirely the implementer's. What they fix is the
-observable contract: the formats, the grammar, and the behaviour a conformant
-tool must exhibit.
+Anyone is free to **adopt** these specifications and free to
+**propose changes** to them via pull request (see [contributing]
+below). Adoption is voluntary; conformance, once adopted, is not.
 
-Anyone is free to **adopt** these specifications — they are written to be
-implementation-agnostic and usable by voice assistants beyond OVOS — and anyone
-is free to **propose changes** to them (see *Changing a specification* below).
-Adoption is voluntary; conformance, once adopted, is not.
+[contributing]: #contributing
+
+---
 
 ## Specifications
 
-| ID | Document | Version | Status | Scope |
-|----|----------|---------|--------|-------|
-| OVOS-INTENT-1 | [Sentence Template Grammar](sentence-template-grammar.md) | 2 | Draft | The ASR input model, the sentence template grammar (expansion + named slots), expansion into training samples, the slot model, and the skill→pipeline training-data contract. |
-| OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 2 | Draft | The `locale/` folder layout and the two resource file formats across five roles: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`. |
-| OVOS-INTENT-3 | [Intent Definition](intent-definition.md) | 1 | Draft | What an intent is, the two definition methods (keyword and template intents), registration, the intent-engine input contract, and the match result. |
-| OVOS-MSG-1 | [Bus Message](message-object.md) | 1 | Draft | The on-the-wire JSON envelope of a Message (`type` / `data` / `context`), the routing keys `source` / `destination` that mark the OVOS / handler-code boundary, the `session` carrier with `session_id` (with `"default"` reserved for device-local origin) and `lang` (user's preferred language, distinct from per-payload `data.lang`), the `forward` / `reply` / `response` derivations, and UTF-8 JSON serialization. The substrate layer-2 systems like HiveMind build on. |
+| ID | Document | Version | Status |
+|----|----------|---------|--------|
+| OVOS-INTENT-1 | [Sentence Template Grammar](sentence-template-grammar.md) | 2 | Draft |
+| OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 2 | Draft |
+| OVOS-INTENT-3 | [Intent Definition](intent-definition.md) | 1 | Draft |
+| OVOS-MSG-1 | [Bus Message](message-object.md) | 1 | Draft |
 
-**Reading order.** The intent specifications are numbered in dependency
-order and are meant to be read that way. OVOS-INTENT-1 defines the
-template grammar; OVOS-INTENT-2 builds on it to define the resource
-files; OVOS-INTENT-3 builds on both to define what an intent is.
-OVOS-MSG-1 is the bus-layer envelope and the routing/session context
-formalized as a single specification — independent of the intent stack
-and readable at any point.
+Each spec carries its own scope statement, design rationale, and
+conformance section in its own header. Open the document for the
+full picture — the table above is just an index.
 
-## Versions
+**Reading order.** The intent specs are numbered in dependency
+order: OVOS-INTENT-1 defines the template grammar; OVOS-INTENT-2
+builds on it to define the resource files; OVOS-INTENT-3 builds on
+both to define what an intent is. OVOS-MSG-1 is the bus-layer
+envelope and the routing / session model — independent of the
+intent stack and readable at any point.
 
-Each specification carries its own integer **`Version`**, shown in the table
-above. A version starts at 1 and is bumped whenever a pull request changes
-normative content (see *Changing a specification*); the
-[CHANGELOG](CHANGELOG.md) records every bump.
+For background — design rationale, comparisons with other systems,
+the catalogue of known divergences from current code, and known
+gaps — see [APPENDIX.md](APPENDIX.md). For term definitions, see
+[GLOSSARY.md](GLOSSARY.md). For the version history of each spec,
+see [CHANGELOG.md](CHANGELOG.md).
 
-The architecture as a whole is also spoken of at three **compatibility
-levels** — the levels a tool may target, and the levels the `ovos-spec-lint`
-linter checks against:
-
-- **V0** — *informal.* The undocumented, de-facto behaviour of Mycroft- and
-  OVOS-derived code from before these specifications existed. V0 is not
-  specified anywhere; it is the baseline the formalization started from, named
-  here only so tools can refer to "pre-spec" behaviour. V0 has no notion of
-  the `.blacklist` resource role or of `<name>` references.
-- **V1** — the specifications as first formalized: OVOS-INTENT-1, -2 and -3,
-  each at version 1. V1's headline addition over V0 is the `.blacklist` role —
-  formalized intent suppression.
-- **V2** — V1 plus **inline vocabulary references** (the `<name>` token):
-  OVOS-INTENT-1 and OVOS-INTENT-2 at version 2. A V2 template cannot be
-  expanded by a V1 tool, so V2 is not backward compatible with V1.
-
-A specification that does not change between levels keeps its lower version
-number — OVOS-INTENT-3 is at version 1 in both V1 and V2.
+---
 
 ## Reference implementation
 
-[**ovos-spec-tools**](https://github.com/OpenVoiceOS/ovos-spec-tools) is the
-reference implementation of these specifications — a dependency-light Python
-package providing the sentence-template expander, the locale resource loader,
-the dialog renderer, language matching, and the `ovos-spec-lint` linter. It is
-the conformance target a tool can depend on instead of reimplementing the
-machinery, and the home of the planned conformance corpus.
+[**ovos-spec-tools**](https://github.com/OpenVoiceOS/ovos-spec-tools)
+is a reference implementation — a dependency-light Python package
+providing the sentence-template expander, the locale resource
+loader, the dialog renderer, language matching, and the
+`ovos-spec-lint` linter. Components that don't want to reimplement
+the spec machinery themselves can depend on it. It is also the
+intended home of the planned conformance corpus.
 
-## Design notes
+The bus stack (OVOS-MSG-1) does not yet have a comparable
+ground-up reference implementation; `ovos-bus-client` is the
+closest existing match but predates the spec.
 
-- These specs define the **shape of training data and resource files**, not
-  engine matching behaviour. A template generates training samples; a capable
-  intent engine generalizes beyond them to recognize unseen utterances.
-  Matching, scoring, and accept/reject decisions are intentionally left to each
-  engine.
-- This draft is deliberately **unopinionated about slot value types**. A slot
-  value is an opaque sequence of words; numbers, dates, and other typed values
-  depend on a prescribed normalization of ASR output, which is deferred to a
-  future specification (see OVOS-INTENT-1 §5.3).
-- OVOS-INTENT-3 adds the **intent model** on top: an intent is a
-  developer-defined binding from a natural-language command to one handler, not
-  a free-floating event. Every intent engine is conceptually a classifier plus
-  a slot extractor, and the two definition methods — keyword intents and
-  template intents — are non-interoperable but complementary.
+---
 
-Design rationale, comparisons with Home Assistant and Rhasspy, the pipeline
-context, and known gaps are collected in [APPENDIX.md](APPENDIX.md) — a
-non-normative companion document.
+## Contributing
 
-## Glossary
+Specifications are **versioned documents, not living wikis**. Any
+change to a spec — however small — **MUST** be submitted as a pull
+request, never committed directly.
 
-Terms defined across the four specifications, with where each is defined.
+Each PR that alters normative content **MUST**:
 
-| Term | Meaning |
-|------|---------|
-| **Template** | A string in the OVOS-INTENT-1 grammar describing a set of sentences (INTENT-1 §3). |
-| **Expansion** | Resolving `(a\|b)` / `[x]` into a finite set of concrete sentences (INTENT-1 §4). |
-| **Sample / sample set** | A concrete sentence produced by expansion; the set of all of them for a template (INTENT-1 §4). |
-| **Slot** | A named placeholder `{name}` filled with a value rather than written out (INTENT-1 §3.4, §5). |
-| **Capture map** | The names→values mapping a match produces — slot names or vocabulary names as keys (INTENT-3 §7). |
-| **Resource file / role** | A skill's plain-text files: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist` (INTENT-2 §1). |
-| **Vocabulary** | A named slot-free phrase set; the unit a keyword intent constrains over (INTENT-3 §4.1). |
-| **Occurrence** | A phrase appearing in an utterance as a contiguous whole-word subsequence (INTENT-2 §4.3, INTENT-3 §4.1). |
-| **Skill** | An app — a self-contained unit of assistant functionality (INTENT-3 §1, §3). |
-| **Skill id** | A skill's identifier, unique across the assistant (INTENT-3 §3). |
-| **Intent** | A developer-defined binding from a natural-language command to one handler (INTENT-3 §1). |
-| **Intent name / qualified name** | The intent's name, unique within its skill / the `skill_id:intent_name` pair (INTENT-3 §3). |
-| **Keyword intent / template intent** | The two definition methods — keyword constraints, or sentence templates (INTENT-3 §2). |
-| **Handler** | The code an intent triggers when its command is recognized (INTENT-3 §1, §6). |
-| **Intent engine** | A classifier + slot extractor: consumes definitions, identifies the triggered intent (INTENT-3 §6.2). |
-| **Host** | The intent system that owns the engines and routes match results to handlers (INTENT-3 §6.1). |
-| **Registration** | Submitting an intent's definition and handler together, as one unit (INTENT-3 §6.1). |
-| **Message** | The unit of communication on the bus: a JSON object with `type`, `data`, `context` (MSG-1 §2). |
-| **Context** | The assistant-metadata object on a Message; an extensible JSON object whose keys are defined by companion specs (MSG-1 §2.3). |
-| **Session** | The per-conversation carrier in `context.session`; carries `session_id` (with `"default"` reserved for "originates from the device itself") and `lang` (the user's preferred language, distinct from any `data.lang` describing the payload's own language) (MSG-1 §4). |
+- bump the spec's `Version` field in its header;
+- add a corresponding entry to [CHANGELOG.md](CHANGELOG.md).
 
-## Planned
+A version identifies an exact, citable state of a document, so
+implementations and conformance results can name the version they
+target.
 
-- Text normalization of ASR output (the basis for slot value typing).
-- A machine-checkable conformance corpus for OVOS-INTENT-1 expansion.
+PRs that touch only the non-normative material —
+[APPENDIX.md](APPENDIX.md), [GLOSSARY.md](GLOSSARY.md), this
+README, examples — do not require a version bump.
 
-## Changing a specification
-
-Specifications are versioned documents, not living wikis. Any change to a spec —
-however small — **MUST** be submitted as a pull request, never committed
-directly. Each PR that alters normative content **MUST** bump the spec's
-`Version` field in its header and add a corresponding entry to
-[`CHANGELOG.md`](CHANGELOG.md). A version identifies an exact, citable state of
-a document, so implementations and conformance results can name the version
-they target.
+---
 
 ## Credits
 
 These specifications were produced as part of a documentation and
 interoperability effort for OpenVoiceOS, funded by NLnet's
-[NGI0 Commons Fund](https://nlnet.nl/project/OpenVoiceOS) under grant
-agreement No [101135429](https://cordis.europa.eu/project/id/101135429).
+[NGI0 Commons Fund](https://nlnet.nl/project/OpenVoiceOS) under
+grant agreement No
+[101135429](https://cordis.europa.eu/project/id/101135429).
 
 ![NGI0 / NLnet](./ngi.png)
