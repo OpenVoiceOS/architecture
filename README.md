@@ -38,11 +38,15 @@ Adoption is voluntary; conformance, once adopted, is not.
 | OVOS-INTENT-1 | [Sentence Template Grammar](sentence-template-grammar.md) | 2 | Draft | The ASR input model, the sentence template grammar (expansion + named slots), expansion into training samples, the slot model, and the skill→pipeline training-data contract. |
 | OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 2 | Draft | The `locale/` folder layout and the two resource file formats across five roles: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`. |
 | OVOS-INTENT-3 | [Intent Definition](intent-definition.md) | 1 | Draft | What an intent is, the two definition methods (keyword and template intents), registration, the intent-engine input contract, and the match result. |
+| OVOS-MSG-1 | [Bus Message](message-object.md) | 1 | Draft | The on-the-wire JSON envelope of a Message (`type` / `data` / `context`), the routing keys `source` / `destination` that mark the OVOS / handler-code boundary, the `session` carrier with `session_id` (with `"default"` reserved for device-local origin) and `lang` (user's preferred language, distinct from per-payload `data.lang`), the `forward` / `reply` / `response` derivations, and UTF-8 JSON serialization. The substrate layer-2 systems like HiveMind build on. |
 
-**Reading order.** The specifications are numbered in dependency order and are
-meant to be read that way. OVOS-INTENT-1 defines the template grammar;
-OVOS-INTENT-2 builds on it to define the resource files; OVOS-INTENT-3 builds
-on both to define what an intent is. Each depends on the ones before it.
+**Reading order.** The intent specifications are numbered in dependency
+order and are meant to be read that way. OVOS-INTENT-1 defines the
+template grammar; OVOS-INTENT-2 builds on it to define the resource
+files; OVOS-INTENT-3 builds on both to define what an intent is.
+OVOS-MSG-1 is the bus-layer envelope and the routing/session context
+formalized as a single specification — independent of the intent stack
+and readable at any point.
 
 ## Versions
 
@@ -102,7 +106,7 @@ non-normative companion document.
 
 ## Glossary
 
-Terms defined across the three specifications, with where each is defined.
+Terms defined across the four specifications, with where each is defined.
 
 | Term | Meaning |
 |------|---------|
@@ -123,6 +127,9 @@ Terms defined across the three specifications, with where each is defined.
 | **Intent engine** | A classifier + slot extractor: consumes definitions, identifies the triggered intent (INTENT-3 §6.2). |
 | **Host** | The intent system that owns the engines and routes match results to handlers (INTENT-3 §6.1). |
 | **Registration** | Submitting an intent's definition and handler together, as one unit (INTENT-3 §6.1). |
+| **Message** | The unit of communication on the bus: a JSON object with `type`, `data`, `context` (MSG-1 §2). |
+| **Context** | The assistant-metadata object on a Message; an extensible JSON object whose keys are defined by companion specs (MSG-1 §2.3). |
+| **Session** | The per-conversation carrier in `context.session`; carries `session_id` (with `"default"` reserved for "originates from the device itself") and `lang` (the user's preferred language, distinct from any `data.lang` describing the payload's own language) (MSG-1 §4). |
 
 ## Planned
 

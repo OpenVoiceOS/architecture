@@ -47,3 +47,32 @@ tool does not recognize the token and cannot expand the template.
 ### 1
 
 - Initial draft.
+
+## OVOS-MSG-1 — Bus Message
+
+### 1
+
+- Initial draft. Formalizes existing OVOS bus behaviour as a single
+  specification covering: the on-the-wire JSON envelope (`type` /
+  `data` / `context`); the routing keys `source` and `destination`
+  that mark the OVOS / handler-code boundary (the attachment point
+  layer-2 systems like HiveMind build on top of); the `session`
+  carrier with two normative internal fields — `session_id` (where
+  `"default"` is reserved for "the Message originates from the device
+  itself", already used by `ovos-audio` to decide whether to play TTS
+  locally; an absent `session` is treated as equivalent to
+  `session_id: "default"`, and `forward`/`reply`/`response` MAY
+  materialize the default during derivation) and `lang` (the user's
+  preferred language, distinct from per-payload `data.lang`
+  describing the message's data language, usually but not necessarily
+  matching); the `forward` / `reply` / `response` Message
+  derivations; the topic+session correlation model for `.response`
+  matching; and UTF-8 JSON serialization rules. No new fields are
+  introduced; every key and derivation defined already exists in
+  current OVOS code paths (`ovos-bus-client.Message` for the
+  envelope, `Message.reply` for source/destination swap,
+  `context["session"]` for the session carrier, `ovos-audio` for the
+  `session_id == "default"` policy hook). Encryption, transport,
+  authentication, authorization, retry, delivery and ordering
+  guarantees, session lifecycle, and the internal shape of `session`
+  beyond `session_id` and `lang` are explicitly out of scope.
