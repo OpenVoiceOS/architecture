@@ -320,21 +320,21 @@ A registration carries:
 - the **language** (§3);
 - the **definition** — keyword constraints (§4), or templates and any paired
   `.blacklist` (§5);
-- a **reference to the handler** — whatever the host needs to invoke the
+- a **reference to the handler** — whatever the orchestrator needs to invoke the
   handler later. Its concrete form (an in-process callback, a method, an
   address) is implementation-specific and **not** prescribed here.
 
 The definition is passed to an intent engine (§6.2). The handler reference is
-retained by the **host** — the intent system that owns the engines — and is
+retained by the **orchestrator** — the intent system that owns the engines — and is
 invoked with the match result (§7) when the engine reports a match. An engine
-never invokes a handler directly; it reports matches, and the host routes.
+never invokes a handler directly; it reports matches, and the orchestrator routes.
 
 Registering an intent whose `(skill id, intent name, language)` triple (§3)
 matches an existing registration **replaces** it: the previous definition and
 handler binding are discarded and wholly superseded by the new one.
 
 **Deregistration** ("detach") removes an intent: its definition is withdrawn
-from the engine and its handler reference is released by the host. Definition
+from the engine and its handler reference is released by the orchestrator. Definition
 and handler are removed **together**, as they were registered. When a skill is
 removed, all of its intents are deregistered.
 
@@ -359,7 +359,7 @@ template, or both. The contract is:
   two methods.
 - An engine **MAY** accept both.
 - An engine **MUST reject** a registration whose method it does not accept,
-  rather than silently ignoring it, so the host can route the intent to an
+  rather than silently ignoring it, so the orchestrator can route the intent to an
   engine that does accept it.
 
 For a given utterance an engine reports **at most one** matched intent. An
@@ -406,7 +406,7 @@ specification.
 
 In classifier terms the qualified intent name is the **label** and the capture
 map is the **payload**: the label selects which handler runs, the payload is
-the data that handler is given. The host routes the result to the **one handler** bound to
+the data that handler is given. The orchestrator routes the result to the **one handler** bound to
 that intent at registration, and to nothing else. The handler always receives
 the capture map — a set of key-value pairs, possibly empty — and that is the
 only data it receives from the intent layer. Running that handler is the whole
@@ -457,7 +457,7 @@ requires is only that a handler not assume a complete capture map.
 - for template intents, honour the training-data contract of OVOS-INTENT-1 §6,
   and apply any paired `.blacklist` as match suppression (§5.4);
 - report at most one matched intent per utterance (§6.2);
-- produce the match result of §7 and report it for the host to route to the
+- produce the match result of §7 and report it for the orchestrator to route to the
   bound handler.
 
 Matching, generalization, scoring, and the ranking of competing intents are
