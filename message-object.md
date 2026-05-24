@@ -336,7 +336,7 @@ Produces a new Message:
   3. All other `context` keys, including `session` (§4), are
      preserved unchanged. As with `forward`, if the source Message
      has no `session`, the derivation **MAY** populate a default
-     session on the result (§4.3).
+     session on the result (§4.1).
 
 `reply` is the basis of any "send back to the asker" Message. A
 producer that does not maintain `source`/`destination` at all **MAY**
@@ -462,7 +462,7 @@ guarantees, retry behaviour, session lifecycle (start, end, expiry,
 resumption), the internal shape of `session` (owned by
 OVOS-SESSION-1), identifier assignment policy, and multi-tenant
 routing semantics beyond the
-opaque layer-2 substrate of §3.4 / §4.4.
+opaque layer-2 substrate of §3.4 / §4.2.
 
 ---
 
