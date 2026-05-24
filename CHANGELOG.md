@@ -77,33 +77,29 @@ tool does not recognize the token and cannot expand the template.
   guarantees, session lifecycle, and the internal shape of `session`
   beyond `session_id` and `lang` are explicitly out of scope.
 
-## OVOS-INTENT-4 — Intent and Entity Registration and Dispatch
+## OVOS-INTENT-4 — Intent and Entity Registration
 
 ### 1
 
-- Initial draft. Defines the full intent lifecycle on the bus:
-  registration (`ovos.intent.register.keyword`,
-  `ovos.intent.register.template`, `ovos.entity.register`),
-  deregistration (`ovos.intent.deregister`, `ovos.entity.deregister`,
+- Initial draft. Defines the bus wire format for **intent
+  registration** — and nothing else. Registration messages
+  (`ovos.intent.register.keyword`, `ovos.intent.register.template`,
+  `ovos.entity.register`), deregistration
+  (`ovos.intent.deregister`, `ovos.entity.deregister`,
   `ovos.skill.deregister`), enable/disable (`ovos.intent.enable`,
-  `ovos.intent.disable`), introspection (`ovos.intent.list`,
-  `ovos.intent.describe`), the match-result notification
-  (`ovos.intent.matched`), dispatch on the qualified-name topic
-  `<skill_id>:<intent_name>` (INTENT-3 §3), and the handler-lifecycle
-  trio `ovos.intent.handler.start` / `.complete` / `.error` that the
-  skill emits to report handler outcome (mirroring the start/complete/
-  error pattern `ovos-workshop` already implements, renamed into the
-  `ovos.intent.*` namespace for uniformity). No separate dispatch
-  `.response` is defined; handler outcome is observed via the trio.
-  Adopts a host-mediated model: the host is the sole bus consumer of
-  skill-originated registration topics and delegates matching to its
-  engines through a host-internal interface; skills subscribe to their
-  own qualified-name dispatch topics. Aligned to OVOS-INTENT-3's
-  keyword/template duality; replaces the legacy Mycroft-era
-  registration topics (`register_vocab`, `register_intent`,
-  `padatious:register_intent`, `padatious:register_entity`,
-  `detach_intent`, `detach_skill`) and renames the legacy
-  `mycroft.skill.handler.{start,complete,error}` trio; **keeps** the
-  existing `<skill_id>:<intent_name>` dispatch topic as the prescribed
-  v1 form so existing skill handler subscriptions continue to work
-  unchanged. See Appendix A for the full mapping.
+  `ovos.intent.disable`), and the orchestrator-provided
+  introspection topics (`ovos.intent.list`, `ovos.intent.describe`)
+  served from a passive registration index.
+- **Registrations are broadcast.** No central party owns or routes
+  them; pipeline plugins (OVOS-PIPELINE-1) consume what they want;
+  the orchestrator passively indexes everything for introspection.
+  There is no error handshake — a registration that no plugin
+  consumes is silently dropped.
+- Aligned to OVOS-INTENT-3's keyword/template duality; replaces the
+  legacy Mycroft-era registration topics (`register_vocab`,
+  `register_intent`, `padatious:register_intent`,
+  `padatious:register_entity`, `detach_intent`, `detach_skill`).
+- The bus-level utterance lifecycle (matching, dispatch,
+  handler-lifecycle trio, terminal events) is **not** in this spec
+  — it is OVOS-PIPELINE-1's domain. See Appendix A for the full
+  mapping of which legacy topics moved where.
