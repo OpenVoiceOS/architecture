@@ -452,17 +452,50 @@ reasoning, not the requirement.
   spec's `ovos.utterance.cancelled` terminal event sits alongside
   the existing `complete_intent_failure` from PIPELINE-1, keeping
   cancellation and failure observably distinct on the bus.
-- **Language disambiguation.** TRANSFORM-1 §7.1 spec'd a
-  precedence hierarchy for resolving the in-flight utterance's
-  operative language: `stt_lang` (STT-attested) >
-  `request_lang` (source-channel-volunteered) > `detected_lang`
-  (transformer-derived) > `data.lang` (Message producer) >
-  existing `session.lang` > config default, gated by
-  `valid_langs`. Mirrors what current OVOS does informally in
-  `ovos_core/intent_services/service.py:197-222`
-  (`disambiguate_lang`); the spec elevates it to a normative
-  hierarchy with reserved context keys, and explicitly deprecates
-  the legacy top-level `Message.context["lang"]` shortcut.
+- **Language signals moved to SESSION-1.** Earlier TRANSFORM-1
+  drafts spec'd a binding language-disambiguation hierarchy and
+  reserved `Message.context` keys for `stt_lang`, `request_lang`,
+  `detected_lang`. These have moved to OVOS-SESSION-1 §3.2 as
+  session-scoped fields with normative meanings but a non-binding
+  consolidation order — the right priority is stage-dependent.
+  TRANSFORM-1 §7.1 now only names which transformer types are
+  natural producers of which signals; consolidation is the
+  consumer's decision per SESSION-1 §3.2.7.
+
+### Session (SESSION-1)
+
+- **Why SESSION-1 now.** OVOS-MSG-1 §4 originally named two
+  internal session fields (`session_id`, `lang`) and deferred the
+  rest. As PIPELINE-1, CONTEXT-1, and TRANSFORM-1 each claimed
+  fields (`pipeline`, `context`, the six `*_transformers`), the
+  session became a load-bearing carrier with no single owner of
+  its wire contract. SESSION-1 consolidates the wire shape and
+  fixes a **registry mechanism** so future specs claim fields
+  without amending SESSION-1 itself.
+- **Prescriptive, not descriptive.** Only the fields normatively
+  claimed by other specs are recognized. Implementations
+  carrying extra per-session state (current OVOS Session class
+  has `site_id`, `persona_id`, `system_unit`, `time_format`,
+  `date_format`, `location`, `is_speaking`, `is_recording`,
+  `blacklisted_skills`, `blacklisted_intents`) are non-normative
+  under v1 — they ride through as opaque pass-through (§2.3) and
+  can be claimed by future per-domain specs.
+- **Omission means "let the orchestrator decide".** Single
+  deferral mechanism: omitted single field, empty `session: {}`,
+  absent `session`, explicit `session_id: "default"` — all
+  equivalent on the wire, all resolve at consumption to deployment
+  defaults filled by each consumer. No `null`, no sentinels.
+- **Language signals.** Four BCP-47 fields with normative meanings
+  but stage-dependent consolidation: `lang` (user preference,
+  base), `secondary_langs` (additional understood languages,
+  constrains lang-detect predictions and fallback selection),
+  `output_lang` (renderer's preferred output language; simplifies
+  the bidirectional-translation transformer to a fallback role),
+  `stt_lang` / `request_lang` / `detected_lang` (per-utterance
+  signals from STT, emitter, and lang-detect respectively).
+  `request_lang` is an emitter-reported hint (per-wakeword
+  language assignment in multi-wakeword setups), not an
+  override.
 
 ---
 
@@ -693,10 +726,39 @@ needs no implementation change:
   current discipline normative as alternative plugin types
   (LLM-backed, agent-backed) are written.
 - **`ovos.utterance.handled` on every terminal path** (PIPELINE-1
-  §9.6). Current `ovos-workshop`'s `_on_event_error` does not
-  emit it on the handler-error path (`ovos.py:1478-1497`). The
-  spec requires it. Fix tracked separately as a workshop
-  implementation bug.
+  §9.5). Current `ovos-workshop`'s `_on_event_error` does not
+  emit it on the handler-error path (`ovos.py:1478-1497`). Under
+  the revised PIPELINE-1 §8 (handler-trio is orchestrator-owned,
+  not handler-owned), this concern dissolves at the spec level:
+  the orchestrator that invokes the handler wraps the call and
+  emits the trio itself, then emits `ovos.utterance.handled`
+  unconditionally. Workshop today plays an orchestrator-wrapper
+  role for some dispatch paths and is missing the wrapper
+  events; the fix is in the wrapper, not in third-party handler
+  code.
+- **Handler-trio ownership shifted to orchestrator** (PIPELINE-1
+  §8). Earlier drafts asked the handler-owning component (skill
+  or plugin-bundled) to emit `ovos.intent.handler.start` /
+  `.complete` / `.error`. The revised spec puts that obligation
+  on the orchestrator that invokes the handler: third-party
+  handler code carries **no normative obligation**, the
+  orchestrator wraps every invocation and emits the trio itself.
+  This is the right ownership — skill authors should not be
+  writing protocol code — and aligns with how a wrapper would
+  naturally observe start / return / exception around an opaque
+  callable.
+- **Per-pipeline_id intent introspection** (PIPELINE-1 §10). New
+  pull-query / scatter-response surface keyed on `pipeline_id`,
+  giving consumers a way to see *which intents a particular
+  pipeline plugin's matcher has compiled*, distinct from the
+  orchestrator's manifest of declared intents (INTENT-4 §10).
+  No current OVOS analogue.
+- **CONTEXT-1 scope discriminator on `requires_context`**
+  (CONTEXT-1 §6 / §6.1). Adds an OPTIONAL `scope: private|shared`
+  per entry, default `private`. Closes the footgun where an
+  unrelated skill's shared `Person` entry could accidentally
+  satisfy a private gate. Short-form `[Person]` keeps working
+  (interpreted as `{ key: Person, scope: private }`).
 
 ### 6.5 New topics with no direct precedent
 
@@ -712,11 +774,46 @@ needs no implementation change:
   in-process subsystems; not currently implemented but compatible
   with current behaviour.
 
+### 6.5.1 Introspection patterns across the specs (informative)
+
+Four specs in this set define pull-query / scatter-response
+introspection surfaces. The shapes are intentionally similar but
+serve different scopes:
+
+| Spec | Topic | Scope | Authoritative responder |
+|------|-------|-------|-------------------------|
+| INTENT-4 §10 | `ovos.intent.list` / `.describe` | Declared intents observed on the bus | Orchestrator (the manifest) |
+| PIPELINE-1 §10 | `ovos.pipeline.<pipeline_id>.intents.list` | Intents currently compiled inside a specific plugin's matcher | The pipeline plugin |
+| CONTEXT-1 §5.4 | `intent.context.list` | Post-decay session-context snapshot | The orchestrator process owning the match round |
+| TRANSFORM-1 §6 | `transformer.<type>.list` | Loaded transformers per injection point | The orchestrator process implementing that chain |
+
+Three properties hold across all four:
+
+1. **Pull-query is the source of truth.** Producers MAY broadcast
+   load-time announcements; consumers MUST NOT rely on having
+   received them. The bus is asynchronous and gives no delivery
+   guarantee; a consumer that started late missed the broadcast.
+2. **No completeness signal.** A consumer that wants completeness
+   keeps its own roster of expected responders and times out
+   non-responders.
+3. **Per-process slices under split orchestrators.** When the
+   orchestrator is split (PIPELINE-1 §2), each process responds
+   from its own slice; consumers aggregate.
+
+The naming convention is **not yet uniform** across the four
+surfaces — INTENT-4 / PIPELINE-1 use the `ovos.` prefix while
+CONTEXT-1 / TRANSFORM-1 do not. Standardization is a candidate
+follow-up PR; the wire contract is otherwise consistent.
+
 ### 6.6 Things the specs do *not* change
 
-- The session object's internal shape beyond `session_id`,
-  `lang`, and `pipeline` (deferred to a future session
-  spec).
+- The session object's internal shape is now owned by
+  OVOS-SESSION-1; the field set is the closed set defined there
+  plus whatever future specs claim via SESSION-1 §2.1. The "extra"
+  fields current OVOS Session carries (`site_id`, `persona_id`,
+  `system_unit`, `time_format`, `date_format`, etc.) ride through
+  as non-normative pass-through and may be claimed by future
+  per-domain specs.
 - The `mycroft.*` topic prefix outside the intent layer (e.g.
   `mycroft.audio.*`) — these are not part of any spec here.
 - The `<skill_id>:<intent_name>` dispatch topic — kept verbatim
