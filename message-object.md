@@ -19,8 +19,8 @@ runtime. It covers:
 - **conformance** (§7).
 
 It is implementation-agnostic: any process, in any language, on any
-transport, can produce and consume conformant Messages. Every key and
-It is the foundation other bus specifications build on.
+transport, can produce and consume conformant Messages. It is the
+foundation other bus specifications build on.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and
 **MAY** are used as in RFC 2119.
@@ -53,13 +53,11 @@ It does **not** define:
   contract;
 - the shape of a Message's `data` payload — fixed per-topic by the
   specification that defines the topic;
-- the **internal shape** of `session` — the field set, the
-  registry mechanism for new fields, the omission-as-deferral
-  rule, and the `session_id` value space (including the reserved
-  `"default"` marker) are all owned by **OVOS-SESSION-1**;
+- the **internal shape** of `session` — fields, semantics,
+  defaults, registry — owned by **OVOS-SESSION-1**;
 - the **session lifecycle** — when a session begins, ends,
   expires, how it is resumed. `session` is a carrier; lifecycle is
-  out of scope for both this specification and SESSION-1;
+  out of scope for this specification;
 - any **central correlation mechanism** — no per-message identifier,
   no in-reply-to chain, no host-managed request/response bookkeeping.
   The bus is fully asynchronous; askers that need correlation handle
@@ -313,8 +311,8 @@ routing and session field. The forwarder does **not** become the new
 `source` — the original producer remains named.
 
 If the source Message has no `session`, the derivation **MAY**
-populate a default session on the result (`session_id: "default"`,
-§4.3); it **MUST NOT** modify a `session` already present.
+materialize a default session on the result per OVOS-SESSION-1;
+it **MUST NOT** modify a `session` already present.
 
 ### 5.2 `reply(T', D')`
 
@@ -371,8 +369,8 @@ to do its own correlation, if it wants to:
 
 Whether to do that, and how, is entirely the asker's
 responsibility. Each component (skills, pipeline plugins, external
-clients) tracks its own state as needed, keyed on
-`session.session_id` (§4.1) when it cares about per-channel
+clients) tracks its own state as needed, keyed on the session
+identifier (per OVOS-SESSION-1) when it cares about per-channel
 continuity. Components that need richer discrimination than
 topic + session — for example, multiple parallel requests on the
 same topic in the same session — carry whatever they need in
@@ -441,15 +439,13 @@ A producer **SHOULD**:
 - treat an absent `data` or `context` as equivalent to `{}` (§2);
 - tolerate any `context` shape, including an empty object, and ignore
   `context` keys it does not understand (§2.3);
-- treat the values of `source`, `destination`, and the contents of
-  `session` as opaque (§3.4); the one exception is the reserved
-  `session_id == "default"` marker, whose meaning is owned by
-  OVOS-SESSION-1 §3.1;
+- treat the values of `source` and `destination` as opaque (§3.4);
+  the contents of `session` are opaque to this specification —
+  consumers consult OVOS-SESSION-1 for the field set and
+  consumption semantics;
 - not require any of `source`, `destination`, or `session` to be
   present — they are all optional, and a Message without them is
-  well-formed;
-- treat an absent or empty `session` per OVOS-SESSION-1 §2.5 (the
-  device-local default at consumption).
+  well-formed.
 
 A consumer **SHOULD**:
 
@@ -463,16 +459,14 @@ The following are explicitly **outside** this specification and
 **MUST NOT** be inferred from it: transport choice, encryption,
 authentication, authorization, delivery guarantees, ordering
 guarantees, retry behaviour, session lifecycle (start, end, expiry,
-resumption), the internal shape of `session` beyond naming
-naming what it carries (owned by OVOS-SESSION-1), identifier
-assignment policy, and multi-tenant routing semantics beyond the
+resumption), the internal shape of `session` (owned by
+OVOS-SESSION-1), identifier assignment policy, and multi-tenant
+routing semantics beyond the
 opaque layer-2 substrate of §3.4 / §4.4.
 
 ---
 
 ## See also
 
-- **OVOS-SESSION-1** — defines the wire shape of `session`, the
-  closed set of fields claimed at any given version, the registry
-  mechanism for new fields, and the `session_id` value space
-  including the reserved `"default"` marker.
+- **OVOS-SESSION-1** — the wire shape of `session`, its field
+  set, and consumption semantics.
