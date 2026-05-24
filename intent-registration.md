@@ -267,16 +267,20 @@ success or `ok: false` with a normative `error_code` (§3.4) on
 rejection. A plugin that did **not** consume a registration emits
 nothing.
 
-Producers (skills) **MUST NOT** require any response. A registration
-that produces no `.response` may have been silently dropped (no plugin
-consumed it), may have been accepted by a plugin that doesn't bother
-to confirm, or may have been accepted by multiple plugins that each
-respond differently. The bus is async; the producer is responsible for
-its own observability and bookkeeping.
+Producers (skills) **MUST NOT** require any response and **MUST
+NOT** block waiting for one. A registration that produces no
+`.response` may have been silently dropped (no plugin consumed it),
+may have been accepted by a plugin that doesn't bother to confirm,
+or may have been accepted by multiple plugins that each respond
+differently. The bus is async; the producer is responsible for its
+own observability and bookkeeping.
 
 The introspection topics of §10 (`ovos.intent.list` /
-`ovos.intent.describe`) are the supported way to verify a registration
-was acknowledged — they query the orchestrator's passive index.
+`ovos.intent.describe`) are the supported way to verify a
+registration landed — they query the orchestrator's manifest, which
+the orchestrator maintains regardless of whether any plugin
+emitted a `.response`. A producer wanting acknowledgement queries
+the manifest after registering; it does not wait on `.response`.
 
 ### 3.4 `error_code` values
 
