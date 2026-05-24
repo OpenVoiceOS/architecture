@@ -568,16 +568,6 @@ needs no implementation change:
 
 ### 6.4 Architectural divergences
 
-- **Intent stages and non-intent stages dissolve into one
-  abstraction** (PIPELINE-1 §2, §3). Today the orchestrator
-  treats every loaded plugin uniformly (calls `match`, dispatches
-  on the returned `match_type`); the conceptual distinction
-  between "intent engine" and "non-intent stage" is internal to
-  plugin authors, not to the orchestrator. PIPELINE-1 makes the
-  uniform model normative by defining `<owner_id>:<intent_name>`
-  polymorphism for plugin-bundled handlers — letting a
-  plugin-bundled handler (e.g. a language-model persona) be
-  addressed on the bus the same way a skill-owned handler is.
 - **The orchestrator maintains a passive registration index**
   (INTENT-4 §10). Today there is no central index — each plugin
   knows what it consumed; nothing aggregates that view. INTENT-4
