@@ -44,11 +44,6 @@ tool does not recognize the token and cannot expand the template.
 
 ## OVOS-INTENT-3 — Intent Definition
 
-### 1.1
-
-- §6.1, §6.2, §7, §8 — terminology: **host → orchestrator**.
-  Editorial rename; conformance semantics are unchanged.
-
 ### 1
 
 - Initial draft.

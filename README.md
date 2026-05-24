@@ -61,7 +61,7 @@ below). Adoption is voluntary; conformance, once adopted, is not.
 |----|----------|---------|--------|
 | OVOS-INTENT-1 | [Sentence Template Grammar](sentence-template-grammar.md) | 2 | Draft |
 | OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 2 | Draft |
-| OVOS-INTENT-3 | [Intent Definition](intent-definition.md) | 1.1 | Draft |
+| OVOS-INTENT-3 | [Intent Definition](intent-definition.md) | 1 | Draft |
 | OVOS-MSG-1 | [Bus Message](message-object.md) | 1 | Draft |
 
 Each spec carries its own scope statement, design rationale, and

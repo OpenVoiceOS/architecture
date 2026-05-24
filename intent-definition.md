@@ -1,6 +1,6 @@
 # Intent Definition Specification
 
-**Spec ID:** OVOS-INTENT-3 · **Version:** 1.1 · **Status:** Draft
+**Spec ID:** OVOS-INTENT-3 · **Version:** 1 · **Status:** Draft
 
 This document defines what an **intent** is, the two methods a developer uses
 to define one, how an intent is registered, and the input contract an **intent
