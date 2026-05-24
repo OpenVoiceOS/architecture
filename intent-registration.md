@@ -76,29 +76,33 @@ It does **not** define:
 
 ## 2. Architectural model — registrations are broadcast
 
-Registration messages defined here are **broadcast** on the bus, like
-every other Message. There is no central party that owns, validates, or
-routes them. Whether any loaded pipeline plugin (OVOS-PIPELINE-1)
-chooses to consume a given registration is a plugin concern, out of
-scope for this specification.
+Registration messages defined here are **broadcast** on the bus,
+like every other Message. There is no central party that owns,
+validates, or routes them. Whether any loaded pipeline plugin
+(OVOS-PIPELINE-1) chooses to consume a given registration is a
+plugin concern, out of scope for this specification.
 
-A skill that emits `ovos.intent.register.template` (§6) and no loaded
-plugin consumes it: the registration is silently dropped. The skill's
-intent will not match utterances. There is no error event; this is the
-deployment's responsibility to debug (typically by checking which
-plugins are loaded against the kinds of registrations the skill emits).
+Because registrations are broadcast and consumption is plugin-
+discretionary, a producer **MUST NOT** rely on any specific
+plugin acknowledging a registration. A skill that emits
+`ovos.intent.register.template` (§6) and no loaded plugin
+consumes it: the registration is silently dropped. The skill's
+intent will not match utterances. There is no error event; this
+is the deployment's responsibility to debug (typically by
+checking which plugins are loaded against the kinds of
+registrations the skill emits).
 
-The **orchestrator** (OVOS-INTENT-3 §6.1) MAY maintain a passive
-index of broadcast registrations and expose it through the
-introspection topics of §10 as a convenience for consumers. The
-orchestrator's index, when maintained, is observability-only — it
-does **not** gate matching, does **not** influence what any plugin
-consumes, and does **not** replace the **skill-side authoritative
-record** (a skill is the source of truth for what it has declared;
-§10 makes the skill an authoritative responder alongside the
-orchestrator). The orchestrator is a logical role; it MAY be
-implemented as multiple cooperating processes (OVOS-PIPELINE-1
-§2), each maintaining its own index slice and responding
+The **orchestrator** (OVOS-INTENT-3 §6.1) maintains the manifest
+(§10) — a passive index built from observed registration
+broadcasts — and serves introspection queries from it. The
+manifest is observability-only: it does **not** gate matching,
+does **not** influence what any plugin consumes, and does **not**
+prevent a skill from re-registering or de-registering at any
+time.
+
+Per OVOS-PIPELINE-1 §2, the orchestrator MAY be split across
+cooperating processes; each maintains its own slice of the
+manifest built from broadcasts it observed and responds
 independently to §10 queries.
 
 Three consequences of this model:
@@ -109,7 +113,7 @@ Three consequences of this model:
 - **There is no method-rejection handshake.** Registrations that no
   plugin claims have no error code, no negative response, no signal at
   all. Plugins that *do* claim a registration **MAY** respond with the
-  error codes of §3.3 if the payload is malformed or otherwise
+  error codes of §3.4 if the payload is malformed or otherwise
   unservable, but only the consuming plugin can do so.
 - **The plugin pipeline is what enforces "at most one match per
   utterance."** This specification does not enforce it; OVOS-PIPELINE-1
@@ -119,7 +123,41 @@ Three consequences of this model:
 
 ## 3. Identity, responses, and error codes
 
-### 3.1 Identity carried by every registration message
+### 3.1 Skills self-identify on every emission
+
+A skill **MUST** set `Message.context["skill_id"]` on **every
+Message it emits**, to its own `skill_id` (OVOS-INTENT-3 §3). This
+applies to registration messages (§§5–8), to handler emissions
+under dispatch (responses, speech, side-effect emissions on other
+topics), and to any other bus traffic the skill originates — there
+is no exemption for any topic.
+
+`Message.context["skill_id"]` is the **authoritative attribution
+key** for skill-originated bus traffic. It lets observers
+(loggers, audit, analytics, telemetry, debug tooling, the
+orchestrator's manifest of §10) attribute any Message to its
+originating skill without parsing topic names or `data` payloads —
+which would otherwise be infeasible for skill emissions on
+non-`<skill_id>:<intent_name>`-shaped topics (e.g. `speak`,
+`enclosure.eyes.color`, custom skill-defined topics).
+
+The orchestrator and other infrastructure components are not bound
+by this rule (they do not have a `skill_id`); they identify
+themselves through `source` (OVOS-MSG-1 §3.2) and through
+component-specific reserved context keys their owning specifications
+define. The rule above is **specifically a skill discipline**.
+
+A consumer **MUST NOT** infer the originating skill from `data`
+fields whose presence is not normatively required, or from the
+topic name. The presence of `context["skill_id"]` is the only
+authoritative attribution surface for skill-originated Messages.
+
+A Message that arrives with no `context["skill_id"]` is either not
+skill-originated, or is from a non-conformant skill; the
+orchestrator **SHOULD** log this for diagnostics but **MUST NOT**
+reject the Message.
+
+### 3.2 Identity carried by every registration message
 
 Every registration message carries the identity of what is being registered,
 inside the Message's `data` (OVOS-MSG-1 §2.2). The identity fields restate
@@ -144,7 +182,7 @@ When `data` and `context` (e.g. OVOS-MSG-1 keys) both carry an identity
 field, `data` is **authoritative** for this specification — `context`
 metadata is opaque to the registration semantics.
 
-### 3.2 Responses are optional
+### 3.3 Responses are optional
 
 Registration topics defined here **MAY** have a `.response` reply
 (OVOS-MSG-1 §5.3). When emitted, a response is correlated to its
@@ -167,7 +205,7 @@ Rejection:
 
 Whether to emit a response is a plugin-level decision. A plugin that
 chose to consume a particular registration **MAY** emit `ok: true` on
-success or `ok: false` with a normative `error_code` (§3.3) on
+success or `ok: false` with a normative `error_code` (§3.4) on
 rejection. A plugin that did **not** consume a registration emits
 nothing.
 
@@ -182,11 +220,11 @@ The introspection topics of §10 (`ovos.intent.list` /
 `ovos.intent.describe`) are the supported way to verify a registration
 was acknowledged — they query the orchestrator's passive index.
 
-### 3.3 `error_code` values
+### 3.4 `error_code` values
 
 The `error_code` enum is normative; new codes **MUST** be added by a
 future version of this specification, not invented per-deployment.
-These codes are **plugin-emitted** on `.response` rejections (§3.2);
+These codes are **plugin-emitted** on `.response` rejections (§3.3);
 no party in this specification synthesizes them on a producer's
 behalf.
 
@@ -330,7 +368,7 @@ malformed-payload rules:
 - Each `samples` array **MUST** be non-empty.
 
 A orchestrator **MUST** reject any registration violating these rules with
-`error_code: "malformed_payload"` (§3.2).
+`error_code: "malformed_payload"` (§3.3).
 
 ### 5.4 No `.blacklist`
 
@@ -656,7 +694,9 @@ specification.
 - emit each registration through the topic that matches its
   definition method (§5 for keyword, §6 for template), never both for
   a single intent (INTENT-3 §2);
-- include the identity fields of §3.1 in every registration's `data`;
+- include the identity fields of §3.2 in every registration's `data`;
+- set `Message.context["skill_id"]` to its own `skill_id` on every
+  Message it emits, per §3.1;
 - conform every registration's payload to §5 (keyword), §6 (template),
   or §7 (entity), respectively, including §5.5's single-host rule for
   `file:` references;
@@ -681,9 +721,9 @@ orchestrator owns the manifest (see below).
   `ovos.intent.register.template` only is conformant; a plugin that
   consumes none of them and matches utterances by its own internal
   rules (e.g. an LLM persona) is also conformant.
-- emit `.response` messages per §3.2 to confirm or reject what it
+- emit `.response` messages per §3.3 to confirm or reject what it
   consumed. Such responses, when emitted, **MUST** use the error
-  codes of §3.3.
+  codes of §3.4.
 
 A plugin **MUST NOT** synthesize a `.response` for a registration it
 did not actually consume — `.response` is the consumer's
