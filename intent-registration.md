@@ -173,12 +173,30 @@ skill's prior registration); a consumer that needs the emitter
 
 The orchestrator (or any component that loads skills) **MUST**
 enforce the `context["skill_id"] == emitting skill's skill_id`
-invariant **whenever it is in a position to do so** — typically
-by intercepting / decorating the skill's emit pathway at load
-time, so that even a non-compliant handler cannot emit a Message
-that lacks or misstates `context["skill_id"]`. This places the
-discipline on the skill-loading infrastructure rather than on
-every skill author, and survives buggy or malicious handler code.
+invariant **whenever it is in a position to do so**.
+
+The cleanest enforcement path is structural: when the orchestrator
+dispatches a matched intent on the `<skill_id>:<intent_name>`
+topic (OVOS-PIPELINE-1 §7.1), it stamps
+`Message.context["skill_id"]` from the dispatch topic's
+`<skill_id>` prefix. The skill handler derives its outbound
+Messages from the dispatch via `forward` / `reply` (OVOS-MSG-1
+§5), inheriting `context["skill_id"]` automatically. For
+emissions on the dispatch path, conformance is structural — a
+skill emitting via the standard derivations carries the correct
+`skill_id` without any extra work.
+
+For emissions **outside** the dispatch path (a skill emitting on
+its own initiative, from a background worker, before any dispatch),
+the orchestrator **SHOULD** intercept / decorate the skill's emit
+pathway at load time so non-compliant handler code cannot emit a
+Message that lacks or misstates `context["skill_id"]`. This
+places the discipline on the skill-loading infrastructure rather
+than on every skill author.
+
+A Message a skill emits whose `context["skill_id"]` does **not**
+match the `<skill_id>` of the dispatch it derives from (when one
+exists) is malformed; the orchestrator **SHOULD** log the drift.
 
 When enforcement is not possible (a skill emitting on a transport
 the loader cannot intercept), the rule still binds the skill, and
