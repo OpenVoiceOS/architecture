@@ -188,7 +188,7 @@ everything else is owned by the cited specification.
 | `session_id` | string | §3.1 (this spec) |
 | `lang` | string (BCP-47) | §3.2 (this spec) |
 | `secondary_langs` | array of string (BCP-47) | §3.2 (this spec) |
-| `tts_lang` | string (BCP-47) | §3.2 (this spec) |
+| `output_lang` | string (BCP-47) | §3.2 (this spec) |
 | `stt_lang` | string (BCP-47) | §3.2 (this spec) |
 | `request_lang` | string (BCP-47) | §3.2 (this spec) |
 | `detected_lang` | string (BCP-47) | §3.2 (this spec) |
@@ -302,40 +302,40 @@ Typical uses by consumers:
 consumer **MAY** ignore it. Per §3.2.7, no consolidation order is
 prescribed.
 
-#### 3.2.3 `tts_lang`
+#### 3.2.3 `output_lang`
 
-`tts_lang` — string — the BCP-47 tag the participant wants the
+`output_lang` — string — the BCP-47 tag the participant wants the
 **assistant's responses rendered in**, independently of the input
 language. It is an output-side preference: a user who speaks German
-but always wants English replies sets `tts_lang: "en-US"`; a
+but always wants English replies sets `output_lang: "en-US"`; a
 language learner who speaks English but wants Spanish responses to
-practise with sets `tts_lang: "es-ES"`.
+practise with sets `output_lang: "es-ES"`.
 
-When `tts_lang` is **omitted**, the assistant replies in whatever
+When `output_lang` is **omitted**, the assistant replies in whatever
 language naturally falls out of input-side signals (consumer's
 choice per §3.2.7 — typically `lang`, `stt_lang`, or the per-payload
 content language). This is the status quo: input language and output
 language are the same.
 
-When `tts_lang` is **set**, a stage that renders text not yet
+When `output_lang` is **set**, a stage that renders text not yet
 produced (dialog selection, prompt selection, response composition,
-GUI text) **SHOULD** render in `tts_lang` if it has the resources
+GUI text) **SHOULD** render in `output_lang` if it has the resources
 to do so (a localized dialog, a TTS voice, a prompt in that
-language). When the stage cannot render in `tts_lang`, it **MAY**
+language). When the stage cannot render in `output_lang`, it **MAY**
 fall back to `secondary_langs` (§3.2.2) and then to the input-side
 language; alternatively a deployment **MAY** insert a translation
-transformer that rewrites the rendered text into `tts_lang`
-post-hoc — `tts_lang` does not prescribe how the goal is met, only
+transformer that rewrites the rendered text into `output_lang`
+post-hoc — `output_lang` does not prescribe how the goal is met, only
 that it is the goal.
 
-`tts_lang` is not consulted by TTS voice selection directly: TTS
+`output_lang` is not consulted by TTS voice selection directly: TTS
 narrates already-produced text and keys on the payload `data.lang`
-of the text being spoken (§3.2.1). `tts_lang` influences which
+of the text being spoken (§3.2.1). `output_lang` influences which
 language the upstream renderer produced, which determines `data.lang`,
 which TTS then voices. The cascade is intentional: a single
 preference field controls the language of every output stage.
 
-A consumer that **cannot** render in `tts_lang` and has no fallback
+A consumer that **cannot** render in `output_lang` and has no fallback
 strategy **MUST NOT** silently render in another language without
 recording the divergence; it **SHOULD** include the actually-used
 language in the rendered Message's `data.lang` so downstream TTS
