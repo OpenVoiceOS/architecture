@@ -141,6 +141,52 @@ which would otherwise be infeasible for skill emissions on
 non-`<skill_id>:<intent_name>`-shaped topics (e.g. `speak`,
 `enclosure.eyes.color`, custom skill-defined topics).
 
+#### `context["skill_id"]` vs `data["skill_id"]`
+
+The two are **different fields with different semantics**, and
+**MUST NOT** be conflated:
+
+- **`Message.context["skill_id"]`** — the **emitter**. Identifies
+  the skill that produced this Message. Set by the emitting skill
+  on every Message it emits, per the rule above. Read by observers
+  for attribution.
+- **`Message.data["skill_id"]`** — the **subject** of the topic.
+  Whenever a topic's payload schema (defined by some other spec)
+  carries `skill_id` as a payload value, that value identifies the
+  skill the topic is *about* — a search filter, a target of an
+  operation, an intent registration's owning skill — not the
+  emitter. Examples: `ovos.skill.deregister` carries
+  `data.skill_id` for the skill *being deregistered* (which may be
+  emitted by the skill itself or by another component on its
+  behalf); `ovos.intent.list` carries an optional
+  `data.skill_id` filter.
+
+A consumer reading `data.skill_id` is reading a payload value
+whose meaning is fixed by the topic's owning spec. A consumer
+reading `context.skill_id` is reading the emitter. The two
+**MAY** differ on a single Message (a tool component
+deregistering on behalf of a skill, a debug harness re-emitting a
+skill's prior registration); a consumer that needs the emitter
+**MUST** read `context.skill_id`, not `data.skill_id`.
+
+#### Orchestrator-side enforcement
+
+The orchestrator (or any component that loads skills) **MUST**
+enforce the `context["skill_id"] == emitting skill's skill_id`
+invariant **whenever it is in a position to do so** — typically
+by intercepting / decorating the skill's emit pathway at load
+time, so that even a non-compliant handler cannot emit a Message
+that lacks or misstates `context["skill_id"]`. This places the
+discipline on the skill-loading infrastructure rather than on
+every skill author, and survives buggy or malicious handler code.
+
+When enforcement is not possible (a skill emitting on a transport
+the loader cannot intercept), the rule still binds the skill, and
+non-conformant traffic remains diagnosable via the consumer-side
+absence-detection rule below.
+
+#### Other component types
+
 The orchestrator and other infrastructure components are not
 bound by this rule — they do not have a `skill_id`. Other
 component types identify themselves through component-specific
@@ -154,15 +200,20 @@ originator of an entry-point Message and propagated by the
 derivations of OVOS-MSG-1 §5; this specification does not
 prescribe its value space.
 
+#### Consumer-side
+
 A consumer **MUST NOT** infer the originating skill from `data`
 fields whose presence is not normatively required, or from the
 topic name. The presence of `context["skill_id"]` is the only
 authoritative attribution surface for skill-originated Messages.
 
 A Message that arrives with no `context["skill_id"]` is either not
-skill-originated, or is from a non-conformant skill; the
-orchestrator **SHOULD** log this for diagnostics but **MUST NOT**
-reject the Message.
+skill-originated, or is from a non-conformant skill that escaped
+loader-side enforcement; the orchestrator **SHOULD** log this for
+diagnostics but **MUST NOT** reject the Message at this layer
+(rejection on a per-topic basis is the responsibility of that
+topic's owning spec — e.g. CONTEXT-1 §5.2 rejects context-mutation
+events that lack the field).
 
 ### 3.2 Identity carried by every registration message
 
