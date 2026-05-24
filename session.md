@@ -78,10 +78,13 @@ empty object `{}` is well-formed and is interpreted per §2.5.
 
 ### 2.5 Omission means "let the orchestrator decide"
 
-Field omission is the **single mechanism** by which a producer defers
-a session value to the orchestrator. An omitted field is interpreted
-identically at every consumer that sees it: the consumer fills the
-field with its own deployment default at the point of consumption.
+Field omission is the **single mechanism** by which a producer
+defers a session value to the orchestrator. A producer **MUST**
+defer by omitting the field; this specification provides no other
+deferral surface (no `null`, no sentinel value, no separate
+"unset" Message). An omitted field is interpreted identically at
+every consumer that sees it: the consumer **MUST** fill the field
+with its own deployment default at the point of consumption.
 
 This applies uniformly across the whole field set:
 
