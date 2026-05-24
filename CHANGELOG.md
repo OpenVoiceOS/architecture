@@ -81,36 +81,38 @@ tool does not recognize the token and cannot expand the template.
 
 ### 2
 
-- Initial draft. Released as **v2** rather than v1: per the
-  draft-stage versioning policy, v1 is reserved for content
-  drop-in compatible with current OVOS. PIPELINE-1 introduces a
-  new orchestrator responsibility (the passive registration index
-  backing `ovos.intent.list` / `.describe`) and normalizes the
-  universal `ovos.utterance.handled` end-marker on every terminal
-  path — both require OVOS-side changes, so the first release is
-  v2.
+- Initial draft. Released as **V2** rather than V1 per the
+  draft-stage versioning policy: a V1 spec must be adoptable
+  without breaking V0 (current OVOS). PIPELINE-1 renames the
+  handler-lifecycle trio (`mycroft.skill.handler.start` /
+  `.complete` / `.error` → `ovos.intent.handler.*`) — existing
+  observers of the legacy names break under that rename, so the
+  spec is V2. The other prescribed behaviours (orchestrator
+  passive registration index, universal `ovos.utterance.handled`
+  on every terminal path) would, on their own, have been
+  V1-compatible: missing them only degrades experience
+  (introspection returns empty; the workshop error path lacks
+  the end-marker) without breaking V0 producers or consumers.
 - Defines the **orchestrator** and the **pipeline plugin**
   abstraction: opaque-`pipeline_id` black boxes the orchestrator
   iterates in `session.pipeline` order per utterance,
-  first-match-wins. Plugins expose one
-  operation — `match(utterance, session) → Match | None`,
-  side-effect-free; the orchestrator handles dispatch,
-  notifications, and terminal events.
+  first-match-wins. Plugins expose one operation —
+  `match(utterance, session) → Match | None`, side-effect-free;
+  the orchestrator handles dispatch, notifications, and terminal
+  events.
 - Dispatch topic: `<owner_id>:<intent_name>` where `owner_id` is
   either a `skill_id` (skill-owned handler) or a `pipeline_id`
   (plugin-bundled handler). Plugins and skills are equivalent
   handler owners from the bus's perspective.
 - Utterance-layer events: `recognizer_loop:utterance` (entry),
   `ovos.intent.matched` (positive match notification),
-  `ovos.utterance.cancelled` (transformer cancellation),
   `complete_intent_failure` (no plugin claimed),
   `ovos.utterance.handled` (universal end-marker, fires on every
   terminal path).
 - Handler-lifecycle trio: `ovos.intent.handler.start` / `.complete`
   / `.error`, emitted by whoever runs the handler (skill or
   plugin).
-- Transformer chain: pre-pipeline modification or cancellation
-  via `context["canceled"]`.
 - Per-plugin behavioural contracts (converse, fallback,
-  common_query, persona, language-model plugins, etc.) are out
-  of scope — plugins are black boxes; each defines itself.
+  common_query, persona, language-model plugins, etc.) and any
+  pre-pipeline utterance-transformer chain are out of scope —
+  plugins are black boxes; each defines itself.

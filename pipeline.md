@@ -39,18 +39,15 @@ This specification defines:
 - the **match contract** (§4) — the only thing a plugin exposes;
 - the **`session.pipeline`** field (§5) — how a session
   chooses which plugins and in what order;
-- the **utterance lifecycle** (§6) — entry, transformer chain,
-  iteration, dispatch, terminal events;
+- the **utterance lifecycle** (§6) — entry, iteration, dispatch,
+  terminal events;
 - the **dispatch** topic shape (§7) — `<owner_id>:<intent_name>`;
 - the **handler-lifecycle trio** (§8) —
   `ovos.intent.handler.start` / `.complete` / `.error`;
 - the **utterance-layer bus events** (§9) —
   `recognizer_loop:utterance`, `ovos.intent.matched`,
-  `ovos.utterance.cancelled`, `complete_intent_failure`,
-  `ovos.utterance.handled`;
-- the **transformer chain** (§10) — pre-pipeline modification and
-  cancellation;
-- **conformance** (§11).
+  `complete_intent_failure`, `ovos.utterance.handled`;
+- **conformance** (§10).
 
 It does **not** define:
 
@@ -255,7 +252,7 @@ over an unknown identifier.
 If `session.pipeline` is absent or empty, the orchestrator
 **MAY** fall back to a deployment-configured default. If no
 default is configured, the utterance proceeds to no-match
-(`complete_intent_failure`, §9.4).
+(`complete_intent_failure`, §9.3).
 
 Different sessions may carry different `pipeline`. This
 is how a deployment provides different behaviour to different
@@ -269,18 +266,12 @@ restricted pipeline that excludes destructive plugins.
 Every utterance flows through the same lifecycle, regardless of
 which plugin (if any) claims it. The lifecycle is **guaranteed
 to terminate** with exactly one `ovos.utterance.handled` event
-(§9.6).
+(§9.5).
 
 ### 6.1 The flow
 
 ```
 recognizer_loop:utterance               ← entry (§9.1)
-   │
-   ├─ transformer chain (§10)
-   │     └─ if any transformer set context["canceled"] = true:
-   │           ovos.utterance.cancelled         (§9.3)
-   │           ovos.utterance.handled           (§9.6)
-   │           STOP
    │
    ├─ session retrieval; pipeline read from session (§5)
    │
@@ -291,12 +282,12 @@ recognizer_loop:utterance               ← entry (§9.1)
    │         ovos.intent.matched                  (§9.2)
    │         dispatch on <match.owner_id>:<match.intent_name>  (§7)
    │         (handler runs; emits lifecycle trio §8)
-   │         ovos.utterance.handled               (§9.6)
+   │         ovos.utterance.handled               (§9.5)
    │         break
    │
    └─ if no plugin matched:
-         complete_intent_failure                  (§9.4)
-         ovos.utterance.handled                   (§9.6)
+         complete_intent_failure                  (§9.3)
+         ovos.utterance.handled                   (§9.5)
 ```
 
 ### 6.2 First-match-wins iteration
@@ -308,7 +299,7 @@ For each utterance, the orchestrator **MUST**:
   plugin (skipping unknown identifiers, §5);
 - stop at the **first plugin** that returns a non-`None` `Match`;
 - if no plugin returns a `Match`, emit `complete_intent_failure`
-  (§9.4).
+  (§9.3).
 
 A plugin that raises an exception during `match` is treated as if
 it returned `None`. The orchestrator **MUST** continue to the next
@@ -326,12 +317,11 @@ keyed on `session.session_id` (per OVOS-MSG-1 §5.4 —
 
 ### 6.4 Terminal events
 
-Every utterance terminates in exactly one of three ways, each
+Every utterance terminates in exactly one of two ways, each
 followed by the universal end-marker `ovos.utterance.handled`:
 
 | Outcome | Sequence of utterance-layer events |
 |---------|------------------------------------|
-| Cancelled by transformer | `ovos.utterance.cancelled` → `ovos.utterance.handled` |
 | Matched by a plugin | `ovos.intent.matched` → dispatch + (handler trio §8) → `ovos.utterance.handled` |
 | No plugin matched | `complete_intent_failure` → `ovos.utterance.handled` |
 
@@ -489,7 +479,7 @@ The orchestrator **MAY** wait for `.complete` or `.error` matching
 the dispatched `(owner_id, intent_name, session)` for a
 deployment-defined time bound. If neither arrives within the
 bound, the orchestrator **MUST** still emit
-`ovos.utterance.handled` (§9.6) to satisfy the universal
+`ovos.utterance.handled` (§9.5) to satisfy the universal
 end-marker invariant. It **MUST NOT** synthesize a `.error` of
 its own — error events come from the handler that owns the trio.
 
@@ -555,35 +545,25 @@ Consumers **MUST NOT** treat receipt as permission or instruction
 to run a handler — handler invocation happens via the dispatch
 topic (§7).
 
-### 9.3 `ovos.utterance.cancelled`
-
-Emitted by the orchestrator when a transformer requested
-cancellation (§10.2). Broadcast. Payload **MAY** carry
-transformer-supplied metadata; this specification does not
-normatively define its shape.
-
-This message **MUST** be followed immediately by
-`ovos.utterance.handled` (§9.6).
-
-### 9.4 `complete_intent_failure`
+### 9.3 `complete_intent_failure`
 
 Emitted by the orchestrator when pipeline iteration completed
 with no plugin claiming the utterance. Broadcast. Payload
 **MAY** carry the original utterance data for observability.
 
 This message **MUST** be followed immediately by
-`ovos.utterance.handled` (§9.6).
+`ovos.utterance.handled` (§9.5).
 
 This is the **intent-layer failure** signal. It is distinct from
 a handler-layer error (§8): `complete_intent_failure` means "no
 plugin claimed"; `ovos.intent.handler.error` means "a handler
 ran and raised."
 
-### 9.5 The dispatch topic
+### 9.4 The dispatch topic
 
 `<owner_id>:<intent_name>` — see §7.
 
-### 9.6 `ovos.utterance.handled`
+### 9.5 `ovos.utterance.handled`
 
 The **universal end-marker** for an utterance. Emitted by the
 orchestrator on every terminal path — cancellation, no-match,
@@ -599,58 +579,19 @@ malformed.
 
 ---
 
-## 10. The transformer chain
-
-Before pipeline iteration, the orchestrator **MAY** run an ordered
-chain of **transformers** that can modify the utterance, modify
-its `message.context`, or request cancellation.
-
-This specification gives a minimum contract for transformers;
-their loading and ordering are deployment concerns.
-
-### 10.1 Two transformer roles
-
-- **Utterance transformers** — may modify the list of utterances
-  (e.g. punctuation cleanup, profanity filtering, normalization).
-- **Metadata transformers** — may modify `message.context`
-  (e.g. classifying speaker identity, adding tracing identifiers).
-
-A transformer in either role **MAY** request cancellation of the
-utterance by setting `message.context["canceled"] = true`.
-
-### 10.2 Cancellation semantics
-
-If any transformer sets `message.context["canceled"] = true`, the
-orchestrator **MUST**:
-
-- not iterate the pipeline for this utterance;
-- emit `ovos.utterance.cancelled` (§9.3);
-- emit `ovos.utterance.handled` (§9.6).
-
-### 10.3 Transformer chain is not a plugin
-
-Transformers run *before* the pipeline. They do not return a
-match; they only modify the message (or cancel it). The match
-contract of §4 applies to pipeline plugins only.
-
----
-
-## 11. Conformance
+## 10. Conformance
 
 ### An **orchestrator** **MUST**:
 
 - subscribe to `recognizer_loop:utterance` (§9.1);
 - run every received utterance through the lifecycle of §6
   exactly once;
-- emit `ovos.utterance.handled` (§9.6) exactly once per
+- emit `ovos.utterance.handled` (§9.5) exactly once per
   utterance, regardless of which terminal path was taken;
-- if any transformer set `context["canceled"] = true`, emit
-  `ovos.utterance.cancelled` and **MUST NOT** iterate the
-  pipeline (§10.2);
 - iterate `session.pipeline` in order (§6.2) and stop at
   the first plugin returning a non-`None` `Match`;
 - skip unknown `pipeline_id`s without failing the utterance (§5);
-- emit `complete_intent_failure` when no plugin claimed (§9.4);
+- emit `complete_intent_failure` when no plugin claimed (§9.3);
 - emit `ovos.intent.matched` (§9.2) on every successful claim,
   before the dispatch;
 - dispatch on `<match.owner_id>:<match.intent_name>` per §7;
@@ -680,21 +621,14 @@ contract of §4 applies to pipeline plugins only.
   (§8.2);
 - run the handler at most once per dispatch.
 
-### A **transformer** **MUST**:
-
-- modify only the utterance list and / or `message.context`;
-- request cancellation via `context["canceled"] = true` if and
-  only if the utterance is to be dropped (§10.2);
-- be side-effect-free beyond its returned modifications.
-
 ### Non-goals
 
 The following are explicitly outside this specification: plugin
-loading and discovery; transformer discovery and ordering; ASR
-n-best ranking semantics within plugins; per-plugin behavioural
-specs; the `session` object's full internal shape beyond
-`session_id`, `lang` (OVOS-MSG-1 §4), and `pipeline`
-(§5).
+loading and discovery; any pre-pipeline utterance transformation
+or cancellation chain; ASR n-best ranking semantics within
+plugins; per-plugin behavioural specs; the `session` object's
+full internal shape beyond `session_id`, `lang` (OVOS-MSG-1 §4),
+and `pipeline` (§5).
 
 ---
 
