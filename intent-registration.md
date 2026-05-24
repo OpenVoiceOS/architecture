@@ -141,11 +141,18 @@ which would otherwise be infeasible for skill emissions on
 non-`<skill_id>:<intent_name>`-shaped topics (e.g. `speak`,
 `enclosure.eyes.color`, custom skill-defined topics).
 
-The orchestrator and other infrastructure components are not bound
-by this rule (they do not have a `skill_id`); they identify
-themselves through `source` (OVOS-MSG-1 §3.2) and through
-component-specific reserved context keys their owning specifications
-define. The rule above is **specifically a skill discipline**.
+The orchestrator and other infrastructure components are not
+bound by this rule — they do not have a `skill_id`. Other
+component types identify themselves through component-specific
+reserved context keys their owning specifications define
+(`pipeline_id`, `transformer_id`, future entry-service identity,
+etc.). The rule above is **specifically a skill discipline**.
+
+`source` (OVOS-MSG-1 §3.2) is **not** an identity surface for any
+component. It is opaque metadata typically populated by the
+originator of an entry-point Message and propagated by the
+derivations of OVOS-MSG-1 §5; this specification does not
+prescribe its value space.
 
 A consumer **MUST NOT** infer the originating skill from `data`
 fields whose presence is not normatively required, or from the
