@@ -741,21 +741,26 @@ needs no implementation change:
   pipeline plugin's matcher has compiled*, distinct from the
   orchestrator's manifest of declared intents (INTENT-4 §10). No
   current OVOS analogue.
-- **CONTEXT-1 scope discriminator on `requires_context`**
-  (CONTEXT-1 §6 / §6.1). OPTIONAL `scope: private|shared` per
-  entry, default `private`. Prevents an unrelated skill's shared
-  `Person` entry from accidentally satisfying a private gate.
-  Short-form `[Person]` is interpreted as
-  `{ key: Person, scope: private }`.
-- **Skill self-identification on every emission** (INTENT-4 §3.1).
-  Every Message a skill emits carries
+- **CONTEXT-1 scope and ownership encoded in the key shape**
+  (CONTEXT-1 §2, §3). A bare key `Person` is shared; a prefixed
+  key `music.skill:Person` is private to `music.skill`. The `:`
+  is load-bearing — mirroring the `<skill_id>:<intent_name>`
+  dispatch topic. Drops separate `scope` and `origin` fields on
+  stored entries (both were redundant with the key shape).
+  `requires_context` and `excludes_context` declarations take an
+  OPTIONAL `scope: private|shared` discriminator (default
+  `private`) to express which lookup the gate uses; bare-string
+  declarations default to private to prevent shared-leak.
+- **Skill self-identification on every emission** (INTENT-4
+  §3.1). Every Message a skill emits carries
   `Message.context["skill_id"]`. Current OVOS skills set this on
-  some emissions (registrations, handler responses) but not
-  uniformly. The spec makes it the authoritative attribution
-  surface for skill-originated bus traffic — observers attribute
-  by `context["skill_id"]`, not by parsing topic names. Enforced
-  loader-side where possible (orchestrator intercepts the emit
-  pathway). Drives CONTEXT-1 §5.2 origin-stamping.
+  some emissions but not uniformly. Enforcement is structural on
+  the dispatch path: the orchestrator stamps
+  `context.skill_id` from the `<skill_id>:<intent_name>` dispatch
+  topic prefix (PIPELINE-1 §7.1), and skill emissions via
+  `forward`/`reply` inherit automatically. Loader-side
+  interception covers off-dispatch emissions. Drives CONTEXT-1
+  §5.2 stored-key computation.
 - **Entry-point topic is not prescribed** (PIPELINE-1 §9.1). The
   utterance-layer entry-topic name is deferred to a future
   audio-input ↔ assistant-core wire spec; current deployments
