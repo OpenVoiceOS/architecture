@@ -171,11 +171,17 @@ match(utterance, session) → Match | None
 
 Inputs:
 
-- `utterance` — the user-side input as received in
-  `recognizer_loop:utterance` (typically a list of one or more
-  candidate strings; see §9.1);
+- `utterance` — a **non-empty list of candidate strings**. The
+  list typically originates from `recognizer_loop:utterance`
+  (§9.1) and may have been modified by the utterance-transformer
+  chain (OVOS-TRANSFORM-1 §3.2) before reaching the plugin. A
+  plugin **MUST** accept this shape: a list of one or more
+  candidate transcripts, in no particular order, all in the same
+  language. A plugin is free to consider all candidates, only the
+  first, or any subset; the orchestrator does not prescribe how
+  candidates are weighted.
 - `session` — the session carrier from `context.session` of the
-  utterance Message (OVOS-MSG-1 §4).
+  utterance Message (OVOS-MSG-1 §4, OVOS-SESSION-1).
 
 Output: either `None` (decline) or a `Match` object with the
 fields below.
