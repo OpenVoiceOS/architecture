@@ -382,7 +382,26 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
 - `source` and `destination` follow the single-flip routing model
   (OVOS-MSG-1 §5.2) — the orchestrator derives the dispatch via
   `reply`, so `destination` is the original utterance emitter and
-  `source` is the orchestrator.
+  `source` is the orchestrator;
+- when `<owner_id>` is a `skill_id`, the orchestrator **MUST**
+  stamp `context["skill_id"]` to that `skill_id`. This carries
+  the skill's identity forward into every Message the handler
+  emits via `forward` (OVOS-MSG-1 §5.1) — the skill inherits the
+  context, satisfying OVOS-INTENT-4 §3.1 by construction. When
+  `<owner_id>` is a `pipeline_id` (plugin-bundled handler), the
+  orchestrator **MUST NOT** stamp `context["skill_id"]` —
+  plugin-bundled handlers identify themselves via `pipeline_id`,
+  not `skill_id`.
+
+Any Message the skill subsequently emits **MUST** carry
+`context["skill_id"]` matching the `<owner_id>` of the dispatch
+that invoked it (OVOS-INTENT-4 §3.1). Because the orchestrator
+stamps the dispatch context and skills derive their emissions
+from it via `forward` / `reply`, this match is automatic — a
+skill that emits a Message whose `context["skill_id"]` differs
+from the dispatch is non-conformant, and the orchestrator
+**SHOULD** detect and log such drift if it is in a position to
+do so (loader-side interception per OVOS-INTENT-4 §3.1).
 
 The dispatch Message's `data`:
 
