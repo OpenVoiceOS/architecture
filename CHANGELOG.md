@@ -81,13 +81,17 @@ tool does not recognize the token and cannot expand the template.
 
 ### 2
 
-- Initial draft. Released as **v2** rather than v1: per the
-  draft-stage versioning policy, v1 is reserved for content
-  drop-in compatible with current OVOS. INTENT-4 renames the
+- Initial draft. Released as **V2** rather than V1 per the
+  draft-stage versioning policy: a V1 spec must be adoptable
+  without breaking V0 (current OVOS). INTENT-4 renames the
   legacy registration topics (`padatious:register_intent`,
-  `register_vocab`, …) into the `ovos.intent.*` namespace and
-  introduces the orchestrator passive registration index — both
-  require OVOS-side changes, so the first release is v2.
+  `register_vocab`, …) into the `ovos.intent.*` namespace —
+  existing skills emit on the legacy names, so adopting the
+  rename strictly **actively breaks** V0 producers. That makes
+  the whole spec V2. The orchestrator passive registration
+  index, on its own, would have been V1-compatible (a missing
+  index just makes `ovos.intent.list` / `.describe` return
+  empty — degraded experience, not a break).
 - Defines the bus wire format for **intent
   registration** — and nothing else. Registration messages
   (`ovos.intent.register.keyword`, `ovos.intent.register.template`,
