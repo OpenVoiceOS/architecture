@@ -187,6 +187,9 @@ everything else is owned by the cited specification.
 |-------|-----------|-------|
 | `session_id` | string | §3.1 (this spec) |
 | `lang` | string (BCP-47) | §3.2 (this spec) |
+| `stt_lang` | string (BCP-47) | §3.2 (this spec) |
+| `request_lang` | string (BCP-47) | §3.2 (this spec) |
+| `detected_lang` | string (BCP-47) | §3.2 (this spec) |
 | `pipeline` | array of string | OVOS-PIPELINE-1 §5 |
 | `context` | object | OVOS-CONTEXT-1 §2 |
 | `audio_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
@@ -240,86 +243,96 @@ The reserved value is not a distinguished kind of session in the
 schema; it is a normal session that carries the same field set as any
 other (§3), distinguished only by its identifier.
 
-### 3.2 `lang`
+### 3.2 Language signals
+
+A session carries up to four BCP-47 language-tag fields, each
+naming a different *kind* of language signal. All four are
+session-scoped, all four are omissible per §2, and all four are
+populated independently (typically by different stages of the
+pipeline, by different components, or by an out-of-band caller).
+
+Their **meanings** are normative; how a consumer **consolidates**
+them into a single language for any given operation is not — that
+choice is stage-dependent and implementation-specific. §3.2.5
+suggests a default consolidation pattern as informative guidance.
+
+#### 3.2.1 `lang`
 
 `lang` — string — the **user's preferred language**, as a BCP-47
 language tag. It declares which language the participant on the
-external side of the bus boundary wants to communicate in.
+external side of the bus boundary wants to communicate in. It is the
+base signal: stable across the session, not derived from any one
+utterance, and the natural fallback when no per-utterance signal is
+available.
 
-The split between session and payload language is sharp:
+#### 3.2.2 `stt_lang`
 
-- **Matching** an utterance against intents is keyed on `data.lang`
-  (the language the utterance was recognized in) — an `en-US` user
-  can still trigger a `de-DE` intent if the utterance happens to be
-  in German.
-- **Rendering text not yet produced** — dialog selection, prompt
-  selection, response composition — is keyed on `session.lang`: the
-  system replies to the user in the user's preferred language even
-  when it has just handled a code-switched command.
-- **Narrating already-produced text** — TTS — is keyed on the
-  payload language of the text being spoken (`data.lang` on the
-  Message carrying the text), not on `session.lang`. The text was
-  rendered in whatever language its producer chose; TTS only voices
-  what is there. A TTS subsystem **MUST** select voice and
-  pronunciation per the payload `data.lang` when it is set, and
-  **MUST** fall back to `session.lang` only when the payload carries
-  no language signal at all (per the resolution order below).
+`stt_lang` — string — the BCP-47 tag the speech-to-text stage
+**actually transcribed in**. It records the language the audio was
+decoded as, regardless of what was requested or expected. It is
+typically populated by the component that produced the transcript;
+once set, it travels with the session until overwritten by a later
+stage that re-transcribes.
 
-#### `data.lang` vs. `session.lang`
+#### 3.2.3 `request_lang`
 
-`lang` also appears in many topic-specific Message payloads under
-`data.lang`, with a different meaning:
+`request_lang` — string — the BCP-47 tag the **caller explicitly
+requested** for downstream processing of this session. It is the
+"please treat this session as language X" override: a remote client,
+a UI selector, or a layer-2 router populates it to pin language
+behaviour regardless of what the user is preferring (`lang`) or what
+the audio was transcribed as (`stt_lang`).
 
-- `session.lang` is the **user's preferred language** — a property
-  of the conversational session.
-- `data.lang` describes the **language of the data carried in this
-  Message** — the utterance just transcribed, the resource just
-  registered, the dialog just rendered. It is a property of the
-  payload.
+#### 3.2.4 `detected_lang`
 
-The two **usually agree** — a user whose `session.lang` is `en-US`
-typically speaks English utterances and triggers English-registered
-intents — but they **MAY differ**. A code-switching user might issue
-a Spanish command inside an English-preferred session:
-`data.lang = "es-ES"`, `session.lang = "en-US"`. A consumer reading
-one **MUST NOT** assume it equals the other.
+`detected_lang` — string — the BCP-47 tag a **language-detection
+component** classified the most recent utterance as. It records the
+opinion of a detector (acoustic, lexical, or hybrid) and may differ
+from both `stt_lang` (which records what STT decoded the audio as,
+which can fail when STT is fixed to a single language) and `lang`
+(which records the user's stable preference).
 
-Topics that carry a `data.lang` field are defined by the
-specifications that own those topics; this specification owns only
-the session-level `lang`.
+#### 3.2.5 Consolidation (informative)
 
-#### Language resolution
+A consumer that needs **one** language for a particular operation
+must consolidate the available signals into a single value. The
+**right priority order is stage-dependent**: different stages of the
+pipeline reasonably prioritize different signals. This specification
+does not bind a single ordering; it lists each signal's meaning
+(above) and leaves consolidation to the orchestrator and the consumer
+performing the operation.
 
-Several distinct language signals may travel on or alongside a
-Message. A consumer that needs **one** authoritative language for an
-operation — selecting an STT model, choosing an intent-engine model,
-rendering a dialog, picking a TTS voice — **MUST** resolve them in
-the following priority order, taking the first value that is present
-and non-empty:
+As **informative guidance** — not a normative rule — a sensible
+default ordering for most stages is:
 
-| Priority | Source | Owner |
-|----------|--------|-------|
-| 1 | `data.stt_lang` | the topic that carries the raw STT result |
-| 2 | `data.request_lang` | the topic that explicitly requests a language for the operation |
-| 3 | `data.detected_lang` | the topic carrying a language-detector classification |
-| 4 | `data.lang` | the topic carrying the payload (its content language) |
-| 5 | `session.lang` | this specification (the participant's preference) |
-| 6 | the consumer's deployment default | per §2.5 |
+```
+request_lang  →  stt_lang  →  detected_lang  →  lang  →  deployment default
+```
 
-The first four signals are payload fields owned by the
-specifications that define their carrying topics; this specification
-fixes only the **resolution order** that places `session.lang` as
-the fallback before the deployment default. A specification that
-introduces a new language signal **MUST** declare where in this
-order it inserts; absent such a declaration, a new signal is treated
-as priority 0 (lowest above `session.lang`) by consumers that
-recognize it, or ignored entirely by consumers that do not (§2.3).
+with the per-payload `data.lang` (the content language of the
+Message being processed) taking absolute priority for any operation
+whose purpose is to act on that payload's content (TTS narrating
+already-rendered text, translation of a specific string, format
+conversion of a specific resource).
 
-A consumer **MUST NOT** treat the resolved language as authoritative
-for any field other than the one it is resolving — `session.lang`
-remains the participant's preference, `data.lang` remains the
-payload's content language, regardless of which value the
-resolution selected for any given operation.
+A consumer **MAY** choose any consolidation order that suits its
+stage and need. A consumer **MUST NOT** assume any one signal is
+present, **MUST NOT** assume one signal equals another, and **MUST
+NOT** mutate any signal as a side effect of consolidating.
+
+#### 3.2.6 `data.lang` (per-payload, not session-scoped)
+
+The session-level fields above describe **session state**. The
+language *of a particular Message's payload* is a per-payload concept
+and is owned by the specification that defines the Message's topic.
+By convention many topics carry a `data.lang` field describing the
+language of the content in that Message (an utterance just
+transcribed, a resource just registered, a dialog just rendered).
+
+`data.lang` is **not** a session field and is not propagated by §4.
+A consumer that needs the payload's content language reads
+`data.lang` directly; it **MUST NOT** assume `data.lang` equals
+`session.lang` or any other session-level signal.
 
 ### 3.3 Wire weight
 
