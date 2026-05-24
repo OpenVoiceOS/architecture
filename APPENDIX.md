@@ -452,26 +452,22 @@ reasoning, not the requirement.
   spec's `ovos.utterance.cancelled` terminal event sits alongside
   the existing `complete_intent_failure` from PIPELINE-1, keeping
   cancellation and failure observably distinct on the bus.
-- **Language signals moved to SESSION-1.** Earlier TRANSFORM-1
-  drafts spec'd a binding language-disambiguation hierarchy and
-  reserved `Message.context` keys for `stt_lang`, `request_lang`,
-  `detected_lang`. These have moved to OVOS-SESSION-1 §3.2 as
-  session-scoped fields with normative meanings but a non-binding
-  consolidation order — the right priority is stage-dependent.
-  TRANSFORM-1 §7.1 now only names which transformer types are
-  natural producers of which signals; consolidation is the
-  consumer's decision per SESSION-1 §3.2.7.
+- **Language signals live in SESSION-1.** Language signals
+  (`stt_lang`, `request_lang`, `detected_lang`, alongside `lang`,
+  `secondary_langs`, `output_lang`) are session-scoped fields with
+  normative meanings but a non-binding consolidation order — the
+  right priority is stage-dependent. TRANSFORM-1 §7.1 names which
+  transformer types are natural producers of which signals;
+  consolidation is the consumer's decision per SESSION-1 §3.2.7.
 
 ### Session (SESSION-1)
 
-- **Why SESSION-1 now.** OVOS-MSG-1 §4 originally named two
-  internal session fields (`session_id`, `lang`) and deferred the
-  rest. As PIPELINE-1, CONTEXT-1, and TRANSFORM-1 each claimed
-  fields (`pipeline`, `context`, the six `*_transformers`), the
-  session became a load-bearing carrier with no single owner of
-  its wire contract. SESSION-1 consolidates the wire shape and
-  fixes a **registry mechanism** so future specs claim fields
-  without amending SESSION-1 itself.
+- **Why a separate session spec.** `Message.context.session` is a
+  load-bearing carrier claimed by multiple specs (PIPELINE-1,
+  CONTEXT-1, TRANSFORM-1) — without a single owner, its wire
+  contract drifts. SESSION-1 consolidates the wire shape and fixes
+  a **registry mechanism** so future specs claim fields without
+  amending SESSION-1 itself.
 - **Prescriptive, not descriptive.** Only the fields normatively
   claimed by other specs are recognized. Implementations
   carrying extra per-session state (current OVOS Session class
@@ -727,59 +723,48 @@ needs no implementation change:
   (LLM-backed, agent-backed) are written.
 - **`ovos.utterance.handled` on every terminal path** (PIPELINE-1
   §9.5). Current `ovos-workshop`'s `_on_event_error` does not
-  emit it on the handler-error path (`ovos.py:1478-1497`). Under
-  the revised PIPELINE-1 §8 (handler-trio is orchestrator-owned,
-  not handler-owned), this concern dissolves at the spec level:
-  the orchestrator that invokes the handler wraps the call and
-  emits the trio itself, then emits `ovos.utterance.handled`
-  unconditionally. Workshop today plays an orchestrator-wrapper
-  role for some dispatch paths and is missing the wrapper
-  events; the fix is in the wrapper, not in third-party handler
-  code.
-- **Handler-trio ownership shifted to orchestrator** (PIPELINE-1
-  §8). Earlier drafts asked the handler-owning component (skill
-  or plugin-bundled) to emit `ovos.intent.handler.start` /
-  `.complete` / `.error`. The revised spec puts that obligation
-  on the orchestrator that invokes the handler: third-party
-  handler code carries **no normative obligation**, the
-  orchestrator wraps every invocation and emits the trio itself.
-  This is the right ownership — skill authors should not be
-  writing protocol code — and aligns with how a wrapper would
-  naturally observe start / return / exception around an opaque
-  callable.
-- **Per-pipeline_id intent introspection** (PIPELINE-1 §10). New
-  pull-query / scatter-response surface keyed on `pipeline_id`,
-  giving consumers a way to see *which intents a particular
+  emit it on the handler-error path (`ovos.py:1478-1497`).
+  PIPELINE-1 §8 places trio emission on the orchestrator-wrapper
+  around the handler, not on the handler itself — workshop is the
+  wrapper in current OVOS, and the spec contract requires the
+  wrapper to emit `ovos.utterance.handled` unconditionally.
+- **Handler-trio is orchestrator-owned** (PIPELINE-1 §8). The
+  orchestrator that invokes the handler wraps the call and emits
+  `ovos.intent.handler.start` / `.complete` / `.error` around it.
+  Third-party handler code carries **no normative obligation** to
+  participate in trio emission. Skill authors are not protocol
+  authors; the wrapper observes start / return / exception around
+  an opaque callable.
+- **Per-pipeline_id intent introspection** (PIPELINE-1 §10).
+  Pull-query / scatter-response surface keyed on `pipeline_id`,
+  giving consumers visibility into *which intents a particular
   pipeline plugin's matcher has compiled*, distinct from the
-  orchestrator's manifest of declared intents (INTENT-4 §10).
-  No current OVOS analogue.
+  orchestrator's manifest of declared intents (INTENT-4 §10). No
+  current OVOS analogue.
 - **CONTEXT-1 scope discriminator on `requires_context`**
-  (CONTEXT-1 §6 / §6.1). Adds an OPTIONAL `scope: private|shared`
-  per entry, default `private`. Closes the footgun where an
-  unrelated skill's shared `Person` entry could accidentally
-  satisfy a private gate. Short-form `[Person]` keeps working
-  (interpreted as `{ key: Person, scope: private }`).
+  (CONTEXT-1 §6 / §6.1). OPTIONAL `scope: private|shared` per
+  entry, default `private`. Prevents an unrelated skill's shared
+  `Person` entry from accidentally satisfying a private gate.
+  Short-form `[Person]` is interpreted as
+  `{ key: Person, scope: private }`.
 - **Skill self-identification on every emission** (INTENT-4 §3.1).
-  Every Message a skill emits MUST carry
+  Every Message a skill emits carries
   `Message.context["skill_id"]`. Current OVOS skills set this on
   some emissions (registrations, handler responses) but not
   uniformly. The spec makes it the authoritative attribution
   surface for skill-originated bus traffic — observers attribute
-  by `context["skill_id"]`, not by parsing topic names. Drives
-  CONTEXT-1 §5.2 origin-stamping (the orchestrator stamps `origin`
-  from this field, not from `source`).
-- **`recognizer_loop:utterance` de-prescribed** (PIPELINE-1 §9.1).
-  Earlier drafts treated this topic as normative. The revision
-  defers the entry-topic name to a future audio-input ↔
-  assistant-core wire spec; current deployments use the legacy
-  name for compatibility but conformant orchestrators MAY adopt
-  whatever name the future spec settles on.
-- **All `.list` topics standardized to `ovos.<domain>.<verb>`**
-  (TRANSFORM-1 §6, CONTEXT-1 §5). Renames:
-  `transformer.<type>.list` → `ovos.transformer.<type>.list`;
-  `intent.context.set/.unset/.clear/.list` →
-  `ovos.context.set/.unset/.clear/.list`. INTENT-4 / PIPELINE-1
-  topics unchanged.
+  by `context["skill_id"]`, not by parsing topic names. Enforced
+  loader-side where possible (orchestrator intercepts the emit
+  pathway). Drives CONTEXT-1 §5.2 origin-stamping.
+- **Entry-point topic is not prescribed** (PIPELINE-1 §9.1). The
+  utterance-layer entry-topic name is deferred to a future
+  audio-input ↔ assistant-core wire spec; current deployments
+  use `recognizer_loop:utterance` for compatibility.
+- **All `.list` topics under one prefix**: `ovos.<domain>.<verb>`
+  (or `ovos.<domain>.<id>.<verb>` for per-id introspection).
+  CONTEXT-1's mutation/introspection events live under
+  `ovos.context.*`; TRANSFORM-1's introspection events live under
+  `ovos.transformer.*`; INTENT-4 / PIPELINE-1 use the same prefix.
 
 ### 6.5 New topics with no direct precedent
 
@@ -823,10 +808,7 @@ Three properties hold across all four:
 
 All four surfaces use the unified `ovos.<domain>.<verb>` (or
 `ovos.<domain>.<id>.<verb>` for per-id introspection) naming
-convention. CONTEXT-1's prior `intent.context.*` topics were
-renamed to `ovos.context.*`, and TRANSFORM-1's prior
-`transformer.<type>.list` topics were renamed to
-`ovos.transformer.<type>.list`, in this round.
+convention.
 
 ### 6.6 Things the specs do *not* change
 
@@ -967,12 +949,7 @@ grammar-level conformance corpus (§7).
 
 ---
 
-## 9. Design history
-
-How the specification set was arrived at — context that explains
-the *why*, but that has no place in a normative document.
-
-### 9.1 The set, in three stacks
+## 9. The spec set, in three stacks
 
 Built bottom-up in three stacks:
 
@@ -980,50 +957,25 @@ Built bottom-up in three stacks:
   (template grammar) → OVOS-INTENT-2 (resource files) →
   OVOS-INTENT-3 (the intent concept) → OVOS-INTENT-4 (the
   registration wire format on the bus).
-- The **bus stack**, anchored on existing `ovos-bus-client` wire
-  format: OVOS-MSG-1 formalizes the envelope, routing, session
-  carrier, and `forward`/`reply`/`response` derivations.
-  Originally drafted as two specs (envelope + session/routing) and
-  merged once it became clear the derivations could only
-  meaningfully be defined where the routing keys lived.
+- The **bus stack**: OVOS-MSG-1 formalizes the envelope, routing,
+  session carrier, and `forward`/`reply`/`response` derivations.
+  OVOS-SESSION-1 formalizes the wire shape of the session carrier.
 - The **orchestrator stack**: OVOS-PIPELINE-1 defines the
   orchestrator, the pipeline-plugin abstraction, the utterance
-  lifecycle, and the handler-lifecycle trio. Sits on top of the
-  bus stack (uses MSG-1's envelope and routing) and around the
-  intent stack (intent registrations are one kind of input
-  pipeline plugins consume).
+  lifecycle, and the handler-lifecycle trio. OVOS-CONTEXT-1
+  defines per-session intent-context state. OVOS-TRANSFORM-1
+  defines the six injection-point transformer chains. Sits on top
+  of the bus stack (uses MSG-1's envelope and routing, SESSION-1's
+  session carrier) and around the intent stack (intent
+  registrations are one kind of input pipeline plugins consume).
 
-Each was a formalization pass over machinery already running in
-production (§1), not a greenfield design.
-
-### 9.2 The reference implementation
-
-The specs are implementation-agnostic, but a spec benefits from
-one conformant implementation. **ovos-spec-tools** is that for
-the intent stack — expander, resource loader, dialog renderer,
-language matching, locale linter, in one dependency-light
-package. It exists because the same machinery had drifted across
-six separate copies in the ecosystem; ovos-spec-tools is what
-those components are meant to converge on, and the intended home
-of the planned conformance corpus.
-
+The **reference implementation** for the intent stack is
+**ovos-spec-tools** — expander, resource loader, dialog renderer,
+language matching, locale linter, in one dependency-light package.
 The bus and orchestrator stacks do not yet have a comparable
 reference; `ovos-bus-client` is the closest match for MSG-1 and
 `ovos-core` is the closest match for PIPELINE-1 + INTENT-4, but
 both predate the specs.
-
-### 9.3 Audit-driven refinement
-
-Before initial release, each spec was revised across several
-review rounds — malformed-form rules, the expansion algorithm,
-slot handling, the envelope/routing split (later un-split, see
-§9.1), the host → orchestrator rename, the
-intent-stage-vs-non-intent-stage distinction (later dissolved
-into the uniform pipeline-plugin abstraction), cross-spec
-terminology. Those rounds happened pre-release, so they left no
-intermediate version numbers behind: the audited result *is*
-version 1 (or 1.1 where editorial-only). The CHANGELOG records
-versioned changes from there on.
 
 ---
 
@@ -1031,17 +983,18 @@ versioned changes from there on.
 
 Each specification carries its own integer (or minor) `Version`,
 bumped per PR per the contributing rules in the README. The
-architecture as a whole was previously spoken of at
-**compatibility levels** — versioned snapshots a tool may target,
-checked against by `ovos-spec-lint`.
+architecture as a whole is spoken of at **compatibility levels** —
+versioned snapshots a tool may target, checked against by
+`ovos-spec-lint`.
 
-The compatibility-level model was designed when the architecture
-was one stack (the intent grammar / resources / intent definition
-chain) and a single integer cleanly identified "all the specs at
-once." With the addition of the bus and orchestrator stacks, that
-single-axis model no longer describes the architecture.
+The compatibility-level model works cleanly for the **intent
+stack**, where a single integer identifies a coherent grammar /
+resources / intent-definition snapshot. The bus and orchestrator
+stacks do not yet map onto the same single-axis ladder; a
+specification-set-wide version tuple covering all eight specs is
+a planned follow-up.
 
-The historical intent-stack ladder:
+The intent-stack ladder:
 
 - **V0** — *informal.* The undocumented, de-facto behaviour from
   before these specifications existed. V0 is not specified
