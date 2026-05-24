@@ -427,46 +427,39 @@ arrangements.
 ## 8. Handler-lifecycle messages
 
 The handler — whether a skill or a plugin-bundled handler — is a
-black box. The bus observes what it does via three broadcast
-notification topics, the **handler-lifecycle trio**:
+black box. **Third-party handler code carries no obligation under
+this specification.** The handler-lifecycle trio is emitted by the
+**orchestrator** that invokes the handler, wrapping the invocation:
+`start` before the call, then `complete` on normal return or `error`
+on exception. The handler itself does not emit anything.
+
+The three broadcast notification topics are the
+**handler-lifecycle trio**:
 
 | Topic | Meaning |
 |-------|---------|
-| `ovos.intent.handler.start` | The handler has begun. |
-| `ovos.intent.handler.complete` | The handler has finished normally. |
+| `ovos.intent.handler.start` | The orchestrator is about to invoke the handler. |
+| `ovos.intent.handler.complete` | The handler returned normally. |
 | `ovos.intent.handler.error` | The handler raised. |
 
-These are emitted by the handler-owning component (skill or
-plugin), produced via OVOS-MSG-1 §5.1 `forward` from the
-originating dispatch Message — `context` is preserved unchanged.
-
-The trio is the only observable about handler execution. It is
-broadcast so any observer (the orchestrator for timeout
-bookkeeping, loggers, transcript viewers, analytics, fallback
-chains) can subscribe.
+Each trio Message is produced via OVOS-MSG-1 §5.1 `forward` from the
+originating dispatch Message — `context` (including `session`) is
+preserved unchanged. The trio is broadcast so any observer (loggers,
+transcript viewers, analytics, fallback chains) can subscribe.
 
 ### 8.1 Order and obligations
 
-For each accepted dispatch, the handler-owning component **MUST**
-emit **exactly one** terminal event — either
-`ovos.intent.handler.complete` or `ovos.intent.handler.error` — and
-**SHOULD** precede it with `ovos.intent.handler.start`.
+For each accepted dispatch, the **orchestrator MUST** emit:
 
-- on normal completion: `ovos.intent.handler.start` (SHOULD) followed
-  by `ovos.intent.handler.complete` (MUST);
-- on exception: `ovos.intent.handler.start` (SHOULD) followed by
-  `ovos.intent.handler.error` (MUST).
+- `ovos.intent.handler.start` immediately before invoking the
+  handler;
+- **exactly one** of `ovos.intent.handler.complete` (on normal
+  return) or `ovos.intent.handler.error` (on exception) immediately
+  after the invocation returns or raises.
 
-The terminal event is **MUST** because the orchestrator's universal
-`ovos.utterance.handled` invariant (§9.5) and timeout bookkeeping
-(§8.3) depend on it: an utterance whose handler emits no terminal
-event leaves the orchestrator unable to satisfy §9.5 without
-falling back to the §8.3 timeout — a degraded mode that wastes time
-and produces observably-late lifecycle for downstream consumers.
-
-A handler that emits neither terminal event still ran (the spec
-cannot prevent that) but is non-conformant — its execution is
-invisible to the bus and forces the orchestrator into §8.3.
+A dispatch produces exactly one `start` and exactly one terminal
+event. The orchestrator owns the trio in full; no third-party code
+is required to participate.
 
 ### 8.2 Payload
 
@@ -493,20 +486,18 @@ Each lifecycle message's `data`:
 |-------|------|----------|---------|
 | `owner_id` | string | yes | The handler-owning component's id (skill_id or pipeline_id). |
 | `intent_name` | string | yes | The intent the handler was dispatched for. |
-| `exception` | string | `error` only | Human-readable description of the failure. |
+| `exception` | string | `error` only | Human-readable description of the failure raised by the handler. |
 
 Implementations **MAY** include additional fields but consumers
 **MUST NOT** require them.
 
-### 8.3 Orchestrator timeout
+### 8.3 Handler timeout
 
-The orchestrator **MAY** wait for `.complete` or `.error` matching
-the dispatched `(owner_id, intent_name, session)` for a
-deployment-defined time bound. If neither arrives within the
-bound, the orchestrator **MUST** still emit
-`ovos.utterance.handled` (§9.5) to satisfy the universal
-end-marker invariant. It **MUST NOT** synthesize a `.error` of
-its own — error events come from the handler that owns the trio.
+The orchestrator **MAY** bound handler execution by a
+deployment-defined time. If the handler has not returned within the
+bound, the orchestrator **MUST** emit `ovos.intent.handler.error`
+with an `exception` field indicating timeout, then **MUST** proceed
+to emit `ovos.utterance.handled` (§9.5).
 
 The orchestrator **MUST NOT** re-emit the dispatch Message for the
 same match. Re-dispatch is not defined by this specification.
@@ -711,9 +702,10 @@ indicates the plugin is not loaded.
 - dispatch on `<match.owner_id>:<match.intent_name>` per §7;
 - handle a plugin exception by logging and continuing to the
   next plugin (§6.2), not by failing the utterance;
-- subscribe to the handler-lifecycle trio (§8) to observe
-  dispatched-handler outcomes; **MUST NOT** synthesize trio
-  events of its own (§8.3).
+- emit the handler-lifecycle trio (§8) wrapping every handler
+  invocation: `start` before the call, then exactly one of
+  `complete` (on normal return) or `error` (on exception or
+  timeout, §8.3) after.
 
 ### A **pipeline plugin** **MUST**:
 
@@ -730,19 +722,13 @@ indicates the plugin is not loaded.
   intent set (§10.4) — pull-query is the source of truth that
   consumers rely on.
 
-### A **handler** (skill or plugin-bundled) **MUST**:
+### A **handler** (skill or plugin-bundled)
 
-- emit **exactly one** of `ovos.intent.handler.complete` or
-  `ovos.intent.handler.error` when it finishes (§8.1) — the
-  orchestrator's §9.5 universal end-marker and §8.3 timeout
-  bookkeeping depend on the terminal event being deterministic;
-- include `owner_id` and `intent_name` in the trio payload (§8.2);
-- run the handler at most once per dispatch.
-
-A handler **SHOULD**:
-
-- emit `ovos.intent.handler.start` when invoked (§8.1) so
-  observers can scope the handler-execution window.
+Handlers carry **no normative obligation** under this
+specification. The orchestrator owns the handler-lifecycle trio
+(§8) and the dispatch envelope (§7). A handler is an opaque
+callable; the spec binds the orchestrator that invokes it, not the
+handler itself.
 
 ### Non-goals
 
