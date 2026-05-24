@@ -1,6 +1,6 @@
 # Utterance Lifecycle and Pipeline Specification
 
-**Spec ID:** OVOS-PIPELINE-1 · **Version:** 1 · **Status:** Draft
+**Spec ID:** OVOS-PIPELINE-1 · **Version:** 2 · **Status:** Draft
 
 This document defines the **utterance lifecycle** — the path an
 utterance takes from the moment it enters the assistant to the moment

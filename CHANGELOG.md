@@ -79,12 +79,20 @@ tool does not recognize the token and cannot expand the template.
 
 ## OVOS-PIPELINE-1 — Utterance Lifecycle and Pipeline
 
-### 1
+### 2
 
-- Initial draft. Defines the **orchestrator** and the
-  **pipeline plugin** abstraction: opaque-`pipeline_id` black
-  boxes the orchestrator iterates in `session.pipeline_stages`
-  order per utterance, first-match-wins. Plugins expose one
+- Initial draft. Released as **v2** rather than v1: per the
+  draft-stage versioning policy, v1 is reserved for content
+  drop-in compatible with current OVOS. PIPELINE-1 introduces a
+  new orchestrator responsibility (the passive registration index
+  backing `ovos.intent.list` / `.describe`) and normalizes the
+  universal `ovos.utterance.handled` end-marker on every terminal
+  path — both require OVOS-side changes, so the first release is
+  v2.
+- Defines the **orchestrator** and the **pipeline plugin**
+  abstraction: opaque-`pipeline_id` black boxes the orchestrator
+  iterates in `session.pipeline` order per utterance,
+  first-match-wins. Plugins expose one
   operation — `match(utterance, session) → Match | None`,
   side-effect-free; the orchestrator handles dispatch,
   notifications, and terminal events.
