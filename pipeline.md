@@ -704,6 +704,14 @@ A plugin **MUST** respond to every query it observes for its own
 deployment-defined timeout **MAY** retry; persistent silence
 indicates the plugin is not loaded.
 
+**Under a split orchestrator** (§2), a pipeline plugin is loaded
+into exactly one orchestrator process — typically the
+utterance-handling process that owns the match round of §6. That
+process answers the per-`pipeline_id` query for plugins it hosts.
+Sibling processes do not respond on its behalf. A query is
+broadcast; the consumer accepts the single response that arrives
+from the hosting process.
+
 ---
 
 ## 11. Conformance
