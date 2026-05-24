@@ -1,9 +1,14 @@
 # Changelog
 
 Each entry records a versioned change to a specification in this repository.
-Each specification is versioned independently, starting at version 1. Every
-pull request that alters normative content bumps the affected spec's `Version`
-field and adds an entry here.
+Each specification is versioned independently, starting at version 1.
+
+Every pull request that alters normative content adds an entry here. The
+version field is bumped per the standard rule (one PR, one bump) **unless**
+the spec is in **Draft** status, in which case the
+[draft-stage versioning rule](README.md#draft-stage-versioning) applies:
+compatible changes fold into the current version; only incompatible features
+bump.
 
 ## OVOS-INTENT-1 — Sentence Template Grammar
 

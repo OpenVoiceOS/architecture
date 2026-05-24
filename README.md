@@ -105,10 +105,10 @@ Specifications are **versioned documents, not living wikis**. Any
 change to a spec — however small — **MUST** be submitted as a pull
 request, never committed directly.
 
-Each PR that alters normative content **MUST**:
-
-- bump the spec's `Version` field in its header;
-- add a corresponding entry to [CHANGELOG.md](CHANGELOG.md).
+Each PR that alters normative content **MUST** add a
+corresponding entry to [CHANGELOG.md](CHANGELOG.md) and, **unless
+the draft-stage rule below applies**, bump the spec's `Version`
+field in its header.
 
 A version identifies an exact, citable state of a document, so
 implementations and conformance results can name the version they
@@ -117,6 +117,31 @@ target.
 PRs that touch only the non-normative material —
 [APPENDIX.md](APPENDIX.md), [GLOSSARY.md](GLOSSARY.md), this
 README, examples — do not require a version bump.
+
+### Draft-stage versioning
+
+While a specification carries **Status: Draft**, the `Version`
+field also doubles as a **compatibility signal** with current
+OVOS:
+
+- **v1** — drop-in compatible with current OVOS. A conforming
+  implementation runs against today's OVOS unchanged.
+- **v2** — incompatible: requires OVOS-side changes (renamed
+  topics, new orchestrator responsibilities, payload-shape
+  changes, etc.).
+
+PRs in draft therefore follow a refined rule:
+
+- A PR that adds, refines, or loosens content **without** breaking
+  compatibility with current OVOS **MAY** keep the spec at its
+  current version (typically v1) and fold the change into that
+  version's CHANGELOG entry.
+- A PR that introduces an incompatible feature **MUST** bump the
+  spec to v2 (or the next major).
+
+The rule applies only while the spec is in **Draft** status; once
+a spec is promoted out of Draft, every normative change bumps the
+version per the standard rule above.
 
 ---
 
