@@ -203,6 +203,17 @@ might have a different view. Producers should not interpret an
 `unknown_*` rejection as "no plugin owns this" — only as "this
 particular plugin doesn't."
 
+**Idempotent deregistration.** A plugin that receives a deregister,
+enable, or disable request for an entity it has no record of
+**SHOULD** respond with the corresponding `unknown_*` error code,
+but **MAY** alternatively treat the operation as a no-op success
+(`{ "ok": true }`) when the request would be idempotent — most
+commonly during a skill's shutdown sequence, where deregistering an
+already-cleared intent is the intended terminal state. Producers
+that want idempotent removal **MAY** ignore `unknown_intent` /
+`unknown_entity` / `unknown_skill` codes specifically and treat
+them as the operation having already completed.
+
 ---
 
 ## 4. Topics
@@ -544,42 +555,45 @@ skills look the same from outside.
 
 ---
 
-## 10. Introspection — broadcast queries, scatter responses
+## 10. Introspection — the orchestrator-owned manifest
 
-Registration topics of §5–§8 are themselves load-time
-**announcements**: when a skill loads, it emits one
-`ovos.intent.register.*` per intent it owns. A consumer that
-subscribed before the skill loaded receives those announcements in
-real time. A consumer that started later — a pipeline plugin
-loaded after the skill, a monitoring tool started mid-session, a
-new orchestrator process joining a split deployment (§2) — has
-missed them; the bus is async with no catch-up channel for missed
+Registration topics of §5–§8 are load-time **announcements**:
+when a skill loads, it emits one `ovos.intent.register.*` per
+intent it owns. A consumer that subscribed before the skill
+loaded receives those announcements in real time. A consumer that
+started later — a monitoring tool started mid-session, a pipeline
+plugin loaded after the skill, a new orchestrator process joining
+a split deployment (OVOS-PIPELINE-1 §2) — has missed them; the
+bus is asynchronous with no catch-up channel for missed
 broadcasts.
 
-Introspection therefore follows a **broadcast-query / scatter-
-response** pattern. Two read-only query topics let any consumer
-catch up:
+The introspection surface this specification defines is the
+**orchestrator-owned manifest** of intents observed on the bus.
+**Skills have no introspection obligation** under this
+specification — they emit their registrations once at load and
+move on. The orchestrator that observes those registrations
+maintains the read-side manifest and answers queries against it.
 
-- A skill **MUST** respond to a query that matches its own
-  registrations — the skill is the authoritative source for what
-  it has declared.
-- The orchestrator (OVOS-INTENT-3 §6.1) MAY additionally maintain
-  a passive index built from observed registration broadcasts and
-  respond from it as a convenience. When the orchestrator is split
-  across multiple cooperating processes (§2), each process answers
-  from its own index slice.
-- Consumers aggregate responses; the bus is async with no
-  completeness signal, so a consumer wanting guaranteed
-  completeness must keep its own roster of expected responders and
-  time out non-responders.
+For per-pipeline-plugin detail — *which* intents are currently
+loaded inside a particular pipeline plugin's matcher, as opposed
+to *what skills have declared on the bus* — see OVOS-PIPELINE-1
+§10 (per-`pipeline_id` introspection). The two surfaces are
+distinct: the orchestrator's manifest is observability of
+declared intents; PIPELINE-1 §10 is observability of compiled
+plugin state. A consumer wanting both queries both.
 
-The orchestrator's passive index — when maintained — reflects
-*what skills have declared as observed on the bus*, not *what any
-specific pipeline plugin actually matches against*. A registration
-that no plugin consumed is still in the index. A pipeline plugin
-that internally rejects or transforms a registration after
-consuming it has no effect on the index. The index is
-observability-only.
+When the orchestrator is split across cooperating processes
+(OVOS-PIPELINE-1 §2), each process answers from its own
+observed-broadcast slice. The composition of all per-process
+responses is the orchestrator's full manifest.
+
+**Pull-query is the source of truth.** A consumer that needs
+accurate state **MUST** issue `ovos.intent.list` /
+`ovos.intent.describe` and **MUST NOT** assume that any prior
+`ovos.intent.register.*` broadcast reached it. Registration
+broadcasts are convenience for already-subscribed observers; they
+are not delivery-guaranteed and a consumer that started after a
+skill loaded missed them.
 
 Two read-only topics:
 
@@ -650,16 +664,15 @@ specification.
   `ovos.skill.deregister` to retract its registrations, paired with
   the local release of the handler (§9, INTENT-3 §6.1);
 - conform its underlying templates, vocabularies, and entities to
-  OVOS-INTENT-1 and OVOS-INTENT-2;
-- respond to `ovos.intent.list` and `ovos.intent.describe` queries
-  (§10) for its own registrations — the skill is the authoritative
-  source for what it has declared, and consumers that started
-  after the load-time announcement broadcasts will rely on this
-  pull-query path to catch up.
+  OVOS-INTENT-1 and OVOS-INTENT-2.
 
 A skill **SHOULD NOT** assume any specific plugin will consume its
 registration. Producers responsible for delivery confirmation
 **SHOULD** query (§10) rather than wait for `.response` events.
+
+A skill carries **no introspection obligation** under this
+specification — it has no §10 query-response responsibility. The
+orchestrator owns the manifest (see below).
 
 ### A **pipeline plugin** (consumer of registration messages) **MAY**:
 
@@ -680,30 +693,33 @@ The plugin's matching behaviour, lifecycle, and bus emissions
 beyond `.response` are out of scope for this specification — see
 OVOS-PIPELINE-1.
 
-### The **orchestrator** **MAY**:
+### The **orchestrator** **MUST**:
 
-- subscribe to every registration topic (§§5–8) and maintain a
-  passive index built from observed broadcasts. When it does so,
-  it **MUST**:
-  - serve `ovos.intent.list` and `ovos.intent.describe` queries
-    against the index, returning the shape of §10.1 / §10.2 — as
-    one responder among several (skills are also authoritative
-    responders);
-  - treat a re-registration with the same key as replacement of
-    the prior index entry (§8.1);
-  - honour `ovos.intent.enable` / `ovos.intent.disable` in the
-    index (§8.5) — the `enabled` field of §10.1 reflects the
-    latest state;
-  - **NOT** validate, reject, route, gate, or synthesize responses
-    for any registration message. The orchestrator is a passive
-    listener, not a routing party.
+- subscribe to every registration topic (§§5–8) and maintain the
+  **manifest** — a passive index built from observed broadcasts;
+- serve `ovos.intent.list` and `ovos.intent.describe` queries
+  against the manifest, returning the shape of §10.1 / §10.2;
+- treat a re-registration with the same key as replacement of the
+  prior manifest entry (§8.1);
+- honour `ovos.intent.enable` / `ovos.intent.disable` in the
+  manifest (§8.5) — the `enabled` field of §10.1 reflects the
+  latest state;
+- **NOT** validate, reject, route, gate, or synthesize
+  `.response` messages for any registration message. The
+  orchestrator is a passive listener for the manifest, not a
+  routing party.
 
-An orchestrator that maintains no such index is conformant —
-skills are the authoritative responders to §10 queries, and a
-deployment without a passive orchestrator-side index simply means
-consumers receive responses only from skills. When the
-orchestrator is split across cooperating processes (§2), each
-process MAY maintain its own index slice and respond independently.
+When the orchestrator is split across cooperating processes
+(OVOS-PIPELINE-1 §2), each process maintains its own slice of the
+manifest built from broadcasts it observed and responds
+independently to §10 queries; consumers aggregate the slices.
+
+For per-pipeline-plugin detail (which intents a particular
+plugin's matcher has compiled), consumers query
+OVOS-PIPELINE-1 §10 directly against the responsible
+`pipeline_id`. The orchestrator's manifest under this
+specification is the declared-intents view; PIPELINE-1 §10 is the
+compiled-state view.
 
 The orchestrator's other responsibilities — matching, dispatch,
 handler lifecycle observation, utterance lifecycle — are defined
@@ -714,9 +730,12 @@ by OVOS-PIPELINE-1.
 ## See also
 
 - *Bus Message Specification* (OVOS-MSG-1) — the envelope every
-  message here travels in, the `destination` and `session` keys
-  used throughout, and the `forward` / `reply` / `response`
-  derivations.
+  message here travels in, the shared identifier-component rule
+  (§2.1.1) bounding `skill_id` / `intent_name`, the `destination`
+  and `session` keys used throughout, and the `forward` / `reply`
+  / `response` derivations.
+- *Session Specification* (OVOS-SESSION-1) — the wire shape of
+  `session` carried on every registration broadcast.
 - *Utterance Lifecycle and Pipeline Specification* (OVOS-PIPELINE-1)
   — the orchestrator's contract: pipeline-plugin model, utterance
   lifecycle, match-result notification, dispatch, handler-lifecycle
