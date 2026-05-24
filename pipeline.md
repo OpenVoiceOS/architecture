@@ -356,11 +356,9 @@ on the topic:
 where `<owner_id>` is `Match.owner_id` (a `skill_id` or a
 `pipeline_id`) and `<intent_name>` is `Match.intent_name`.
 
-The delimiter is the **first** `:` in the topic. `skill_id` and
-`pipeline_id` **MUST NOT** contain `:` so the split is
-unambiguous; `intent_name` MAY contain further `:` characters
-(downstream consumers can use it to namespace dispatched topics
-inside their own surface).
+`skill_id`, `pipeline_id`, and `intent_name` **MUST NOT** contain
+`:`. The dispatch topic therefore contains exactly one `:`, and
+the split is unambiguous.
 
 ### 7.1 Routing and payload
 
