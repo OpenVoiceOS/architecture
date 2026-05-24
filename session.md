@@ -3,17 +3,13 @@
 **Spec ID:** OVOS-SESSION-1 · **Version:** 1 · **Status:** Draft
 
 This document defines the **wire shape** of the `session` carrier —
-the JSON object that travels inside `Message.context.session`
-(OVOS-MSG-1 §4) — and the rules consumers follow when reading and
-propagating it.
+the JSON object that travels inside `Message.context.session` — and
+the rules consumers follow when reading and propagating it.
 
-OVOS-MSG-1 §4 declares the carrier exists, reserves the values of two
-internal keys (`session_id`, `lang`), and defers the rest to "a
-future session specification". This is that specification. Its scope
-is narrow on purpose: the **shape on the wire** and **how it may be
-consumed**. Lifecycle (when a session begins, ends, expires, resumes),
-storage, authorization, and per-field semantics are out of scope and
-remain owned by their respective specifications.
+Its scope is narrow on purpose: the **shape on the wire** and **how
+it may be consumed**. Lifecycle (when a session begins, ends,
+expires, resumes), storage, authorization, and the semantics of
+fields owned by other specifications are out of scope.
 
 This specification is **prescriptive, not descriptive**. The field set
 it lists in §3 is the closed set of fields with normative meaning in
@@ -190,7 +186,7 @@ everything else is owned by the cited specification.
 | Field | Wire type | Owner |
 |-------|-----------|-------|
 | `session_id` | string | §3.1 (this spec) |
-| `lang` | string (BCP-47) | OVOS-MSG-1 §4.2 |
+| `lang` | string (BCP-47) | §3.2 (this spec) |
 | `pipeline` | array of string | OVOS-PIPELINE-1 §5 |
 | `context` | object | OVOS-CONTEXT-1 §2 |
 | `audio_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
@@ -244,7 +240,83 @@ The reserved value is not a distinguished kind of session in the
 schema; it is a normal session that carries the same field set as any
 other (§3), distinguished only by its identifier.
 
-### 3.2 Wire weight
+### 3.2 `lang`
+
+`lang` — string — the **user's preferred language**, as a BCP-47
+language tag. It declares which language the participant on the
+external side of the bus boundary wants to communicate in.
+
+The split between session and payload language is sharp:
+
+- **Matching** is keyed on `data.lang` (the language the utterance
+  was recognized in) — an `en-US` user can still trigger a `de-DE`
+  intent if the utterance happens to be in German.
+- **Output localization** — TTS voice selection, rendered dialog,
+  prompt selection — is keyed on `session.lang` — the assistant
+  speaks back to the user in the user's preferred language even
+  when it has just handled a code-switched command.
+
+A subsystem that produces speech, dialog, or text for the user
+**SHOULD** read `session.lang` to decide which language to render
+in.
+
+#### `data.lang` vs. `session.lang`
+
+`lang` also appears in many topic-specific Message payloads under
+`data.lang`, with a different meaning:
+
+- `session.lang` is the **user's preferred language** — a property
+  of the conversational session.
+- `data.lang` describes the **language of the data carried in this
+  Message** — the utterance just transcribed, the resource just
+  registered, the dialog just rendered. It is a property of the
+  payload.
+
+The two **usually agree** — a user whose `session.lang` is `en-US`
+typically speaks English utterances and triggers English-registered
+intents — but they **MAY differ**. A code-switching user might issue
+a Spanish command inside an English-preferred session:
+`data.lang = "es-ES"`, `session.lang = "en-US"`. A consumer reading
+one **MUST NOT** assume it equals the other.
+
+Topics that carry a `data.lang` field are defined by the
+specifications that own those topics; this specification owns only
+the session-level `lang`.
+
+#### Language resolution
+
+Several distinct language signals may travel on or alongside a
+Message. A consumer that needs **one** authoritative language for an
+operation — selecting an STT model, choosing an intent-engine model,
+rendering a dialog, picking a TTS voice — **MUST** resolve them in
+the following priority order, taking the first value that is present
+and non-empty:
+
+| Priority | Source | Owner |
+|----------|--------|-------|
+| 1 | `data.stt_lang` | the topic that carries the raw STT result |
+| 2 | `data.request_lang` | the topic that explicitly requests a language for the operation |
+| 3 | `data.detected_lang` | the topic carrying a language-detector classification |
+| 4 | `data.lang` | the topic carrying the payload (its content language) |
+| 5 | `session.lang` | this specification (the participant's preference) |
+| 6 | the consumer's deployment default | per §2.5 |
+
+The first four signals are payload fields owned by the
+specifications that define their carrying topics; this specification
+fixes only the **resolution order** that places `session.lang` as
+the fallback before the deployment default. A specification that
+introduces a new language signal **MUST** declare where in this
+order it inserts; absent such a declaration, a new signal is treated
+as priority 0 (lowest above `session.lang`) by consumers that
+recognize it, or ignored entirely by consumers that do not (§2.3).
+
+A consumer **MUST NOT** treat the resolved language as authoritative
+for any field other than the one it is resolving — `session.lang`
+remains the participant's preference, `data.lang` remains the
+payload's content language, regardless of which value the
+resolution selected for any given operation.
+
+### 3.3 Wire weight
 
 Sessions carrying every per-component override populated may add
 several hundred bytes to each Message. Because §4 propagates
@@ -329,7 +401,7 @@ A producer **MUST NOT**:
 - populate a per-component override field (§3 — `pipeline`, `context`,
   the six `*_transformers`) with a value that matches the deployment
   default merely as a form of explicit confirmation. Omit the field
-  and let the orchestrator's default apply (§2.5, §3.2).
+  and let the orchestrator's default apply (§2.5, §3.3).
 
 ### A **consumer** of session-carrying Messages **MUST**:
 
@@ -371,10 +443,9 @@ and any field not claimed under §2.1 by a normative specification.
 
 ## See also
 
-- **OVOS-MSG-1** — defines `Message.context.session`, the reserved
-  `session_id == "default"` value, and the
+- **OVOS-MSG-1** — defines `Message.context` as the carrier and the
   `forward` / `reply` / `response` derivations that propagate
-  sessions.
+  `session` unchanged.
 - **OVOS-PIPELINE-1** — owns `session.pipeline`.
 - **OVOS-CONTEXT-1** — owns `session.context`.
 - **OVOS-TRANSFORM-1** — owns the six `session.*_transformers`
