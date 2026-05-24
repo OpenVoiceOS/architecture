@@ -196,7 +196,7 @@ everything else is owned by the cited specification.
 | `request_lang` | string (BCP-47) | §3.2 (this spec) |
 | `detected_lang` | string (BCP-47) | §3.2 (this spec) |
 | `pipeline` | array of string | OVOS-PIPELINE-1 §5 |
-| `context` | object | OVOS-CONTEXT-1 §2 |
+| `intent_context` | object | OVOS-CONTEXT-1 §2 |
 | `audio_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
 | `utterance_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
 | `metadata_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
@@ -565,6 +565,6 @@ and any field not claimed under §2.1 by a normative specification.
   `forward` / `reply` / `response` derivations that propagate
   `session` unchanged.
 - **OVOS-PIPELINE-1** — owns `session.pipeline`.
-- **OVOS-CONTEXT-1** — owns `session.context`.
+- **OVOS-CONTEXT-1** — owns `session.intent_context`.
 - **OVOS-TRANSFORM-1** — owns the six `session.*_transformers`
   fields.
