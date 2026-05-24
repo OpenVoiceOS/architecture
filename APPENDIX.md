@@ -357,6 +357,113 @@ reasoning, not the requirement.
   that excludes destructive plugins. This composes with the
   layer-2 substrate (§5) without orchestrator-side changes.
 
+### Intent context (CONTEXT-1)
+
+- **Lifts intent context out of Adapt.** The Adapt-era
+  `add_context` / `remove_context` mechanism, and the
+  Mycroft-era `mycroft.skill.set_cross_context` /
+  `mycroft.skill.remove_cross_context` fan-out for cross-skill
+  use, are Adapt-only at the matcher level — Padatious and
+  other engines ignore them. CONTEXT-1 generalizes the
+  mechanism into a session-bound, decaying flat key/value store
+  consumed by every intent engine uniformly via
+  `requires_context` and `excludes_context` declarations.
+- **Two explicit scopes.** `private` (orchestrator
+  auto-prefixes with `<skill_id>:`) and `shared` (flat,
+  cross-skill). The current OVOS code models the same distinction
+  informally (`MycroftSkill.set_context` auto-prefixes with
+  `alphanumeric_skill_id`; `set_cross_skill_context` fans out via
+  a bus event); CONTEXT-1 names the scopes explicitly and routes
+  both through one bus surface (`intent.context.set` / `.unset` /
+  `.clear` / `.list`).
+- **Prior art for the negative gate.** Three in-tree intent
+  engines under `/plugins-pipeline/` —
+  [jurebes](https://github.com/OpenJarbas/jurebes),
+  [nebulento](https://github.com/OpenJarbas/nebulento), and
+  [palavreado](https://github.com/OpenJarbas/palavreado) —
+  independently implement `exclude_context` as a first-class
+  negative gate. CONTEXT-1's `excludes_context` adopts the same
+  primitive at the spec level, addressing patterns ("fire once",
+  "modal suppression") that positive gating alone cannot express.
+- **Engine-side mutation as a sanctioned non-bus pathway.** The
+  Adapt pipeline plugin auto-injects matched entities into context
+  *inside* `match()`, which conflicts with PIPELINE-1 §4.2's
+  side-effect-free `match` rule. CONTEXT-1 §5.3 carves an explicit
+  window between match-accept and dispatch-emit for engine-side
+  session mutation, with the orchestrator (not the bus) carrying
+  the write. This both legitimizes the established practice and
+  resolves the PIPELINE-1 contradiction.
+
+### Transformer plugins (TRANSFORM-1)
+
+- **Spec'd as an architectural pattern, not a feature list.** An
+  orchestrator MAY implement chains at any subset of six
+  injection points (audio, utterance, metadata, intent, dialog,
+  TTS); a null-implementation is conformant. For each chain it
+  does implement, the per-type contract binds. Each injection
+  point's existence is justified by what the lifecycle holds at
+  that exact moment — what's possible there that isn't possible
+  elsewhere.
+- **Intent transformers as the system-typing home.**
+  OVOS-INTENT-1 §5.3 defers slot value typing pending a text
+  normalization specification. TRANSFORM-1 §3.4 is the spec'd
+  injection home for typing: a deployer ships date / number /
+  duration parsing once, and every skill receives typed values
+  in `Match.captures` regardless of which engine matched. The
+  OVOS analogue of ASK's `AMAZON.DATE` and Dialogflow's
+  `@sys.date-time`, but as an injected enrichment rather than a
+  built-in engine feature.
+- **Concrete in-tree plugins as prior art.** Nine plugins live
+  under `/plugins-transformer/` today, covering five of the six
+  injection points: utterance transformers
+  (`ovos-utterance-normalizer`, `ovos-utterance-corrections-plugin`,
+  `ovos-transcription-validator-plugin`,
+  `ovos-utterance-plugin-cancel`,
+  `ovos-bidirectional-translation-plugin`); dialog transformers
+  (`ovos-dialog-normalizer-plugin`,
+  `ovos-bidirectional-translation-plugin`,
+  `ovos-dialog-transformer-openai-plugin`); audio transformers
+  (`ovos-audio-transformer-plugin-speechbrain-langdetect`,
+  `ovos-audio-transformer-plugin-ggwave`,
+  `ovos-audio-transformer-redis-publish`); intent transformers
+  (`ovos-keyword-template-matcher`,
+  `ovos-ahocorasick-ner-plugin`). The
+  `bidirectional-translation` plugin exercises the cross-chain
+  coordination via `Message.context` that TRANSFORM-1 §7
+  formalizes.
+- **Ascending priority.** TRANSFORM-1 §4 specifies ascending
+  priority (lower = earlier, default 50). Current OVOS sorts
+  transformer chains **descending**
+  (`ovos_core/transformers.py:53,117,205`, `reverse=True`); the
+  spec aligns with the **ascending** convention already used by
+  fallback skills (`fallback_service.py:49`, default 101 = run
+  last) and the natural "stages count up" reading. Bringing
+  current plugins into conformance only requires flipping
+  relative priorities, not rewriting.
+- **Cancellation aligned with prior plugin convention.** Two
+  existing utterance transformers
+  (`ovos-utterance-plugin-cancel`,
+  `ovos-transcription-validator-plugin`) already signal the
+  lifecycle should abort by returning empty utterance lists with
+  `{canceled: true, cancel_word: <reason>}` context keys.
+  TRANSFORM-1 §8 keeps the convention, renaming `cancel_word` to
+  `cancel_reason` (the structured concept the field encodes) and
+  adding orchestrator-stamped `cancel_by: <transformer_id>`. The
+  spec's `ovos.utterance.cancelled` terminal event sits alongside
+  the existing `complete_intent_failure` from PIPELINE-1, keeping
+  cancellation and failure observably distinct on the bus.
+- **Language disambiguation.** TRANSFORM-1 §7.1 spec'd a
+  precedence hierarchy for resolving the in-flight utterance's
+  operative language: `stt_lang` (STT-attested) >
+  `request_lang` (source-channel-volunteered) > `detected_lang`
+  (transformer-derived) > `data.lang` (Message producer) >
+  existing `session.lang` > config default, gated by
+  `valid_langs`. Mirrors what current OVOS does informally in
+  `ovos_core/intent_services/service.py:197-222`
+  (`disambiguate_lang`); the spec elevates it to a normative
+  hierarchy with reserved context keys, and explicitly deprecates
+  the legacy top-level `Message.context["lang"]` shortcut.
+
 ---
 
 ## 5. The OVOS bus as a substrate
@@ -690,19 +797,14 @@ number of legacy names. Implementer migration aid:
   type plus skill-side state). MSG-1's async-by-default stance
   (§5.2) leaves room for this to be formalized either in the
   session spec or as a separate one.
-- **Intent context.** The Adapt-era `add_context` /
-  `remove_context` feature — where one intent's match influences a
-  later intent's eligibility — is not formalized at the spec
-  level.
-- **The utterance-transformer chain.** Current OVOS runs an
-  ordered chain of *transformers* before the pipeline that can
-  rewrite the utterance, mutate `message.context`, or cancel the
-  utterance entirely (via `context["canceled"] = true`, observed
-  on the bus as `ovos.utterance.cancelled`). PIPELINE-1
-  intentionally **does not** cover this — transformers don't
-  match, don't dispatch, and don't own a handler; their loading,
-  ordering, and contract are a separate concern. A future
-  transformer specification picks this up.
+- **Intent context.** Formalized in **OVOS-CONTEXT-1** — see §4
+  *Intent context* above. The Adapt-era `add_context` /
+  `remove_context` feature is lifted to a session-bound,
+  decaying, engine-agnostic primitive.
+- **The utterance-transformer chain.** Formalized in
+  **OVOS-TRANSFORM-1** — see §4 *Transformer plugins* above —
+  covering six injection points (audio, utterance, metadata,
+  intent, dialog, TTS) and their cancellation contract.
 - **Text normalization of ASR output.** The basis for slot value
   typing (OVOS-INTENT-1 §5.3). Deferred to its own specification.
 - **A machine-checkable conformance corpus** of `template → sample
