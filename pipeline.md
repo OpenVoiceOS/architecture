@@ -79,12 +79,25 @@ It does **not** define:
 
 ## 2. The orchestrator and the pipeline plugin
 
-The **orchestrator** (OVOS-INTENT-3 §6.1) is the single component
-that consumes the utterance entry point `recognizer_loop:utterance`,
+The **orchestrator** (OVOS-INTENT-3 §6.1) is the logical role that
+consumes the utterance entry point `recognizer_loop:utterance`,
 iterates plugins per session, emits dispatch and terminal events,
 and guarantees the universal end-marker `ovos.utterance.handled`.
 The orchestrator is distinct from the **messagebus** (the transport
 layer) and from any individual plugin.
+
+The orchestrator MAY be implemented as a single process or as
+multiple cooperating processes — a natural split along the audio
+boundary runs an audio-input service (mic, STT), an utterance-
+handling service (the pipeline and intent matching specified
+here), and an audio-output service (TTS, playback) as separate
+processes. From this specification's perspective those processes
+together are "the orchestrator"; the split is a deployment /
+containerization choice the spec accommodates but does not
+prescribe. Pipeline plugins, the loaded-plugin set, and the match
+contract of §4 live in the orchestrator process that implements
+the utterance lifecycle (the utterance-handling service in the
+split shape above).
 
 A **pipeline plugin** is a third-party component identified by an
 opaque `pipeline_id` — an arbitrary, deployment-unique string. The
