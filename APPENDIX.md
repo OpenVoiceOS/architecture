@@ -122,28 +122,26 @@ engine-agnostic contract and the pipeline.
 
 ---
 
-## 3. The pipeline — the host-side spec
+## 3. The pipeline — what these specs do not cover
 
-The intent specs (OVOS-INTENT-1/2/3/4) formalize **intent definition
-and delivery**: the grammar, the resource files, what an intent is,
-the intent-engine contract, and the bus messages that carry
-registration, match, and dispatch. OVOS-MSG-1 formalizes the bus
-that carries them. **OVOS-PIPELINE-1** formalizes the
-host-side piece that sits *around* all of those — the utterance
-lifecycle, the transformer chain, the ordered pipeline of stages
-(intent engines, `converse`, `fallback`, `common_query`, `ocp`,
-`persona`, …), the confidence-tier convention, and the universal
-`ovos.utterance.handled` end-marker.
+The intent specs (OVOS-INTENT-1/2/3) formalize **intent definition**:
+the grammar, the resource files, what an intent is, the intent-engine
+contract. OVOS-MSG-1 formalizes the bus that carries the result.
+The piece that sits *around* both — the multi-stage **pipeline** that
+decides which intent engine even gets a turn, interleaves
+confidence tiers, runs `converse` / `fallback` / `common_query` /
+`ocp` / `persona` stages, and produces the universal
+`ovos.utterance.handled` end-marker — is not formalized by any spec
+in this repository yet.
 
-What PIPELINE-1 leaves out by design: the **internal behaviour of
-non-intent stages**. Each of `converse`, `fallback`, `common_query`,
-`ocp`, `persona`, `stop` is the natural subject of its own future
-specification — PIPELINE-1 only defines the contract every stage
-conforms to. See §7 known gaps for the list.
+That gap is what makes OVOS structurally distinctive (HA and Rhasspy
+have no equivalent layer), and what most reviewers ask about
+first. The natural next formalization is a pipeline / utterance-
+lifecycle specification; see §7 known gaps.
 
-One observation worth flagging: **the engine-agnostic intent
-contract is already realized**, not hypothetical. `ovos-persona`
-plugs into the pipeline as a first-class LLM stage (`persona-high`,
+One observation worth flagging here: **the engine-agnostic intent
+contract is already realized**, not hypothetical. `ovos-persona` plugs
+into the pipeline as a first-class LLM stage (`persona-high`,
 `persona-low`) — the OVOS-INTENT-3 §6.2 non-normative note about
 LLM-backed engines describes something that ships today. The
 ordered confidence-tier chain (deterministic Adapt before fuzzy
@@ -437,12 +435,9 @@ current code:
   (`mycroft.skill.handler.{start,complete,error}` etc.) are still
   informal. The natural next bus spec is OVOS-INTENT-4, which builds
   on OVOS-MSG-1 + OVOS-INTENT-3.
-- **Per-stage behavioural specs.** OVOS-PIPELINE-1 defines the
-  stage *contract* (the `match` signature, the `StageMatch` shape,
-  the confidence-tier convention) but explicitly defers what each
-  non-intent stage actually *does*. `converse`, `fallback`,
-  `common_query`, `ocp`, `persona`, `stop` are each natural
-  subjects of their own specifications.
+- **A pipeline specification.** Stage ordering, the confidence-tier
+  model, and the contracts for `converse`, `fallback`,
+  `common_query`, `ocp`, and `persona` stages are unspecified (§3).
 - **A session specification.** MSG-1 §4 carries `session` opaquely
   and names only `session_id` and `lang`. Everything else about the
   session is deferred — see §5.2 for the explicit list: session
@@ -510,7 +505,7 @@ the *why*, but that has no place in a normative document.
 
 ### 9.1 The set, in two stacks
 
-Built bottom-up in three stacks:
+Built bottom-up in two stacks:
 
 - The **intent stack**, in dependency order: OVOS-INTENT-1 (template
   grammar) → OVOS-INTENT-2 (resource files built on it) →
@@ -521,13 +516,6 @@ Built bottom-up in three stacks:
   Originally drafted as two specs (envelope + session/routing) and
   merged once it became clear the derivations could only
   meaningfully be defined where the routing keys lived.
-- The **host stack**, sitting around the intent and bus stacks:
-  OVOS-PIPELINE-1 formalizes the utterance lifecycle, the
-  transformer chain, the ordered pipeline of stages (intent and
-  non-intent), the confidence-tier convention, and the universal
-  `ovos.utterance.handled` end-marker. It builds on OVOS-MSG-1
-  and provides the host context that all the other specs operate
-  inside.
 
 Each was a formalization pass over machinery already running in
 production (§1), not a greenfield design.
@@ -588,19 +576,15 @@ A specification that does not change between levels keeps its
 lower version number — OVOS-INTENT-3 is at version 1 in both V1
 and V2.
 
-### How the bus and host stacks will be layered in
+### How the bus stack will be layered in
 
-OVOS-MSG-1 introduces the bus envelope; OVOS-INTENT-4 introduces
-intent registration and dispatch on top of it; OVOS-PIPELINE-1
-introduces the host-side utterance lifecycle. All three are
-structurally orthogonal to the intent grammar/resource stack — a
-tool can implement either without the other. As a result the
-single-axis V0/V1/V2 ladder above is no longer sufficient to
-describe the architecture as a whole.
+OVOS-MSG-1 introduces the bus envelope, which is structurally
+orthogonal to the intent stack — a tool can implement the intent
+stack without the bus envelope and vice versa. As more bus-layer
+specs land, the compatibility-level model is expected to evolve;
+the current V0–V2 ladder may grow a second axis or be replaced
+with per-stack ladders.
 
-The compatibility-level model is expected to evolve into either a
-multi-axis grid or per-stack ladders. Until that's settled, the
-bus and host specs (OVOS-MSG-1, OVOS-INTENT-4, OVOS-PIPELINE-1)
-are versioned individually but not yet placed on a compatibility
-ladder. Implementers targeting them today should cite each spec's
-own `Version` field rather than a compat level.
+Until that's settled, the bus-layer specs (OVOS-MSG-1 and the
+others in the pipeline behind it) are versioned individually but
+not yet placed on a compatibility ladder.

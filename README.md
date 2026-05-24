@@ -63,7 +63,6 @@ below). Adoption is voluntary; conformance, once adopted, is not.
 | OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 2 | Draft |
 | OVOS-INTENT-3 | [Intent Definition](intent-definition.md) | 1 | Draft |
 | OVOS-MSG-1 | [Bus Message](message-object.md) | 1 | Draft |
-| OVOS-PIPELINE-1 | [Utterance Lifecycle and Pipeline](pipeline.md) | 2 | Draft |
 
 Each spec carries its own scope statement, design rationale, and
 conformance section in its own header. Open the document for the
@@ -73,10 +72,8 @@ full picture — the table above is just an index.
 order: OVOS-INTENT-1 defines the template grammar; OVOS-INTENT-2
 builds on it to define the resource files; OVOS-INTENT-3 builds on
 both to define what an intent is. OVOS-MSG-1 is the bus-layer
-envelope and the routing / session model — readable at any point.
-OVOS-PIPELINE-1 is the orchestrator-side spec: it defines the utterance
-lifecycle that wraps everything else (ordered stages,
-terminal events) and builds on OVOS-MSG-1.
+envelope and the routing / session model — independent of the
+intent stack and readable at any point.
 
 For background — design rationale, comparisons with other systems,
 the catalogue of known divergences from current code, and known
