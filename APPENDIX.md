@@ -759,6 +759,27 @@ needs no implementation change:
   unrelated skill's shared `Person` entry could accidentally
   satisfy a private gate. Short-form `[Person]` keeps working
   (interpreted as `{ key: Person, scope: private }`).
+- **Skill self-identification on every emission** (INTENT-4 §3.1).
+  Every Message a skill emits MUST carry
+  `Message.context["skill_id"]`. Current OVOS skills set this on
+  some emissions (registrations, handler responses) but not
+  uniformly. The spec makes it the authoritative attribution
+  surface for skill-originated bus traffic — observers attribute
+  by `context["skill_id"]`, not by parsing topic names. Drives
+  CONTEXT-1 §5.2 origin-stamping (the orchestrator stamps `origin`
+  from this field, not from `source`).
+- **`recognizer_loop:utterance` de-prescribed** (PIPELINE-1 §9.1).
+  Earlier drafts treated this topic as normative. The revision
+  defers the entry-topic name to a future audio-input ↔
+  assistant-core wire spec; current deployments use the legacy
+  name for compatibility but conformant orchestrators MAY adopt
+  whatever name the future spec settles on.
+- **All `.list` topics standardized to `ovos.<domain>.<verb>`**
+  (TRANSFORM-1 §6, CONTEXT-1 §5). Renames:
+  `transformer.<type>.list` → `ovos.transformer.<type>.list`;
+  `intent.context.set/.unset/.clear/.list` →
+  `ovos.context.set/.unset/.clear/.list`. INTENT-4 / PIPELINE-1
+  topics unchanged.
 
 ### 6.5 New topics with no direct precedent
 
@@ -784,8 +805,8 @@ serve different scopes:
 |------|-------|-------|-------------------------|
 | INTENT-4 §10 | `ovos.intent.list` / `.describe` | Declared intents observed on the bus | Orchestrator (the manifest) |
 | PIPELINE-1 §10 | `ovos.pipeline.<pipeline_id>.intents.list` | Intents currently compiled inside a specific plugin's matcher | The pipeline plugin |
-| CONTEXT-1 §5.4 | `intent.context.list` | Post-decay session-context snapshot | The orchestrator process owning the match round |
-| TRANSFORM-1 §6 | `transformer.<type>.list` | Loaded transformers per injection point | The orchestrator process implementing that chain |
+| CONTEXT-1 §5.4 | `ovos.context.list` | Post-decay session-context snapshot | The orchestrator process owning the match round |
+| TRANSFORM-1 §6 | `ovos.transformer.<type>.list` | Loaded transformers per injection point | The orchestrator process implementing that chain |
 
 Three properties hold across all four:
 
@@ -800,10 +821,12 @@ Three properties hold across all four:
    orchestrator is split (PIPELINE-1 §2), each process responds
    from its own slice; consumers aggregate.
 
-The naming convention is **not yet uniform** across the four
-surfaces — INTENT-4 / PIPELINE-1 use the `ovos.` prefix while
-CONTEXT-1 / TRANSFORM-1 do not. Standardization is a candidate
-follow-up PR; the wire contract is otherwise consistent.
+All four surfaces use the unified `ovos.<domain>.<verb>` (or
+`ovos.<domain>.<id>.<verb>` for per-id introspection) naming
+convention. CONTEXT-1's prior `intent.context.*` topics were
+renamed to `ovos.context.*`, and TRANSFORM-1's prior
+`transformer.<type>.list` topics were renamed to
+`ovos.transformer.<type>.list`, in this round.
 
 ### 6.6 Things the specs do *not* change
 
