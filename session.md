@@ -188,6 +188,7 @@ everything else is owned by the cited specification.
 | `session_id` | string | §3.1 (this spec) |
 | `lang` | string (BCP-47) | §3.2 (this spec) |
 | `secondary_langs` | array of string (BCP-47) | §3.2 (this spec) |
+| `tts_lang` | string (BCP-47) | §3.2 (this spec) |
 | `stt_lang` | string (BCP-47) | §3.2 (this spec) |
 | `request_lang` | string (BCP-47) | §3.2 (this spec) |
 | `detected_lang` | string (BCP-47) | §3.2 (this spec) |
@@ -298,10 +299,49 @@ Typical uses by consumers:
   will not understand.
 
 `secondary_langs` is a hint, not an authorization boundary: a
-consumer **MAY** ignore it. Per §3.2.6, no consolidation order is
+consumer **MAY** ignore it. Per §3.2.7, no consolidation order is
 prescribed.
 
-#### 3.2.3 `stt_lang`
+#### 3.2.3 `tts_lang`
+
+`tts_lang` — string — the BCP-47 tag the participant wants the
+**assistant's responses rendered in**, independently of the input
+language. It is an output-side preference: a user who speaks German
+but always wants English replies sets `tts_lang: "en-US"`; a
+language learner who speaks English but wants Spanish responses to
+practise with sets `tts_lang: "es-ES"`.
+
+When `tts_lang` is **omitted**, the assistant replies in whatever
+language naturally falls out of input-side signals (consumer's
+choice per §3.2.7 — typically `lang`, `stt_lang`, or the per-payload
+content language). This is the status quo: input language and output
+language are the same.
+
+When `tts_lang` is **set**, a stage that renders text not yet
+produced (dialog selection, prompt selection, response composition,
+GUI text) **SHOULD** render in `tts_lang` if it has the resources
+to do so (a localized dialog, a TTS voice, a prompt in that
+language). When the stage cannot render in `tts_lang`, it **MAY**
+fall back to `secondary_langs` (§3.2.2) and then to the input-side
+language; alternatively a deployment **MAY** insert a translation
+transformer that rewrites the rendered text into `tts_lang`
+post-hoc — `tts_lang` does not prescribe how the goal is met, only
+that it is the goal.
+
+`tts_lang` is not consulted by TTS voice selection directly: TTS
+narrates already-produced text and keys on the payload `data.lang`
+of the text being spoken (§3.2.1). `tts_lang` influences which
+language the upstream renderer produced, which determines `data.lang`,
+which TTS then voices. The cascade is intentional: a single
+preference field controls the language of every output stage.
+
+A consumer that **cannot** render in `tts_lang` and has no fallback
+strategy **MUST NOT** silently render in another language without
+recording the divergence; it **SHOULD** include the actually-used
+language in the rendered Message's `data.lang` so downstream TTS
+voices the text correctly.
+
+#### 3.2.4 `stt_lang`
 
 `stt_lang` — string — the BCP-47 tag the speech-to-text stage
 **actually transcribed in**. It records the language the audio was
@@ -310,7 +350,7 @@ typically populated by the component that produced the transcript;
 once set, it travels with the session until overwritten by a later
 stage that re-transcribes.
 
-#### 3.2.4 `request_lang`
+#### 3.2.5 `request_lang`
 
 `request_lang` — string — the BCP-47 tag the **emitter reported**
 for this utterance at the point it was emitted. It is a hint about
@@ -340,7 +380,7 @@ when other signals are missing — but **MUST NOT** reject or override
 contradictory `stt_lang` / `detected_lang` values purely on the
 strength of `request_lang`.
 
-#### 3.2.5 `detected_lang`
+#### 3.2.6 `detected_lang`
 
 `detected_lang` — string — the BCP-47 tag a **language-detection
 component** classified the most recent utterance as. It records the
@@ -349,7 +389,7 @@ from both `stt_lang` (which records what STT decoded the audio as,
 which can fail when STT is fixed to a single language) and `lang`
 (which records the user's stable preference).
 
-#### 3.2.6 Consolidation (informative)
+#### 3.2.7 Consolidation (informative)
 
 A consumer that needs **one** language for a particular operation
 must consolidate the available signals into a single value. The
@@ -377,7 +417,7 @@ stage and need. A consumer **MUST NOT** assume any one signal is
 present, **MUST NOT** assume one signal equals another, and **MUST
 NOT** mutate any signal as a side effect of consolidating.
 
-#### 3.2.7 `data.lang` (per-payload, not session-scoped)
+#### 3.2.8 `data.lang` (per-payload, not session-scoped)
 
 The session-level fields above describe **session state**. The
 language *of a particular Message's payload* is a per-payload concept
