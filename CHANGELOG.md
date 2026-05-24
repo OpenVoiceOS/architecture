@@ -79,9 +79,16 @@ tool does not recognize the token and cannot expand the template.
 
 ## OVOS-INTENT-4 — Intent and Entity Registration
 
-### 1
+### 2
 
-- Initial draft. Defines the bus wire format for **intent
+- Initial draft. Released as **v2** rather than v1: per the
+  draft-stage versioning policy, v1 is reserved for content
+  drop-in compatible with current OVOS. INTENT-4 renames the
+  legacy registration topics (`padatious:register_intent`,
+  `register_vocab`, …) into the `ovos.intent.*` namespace and
+  introduces the orchestrator passive registration index — both
+  require OVOS-side changes, so the first release is v2.
+- Defines the bus wire format for **intent
   registration** — and nothing else. Registration messages
   (`ovos.intent.register.keyword`, `ovos.intent.register.template`,
   `ovos.entity.register`), deregistration

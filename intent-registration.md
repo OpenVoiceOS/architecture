@@ -1,6 +1,6 @@
 # Intent and Entity Registration Bus Contract
 
-**Spec ID:** OVOS-INTENT-4 · **Version:** 1 · **Status:** Draft
+**Spec ID:** OVOS-INTENT-4 · **Version:** 2 · **Status:** Draft
 
 This document defines the **bus messages** a skill uses to declare its
 intents and entities. It is the wire format for intent registration —
