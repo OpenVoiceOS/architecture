@@ -765,11 +765,13 @@ needs no implementation change:
   utterance-layer entry-topic name is deferred to a future
   audio-input ↔ assistant-core wire spec; current deployments
   use `recognizer_loop:utterance` for compatibility.
-- **All `.list` topics under one prefix**: `ovos.<domain>.<verb>`
-  (or `ovos.<domain>.<id>.<verb>` for per-id introspection).
-  CONTEXT-1's mutation/introspection events live under
-  `ovos.context.*`; TRANSFORM-1's introspection events live under
-  `ovos.transformer.*`; INTENT-4 / PIPELINE-1 use the same prefix.
+- **All introspection topics share the `ovos.<domain>.` prefix.**
+  Verb segments vary by domain — INTENT-4 nests under
+  `ovos.intent.register.<kind>` / `ovos.intent.list`; PIPELINE-1
+  uses `ovos.pipeline.<pipeline_id>.intents.list`; CONTEXT-1 uses
+  `ovos.context.<verb>`; TRANSFORM-1 uses
+  `ovos.transformer.<type>.<verb>`. Uniformity is at the prefix
+  level, not at verb depth.
 
 ### 6.5 New topics with no direct precedent
 
@@ -811,9 +813,9 @@ Three properties hold across all four:
    orchestrator is split (PIPELINE-1 §2), each process responds
    from its own slice; consumers aggregate.
 
-All four surfaces use the unified `ovos.<domain>.<verb>` (or
-`ovos.<domain>.<id>.<verb>` for per-id introspection) naming
-convention.
+All four surfaces share the `ovos.<domain>.` prefix; verb segments
+vary by domain (some nest, some don't). The uniformity is in the
+namespace, not in a fixed depth.
 
 ### 6.6 Things the specs do *not* change
 
