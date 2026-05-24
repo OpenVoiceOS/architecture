@@ -45,8 +45,9 @@ This specification defines:
 - the **handler-lifecycle trio** (§8) —
   `ovos.intent.handler.start` / `.complete` / `.error`;
 - the **utterance-layer bus events** (§9) —
-  `recognizer_loop:utterance`, `ovos.intent.matched`,
-  `complete_intent_failure`, `ovos.utterance.handled`;
+  the utterance entry topic (§9.1, name deferred),
+  `ovos.intent.matched`, `complete_intent_failure`,
+  `ovos.utterance.handled`;
 - **conformance** (§10).
 
 It does **not** define:
@@ -80,9 +81,10 @@ It does **not** define:
 ## 2. The orchestrator and the pipeline plugin
 
 The **orchestrator** (OVOS-INTENT-3 §6.1) is the logical role that
-consumes the utterance entry point `recognizer_loop:utterance`,
-iterates plugins per session, emits dispatch and terminal events,
-and guarantees the universal end-marker `ovos.utterance.handled`.
+consumes the utterance-layer entry topic (§9.1; topic name
+deferred to a future spec), iterates plugins per session, emits
+dispatch and terminal events, and guarantees the universal
+end-marker `ovos.utterance.handled`.
 The orchestrator is distinct from the **messagebus** (the transport
 layer) and from any individual plugin.
 
@@ -172,8 +174,8 @@ match(utterance, session) → Match | None
 Inputs:
 
 - `utterance` — a **non-empty list of candidate strings**. The
-  list typically originates from `recognizer_loop:utterance`
-  (§9.1) and may have been modified by the utterance-transformer
+  list typically originates from the entry topic (§9.1) and may
+  have been modified by the utterance-transformer
   chain (OVOS-TRANSFORM-1 §3.2) before reaching the plugin. A
   plugin **MUST** accept this shape: a list of one or more
   candidate transcripts, in no particular order, all in the same
@@ -292,7 +294,7 @@ to terminate** with exactly one `ovos.utterance.handled` event
 ### 6.1 The flow
 
 ```
-recognizer_loop:utterance               ← entry (§9.1)
+entry topic                              ← entry (§9.1)
    │
    ├─ session retrieval; pipeline read from session (§5)
    │
@@ -516,14 +518,22 @@ This specification formalizes five utterance-layer bus events.
 All travel in standard OVOS-MSG-1 envelopes; routing follows the
 single-flip model of OVOS-MSG-1 §5.2.
 
-### 9.1 `recognizer_loop:utterance`
+### 9.1 The utterance-layer entry point
 
-The **utterance-layer entry point**. Produced by any component
-that wants to feed an utterance into the assistant — a listener,
-a chat bridge, a CLI, a test harness, a remote-peer client. The
-orchestrator subscribes and runs the lifecycle of §6.
+The orchestrator subscribes to an **utterance-layer entry-point
+topic** produced by any component that wants to feed an utterance
+into the assistant — a listener, a chat bridge, a CLI, a test
+harness, a remote-peer client. Receiving on this topic kicks off
+the lifecycle of §6.
 
-Payload:
+The **topic name itself is not prescribed by this
+specification**; it is the subject of a separate spec covering
+audio-input ↔ assistant-core wire contracts. Current deployments
+use **`recognizer_loop:utterance`** as the entry topic; a
+conformant orchestrator MAY subscribe to that name for
+compatibility while the entry-point spec is in flight.
+
+Payload shape on the entry topic (current convention):
 
 ```json
 {
@@ -535,7 +545,13 @@ Payload:
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `utterances` | array of strings | yes | One or more candidate utterance strings. |
-| `lang` | string | no | BCP-47 language tag of the utterance. If absent, the orchestrator disambiguates from `session.lang` and other context. |
+| `lang` | string | no | BCP-47 language tag of the utterance. If absent, the orchestrator falls back per OVOS-SESSION-1 §3.2. |
+
+What **is** normative in this specification is the *behaviour
+after entry*: every utterance the orchestrator accepts proceeds
+through §6, terminates with exactly one `ovos.utterance.handled`
+(§9.5), and carries the universal lifecycle obligations of
+§§7–8. The entry topic's exact name and payload shape are not.
 
 ### 9.2 `ovos.intent.matched`
 
@@ -595,7 +611,7 @@ matched-and-handler-timed-out.
 Broadcast. Payload **MAY** be empty.
 
 A conformant orchestrator **MUST** emit exactly one
-`ovos.utterance.handled` per `recognizer_loop:utterance`.
+`ovos.utterance.handled` per entry-topic Message (§9.1).
 Multiple emissions for one utterance are malformed; zero is
 malformed.
 
@@ -694,7 +710,9 @@ indicates the plugin is not loaded.
 
 ### An **orchestrator** **MUST**:
 
-- subscribe to `recognizer_loop:utterance` (§9.1);
+- subscribe to the utterance-layer entry topic (§9.1) — name
+  deferred to a future spec; current deployments use
+  `recognizer_loop:utterance`;
 - run every received utterance through the lifecycle of §6
   exactly once;
 - emit `ovos.utterance.handled` (§9.5) exactly once per
