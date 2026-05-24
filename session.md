@@ -187,6 +187,7 @@ everything else is owned by the cited specification.
 |-------|-----------|-------|
 | `session_id` | string | §3.1 (this spec) |
 | `lang` | string (BCP-47) | §3.2 (this spec) |
+| `secondary_langs` | array of string (BCP-47) | §3.2 (this spec) |
 | `stt_lang` | string (BCP-47) | §3.2 (this spec) |
 | `request_lang` | string (BCP-47) | §3.2 (this spec) |
 | `detected_lang` | string (BCP-47) | §3.2 (this spec) |
@@ -265,7 +266,42 @@ base signal: stable across the session, not derived from any one
 utterance, and the natural fallback when no per-utterance signal is
 available.
 
-#### 3.2.2 `stt_lang`
+#### 3.2.2 `secondary_langs`
+
+`secondary_langs` — array of string — additional BCP-47 tags the
+participant **also speaks or understands**, ordered by preference
+(most-preferred first). It is the broader language set the session
+operates inside; `lang` is the primary, `secondary_langs` is the
+fallback pool.
+
+`secondary_langs` **MUST NOT** contain `lang` (it is *additional*
+languages, not a list including the primary). It **MUST NOT**
+contain duplicates. An empty array and an omitted field are
+equivalent and mean "no additional languages declared".
+
+Typical uses by consumers:
+
+- **Constraining a language detector** — a detector reading
+  `lang` + `secondary_langs` produces predictions only from that
+  candidate set, instead of from the detector's full label space.
+  A detected language outside the set is either coerced to the
+  nearest in-set member or reported as unknown, at the detector's
+  discretion.
+- **Fallback selection** — a stage that cannot serve `lang`
+  (missing TTS voice, missing intent locale, missing translation
+  pair) **MAY** walk `secondary_langs` in order and pick the first
+  it can serve, instead of falling all the way to a deployment
+  default.
+- **Gating outputs** — a stage that renders text **MAY** decline
+  to render in a language that is neither `lang` nor in
+  `secondary_langs`, to avoid producing content the participant
+  will not understand.
+
+`secondary_langs` is a hint, not an authorization boundary: a
+consumer **MAY** ignore it. Per §3.2.6, no consolidation order is
+prescribed.
+
+#### 3.2.3 `stt_lang`
 
 `stt_lang` — string — the BCP-47 tag the speech-to-text stage
 **actually transcribed in**. It records the language the audio was
@@ -274,7 +310,7 @@ typically populated by the component that produced the transcript;
 once set, it travels with the session until overwritten by a later
 stage that re-transcribes.
 
-#### 3.2.3 `request_lang`
+#### 3.2.4 `request_lang`
 
 `request_lang` — string — the BCP-47 tag the **caller explicitly
 requested** for downstream processing of this session. It is the
@@ -283,7 +319,7 @@ a UI selector, or a layer-2 router populates it to pin language
 behaviour regardless of what the user is preferring (`lang`) or what
 the audio was transcribed as (`stt_lang`).
 
-#### 3.2.4 `detected_lang`
+#### 3.2.5 `detected_lang`
 
 `detected_lang` — string — the BCP-47 tag a **language-detection
 component** classified the most recent utterance as. It records the
@@ -292,7 +328,7 @@ from both `stt_lang` (which records what STT decoded the audio as,
 which can fail when STT is fixed to a single language) and `lang`
 (which records the user's stable preference).
 
-#### 3.2.5 Consolidation (informative)
+#### 3.2.6 Consolidation (informative)
 
 A consumer that needs **one** language for a particular operation
 must consolidate the available signals into a single value. The
@@ -320,7 +356,7 @@ stage and need. A consumer **MUST NOT** assume any one signal is
 present, **MUST NOT** assume one signal equals another, and **MUST
 NOT** mutate any signal as a side effect of consolidating.
 
-#### 3.2.6 `data.lang` (per-payload, not session-scoped)
+#### 3.2.7 `data.lang` (per-payload, not session-scoped)
 
 The session-level fields above describe **session state**. The
 language *of a particular Message's payload* is a per-payload concept
