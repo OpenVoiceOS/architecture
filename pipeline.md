@@ -145,11 +145,12 @@ not interpret the `pipeline_id` string beyond using it as a key.
 Constraints on `pipeline_id` strings:
 
 - Non-empty.
-- Must not contain a colon (`:`) — the colon separates owner from
-  intent name in the dispatch topic shape (§7), and `pipeline_id`
-  may appear as the owner.
-- Must match the topic-name syntax of OVOS-MSG-1 §2.1 (ASCII
-  letters, digits, `.`, `_`, `-`; no whitespace).
+- Bound by OVOS-MSG-1 §2.1.1 (identifiers used as topic
+  components): no `:`, no `.`, no whitespace, ASCII letters /
+  digits / `_` / `-` only. The constraint is necessary because
+  `pipeline_id` may appear as the owner in the dispatch topic shape
+  `<owner_id>:<intent_name>` (§7) and per-pipeline introspection
+  topics (§10) build on the same identifier.
 - Unique within a deployment's loaded-plugin set.
 
 A plugin **MAY** appear in a session's pipeline more than once
@@ -228,14 +229,18 @@ it to the dispatched handler.
 
 ## 5. `session.pipeline`
 
-The session (OVOS-MSG-1 §4) carries an ordered list of pipeline
-identifiers under the field name **`pipeline`**:
+This specification claims **`pipeline`** as a session field per
+OVOS-SESSION-1 §2.1: an array of `pipeline_id` strings, ordered,
+session-scoped, propagating with the session, with the
+deployment-default-fallback absence rule (an omitted, empty, or
+absent `session.pipeline` resolves to the deployment-configured
+default at consumption, per OVOS-SESSION-1 §2.5).
+
+Example:
 
 ```json
 {
   "session": {
-    "session_id": "default",
-    "lang": "en-US",
     "pipeline": [
       "padatious-high",
       "adapt-high",
@@ -249,28 +254,25 @@ identifiers under the field name **`pipeline`**:
 }
 ```
 
-`pipeline` is a normative internal field inside `session`
-prescribed by this specification (analogous to `session_id` and
-`lang` from OVOS-MSG-1 §4). Other internal session fields remain
-opaque (deferred to a future session specification).
-
-For each utterance, the orchestrator iterates `pipeline`
+For each utterance, the orchestrator iterates `session.pipeline`
 in order, calling `match` on each corresponding plugin (§6.2).
 
-If a `pipeline_id` in `pipeline` does not correspond to
-any loaded plugin, the orchestrator **MUST** skip it and
-**SHOULD** log a warning. It **MUST NOT** abort the utterance
-over an unknown identifier.
+If a `pipeline_id` in `session.pipeline` does not correspond to
+any loaded plugin, the orchestrator **MUST** skip it and **SHOULD**
+log a warning. It **MUST NOT** abort the utterance over an unknown
+identifier and **MUST NOT** fall back to the deployment default
+merely because one identifier is unknown — the remaining known
+identifiers are the effective ordered set.
 
-If `session.pipeline` is absent or empty, the orchestrator
-**MAY** fall back to a deployment-configured default. If no
-default is configured, the utterance proceeds to no-match
-(`complete_intent_failure`, §9.3).
+If `session.pipeline` is absent or empty (per OVOS-SESSION-1 §2.5),
+the orchestrator falls back to the deployment-configured default
+pipeline. If no default is configured, the utterance proceeds to
+no-match (`complete_intent_failure`, §9.3).
 
-Different sessions may carry different `pipeline`. This
-is how a deployment provides different behaviour to different
-participants — for example, a remote-peer session may carry a
-restricted pipeline that excludes destructive plugins.
+Different sessions may carry different `pipeline`. This is how a
+deployment provides different behaviour to different participants —
+for example, a remote-peer session may carry a restricted pipeline
+that excludes destructive plugins.
 
 ---
 
@@ -359,9 +361,10 @@ on the topic:
 where `<owner_id>` is `Match.owner_id` (a `skill_id` or a
 `pipeline_id`) and `<intent_name>` is `Match.intent_name`.
 
-`skill_id`, `pipeline_id`, and `intent_name` **MUST NOT** contain
-`:`. The dispatch topic therefore contains exactly one `:`, and
-the split is unambiguous.
+The `:` between the two segments is the only one in the topic:
+`skill_id`, `pipeline_id`, and `intent_name` are bound by
+OVOS-MSG-1 §2.1.1 (no `:`, no `.`, no whitespace), so the split is
+unambiguous.
 
 ### 7.1 Routing and payload
 
@@ -444,17 +447,26 @@ chains) can subscribe.
 
 ### 8.1 Order and obligations
 
-For each accepted dispatch, the handler-owning component
-**SHOULD** emit:
+For each accepted dispatch, the handler-owning component **MUST**
+emit **exactly one** terminal event — either
+`ovos.intent.handler.complete` or `ovos.intent.handler.error` — and
+**SHOULD** precede it with `ovos.intent.handler.start`.
 
-- on normal completion: `ovos.intent.handler.start` followed by
-  `ovos.intent.handler.complete`;
-- on exception: `ovos.intent.handler.start` followed by
-  `ovos.intent.handler.error`.
+- on normal completion: `ovos.intent.handler.start` (SHOULD) followed
+  by `ovos.intent.handler.complete` (MUST);
+- on exception: `ovos.intent.handler.start` (SHOULD) followed by
+  `ovos.intent.handler.error` (MUST).
 
-A handler that does not emit the trio still ran (the spec cannot
-prevent that) but is non-conformant — its execution is invisible
-to the bus.
+The terminal event is **MUST** because the orchestrator's universal
+`ovos.utterance.handled` invariant (§9.5) and timeout bookkeeping
+(§8.3) depend on it: an utterance whose handler emits no terminal
+event leaves the orchestrator unable to satisfy §9.5 without
+falling back to the §8.3 timeout — a degraded mode that wastes time
+and produces observably-late lifecycle for downstream consumers.
+
+A handler that emits neither terminal event still ran (the spec
+cannot prevent that) but is non-conformant — its execution is
+invisible to the bus and forces the orchestrator into §8.3.
 
 ### 8.2 Payload
 
@@ -592,7 +604,96 @@ malformed.
 
 ---
 
-## 10. Conformance
+## 10. Per-pipeline introspection
+
+Each pipeline plugin owns the set of intents it currently has
+loaded. To let consumers (UIs, developer tools, debug viewers,
+other plugins) discover that set at runtime, this specification
+defines a pull-query / scatter-response pattern keyed on
+`pipeline_id`.
+
+### 10.1 Query and response topics
+
+| Topic | Direction | Carries |
+|-------|-----------|---------|
+| `ovos.pipeline.<pipeline_id>.intents.list` | request | empty payload (or filters, see §10.3) |
+| `ovos.pipeline.<pipeline_id>.intents.list.response` | reply | the plugin's currently-loaded intent set |
+
+A consumer that wants the loaded intents of a specific pipeline
+**MUST** emit on the per-`pipeline_id` topic above. There is **no
+aggregate query** — a consumer that wants the intent set of every
+loaded plugin emits one query per `pipeline_id` it cares about and
+aggregates the responses itself.
+
+The `pipeline_id` in the topic is the same identifier carried by
+`session.pipeline` (§5) and by `Match.owner_id` when the plugin
+owns its own handler (§7); a consumer that has already observed
+a `pipeline_id` from any of these sources can query it directly.
+
+### 10.2 Response payload
+
+The plugin **MUST** reply with the currently-loaded intent set:
+
+```json
+{
+  "pipeline_id": "padatious-high",
+  "intents": [
+    {
+      "intent_name": "play_music",
+      "owner_id": "music.skill",
+      "lang": "en-US"
+    },
+    {
+      "intent_name": "stop_music",
+      "owner_id": "music.skill",
+      "lang": "en-US"
+    }
+  ]
+}
+```
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `pipeline_id` | string | yes | The responding plugin's id. |
+| `intents` | array | yes | Currently-loaded intents (possibly empty). |
+| `intents[].intent_name` | string | yes | Intent identifier. |
+| `intents[].owner_id` | string | yes | The owning component (`skill_id` or `pipeline_id` when plugin-owned). |
+| `intents[].lang` | string | yes | The language the intent is registered for. |
+
+A plugin **MAY** include additional per-intent fields (engine
+metadata, confidence thresholds, sample templates) but consumers
+**MUST NOT** require them.
+
+### 10.3 Filters
+
+The request payload **MAY** carry filters:
+
+```json
+{ "lang": "en-US", "owner_id": "music.skill" }
+```
+
+When a filter is present, the plugin **SHOULD** restrict its
+response to intents matching every filter field. Unknown filter
+keys are ignored (forward-compatible).
+
+### 10.4 Pull-query is the source of truth
+
+Pipeline plugins **MAY** broadcast load-time announcements (e.g.
+when a skill registers new intents the plugin recompiles), but
+consumers that need accurate state **MUST** query
+`ovos.pipeline.<pipeline_id>.intents.list` and **MUST NOT** assume
+that any prior broadcast reached them. The bus is asynchronous,
+has no delivery guarantees, and a consumer that started after a
+load event missed the announcement.
+
+A plugin **MUST** respond to every query it observes for its own
+`pipeline_id`. A consumer that receives no response within a
+deployment-defined timeout **MAY** retry; persistent silence
+indicates the plugin is not loaded.
+
+---
+
+## 11. Conformance
 
 ### An **orchestrator** **MUST**:
 
@@ -623,16 +724,25 @@ malformed.
 - when claiming, return a `Match` with `owner_id` and
   `intent_name` per §4 — never a partial or speculative claim;
 - bear a `pipeline_id` distinct from any other loaded plugin's
-  id (§3).
+  id (§3);
+- **respond** to every `ovos.pipeline.<own_pipeline_id>.intents.list`
+  query with a §10.2 response payload describing its currently-loaded
+  intent set (§10.4) — pull-query is the source of truth that
+  consumers rely on.
 
-### A **handler** (skill or plugin-bundled) **SHOULD**:
+### A **handler** (skill or plugin-bundled) **MUST**:
 
-- emit `ovos.intent.handler.start` when invoked (§8.1);
-- emit exactly one of `ovos.intent.handler.complete` or
-  `ovos.intent.handler.error` when it finishes (§8.1);
-- include `owner_id` and `intent_name` in the trio payload
-  (§8.2);
+- emit **exactly one** of `ovos.intent.handler.complete` or
+  `ovos.intent.handler.error` when it finishes (§8.1) — the
+  orchestrator's §9.5 universal end-marker and §8.3 timeout
+  bookkeeping depend on the terminal event being deterministic;
+- include `owner_id` and `intent_name` in the trio payload (§8.2);
 - run the handler at most once per dispatch.
+
+A handler **SHOULD**:
+
+- emit `ovos.intent.handler.start` when invoked (§8.1) so
+  observers can scope the handler-execution window.
 
 ### Non-goals
 
@@ -640,16 +750,19 @@ The following are explicitly outside this specification: plugin
 loading and discovery; any pre-pipeline utterance transformation
 or cancellation chain; ASR n-best ranking semantics within
 plugins; per-plugin behavioural specs; the `session` object's
-full internal shape beyond `session_id`, `lang` (OVOS-MSG-1 §4),
-and `pipeline` (§5).
+wire shape and field set (owned by OVOS-SESSION-1).
 
 ---
 
 ## See also
 
 - *Bus Message Specification* (OVOS-MSG-1) — the envelope, the
-  single-flip routing model, the `session` carrier that holds
-  `pipeline`.
+  single-flip routing model, the shared topic-component identifier
+  rule (§2.1.1), the `session` carrier that holds `pipeline`.
+- *Session Specification* (OVOS-SESSION-1) — the wire shape of
+  `session`, the registry mechanism under which this specification
+  claims the `pipeline` field, and the deployment-default fallback
+  rule for omitted / empty `session.pipeline`.
 - *Intent and Entity Registration Bus Contract* (OVOS-INTENT-4) —
   the registration wire format plugins consume (when they choose
   to).
