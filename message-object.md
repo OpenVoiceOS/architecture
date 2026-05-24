@@ -1,6 +1,6 @@
 # Bus Message Specification
 
-**Spec ID:** OVOS-MSG-1 · **Version:** 1 · **Status:** Draft
+**Spec ID:** OVOS-MSG-1 · **Version:** 1.1 · **Status:** Draft
 
 This document defines the **bus message** — the single unit of
 communication exchanged between components of an OVOS-style voice
@@ -89,11 +89,13 @@ A Message is a **JSON object** with exactly these top-level keys:
 | Key | Type | Required | Meaning |
 |------|------|----------|---------|
 | `type` | string | yes | The message topic. |
-| `data` | object | yes | The message payload. |
-| `context` | object | yes | Assistant metadata about the message — routing keys (§3) and the session carrier (§4). |
+| `data` | object | no | The message payload. An absent `data` is equivalent to an empty object (`{}`). |
+| `context` | object | no | Assistant metadata about the message — routing keys (§3) and the session carrier (§4). An absent `context` is equivalent to an empty object (`{}`). |
 
-Other top-level keys **MUST NOT** appear; consumers **MUST** reject any
-Message with unknown top-level keys.
+Producers **MAY** omit `data` and/or `context` when they would be
+empty; consumers **MUST** treat an absent `data` or `context` as
+equivalent to `{}`. Other top-level keys **MUST NOT** appear;
+consumers **MUST** reject any Message with unknown top-level keys.
 
 ### 2.1 `type`
 
@@ -466,9 +468,11 @@ silently coerce it.
 
 ### A **producer** of Messages **MUST**:
 
-- emit exactly the top-level keys `type`, `data`, `context` (§2);
+- emit a top-level `type` matching §2.1, and no top-level keys
+  beyond `type`, `data`, `context` (§2);
 - give `type` a non-empty string value matching §2.1;
-- give `data` and `context` JSON-object values (possibly empty);
+- when present, give `data` and `context` JSON-object values
+  (possibly empty); they MAY be omitted when empty (§2);
 - when deriving a Message from another (`forward` / `reply` /
   `response`), follow §5;
 - emit serialization conformant to §6.
@@ -486,7 +490,8 @@ A producer **SHOULD**:
 ### A **consumer** of Messages **MUST**:
 
 - reject a Message that violates §2 (wrong top-level keys, wrong
-  types, missing required keys) as malformed;
+  types, missing or non-string `type`) as malformed;
+- treat an absent `data` or `context` as equivalent to `{}` (§2);
 - tolerate any `context` shape, including an empty object, and ignore
   `context` keys it does not understand (§2.3);
 - treat the values of `source`, `destination`, and the contents of
