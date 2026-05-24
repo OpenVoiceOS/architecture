@@ -248,17 +248,22 @@ external side of the bus boundary wants to communicate in.
 
 The split between session and payload language is sharp:
 
-- **Matching** is keyed on `data.lang` (the language the utterance
-  was recognized in) — an `en-US` user can still trigger a `de-DE`
-  intent if the utterance happens to be in German.
-- **Output localization** — TTS voice selection, rendered dialog,
-  prompt selection — is keyed on `session.lang` — the assistant
-  speaks back to the user in the user's preferred language even
+- **Matching** an utterance against intents is keyed on `data.lang`
+  (the language the utterance was recognized in) — an `en-US` user
+  can still trigger a `de-DE` intent if the utterance happens to be
+  in German.
+- **Rendering text not yet produced** — dialog selection, prompt
+  selection, response composition — is keyed on `session.lang`: the
+  system replies to the user in the user's preferred language even
   when it has just handled a code-switched command.
-
-A subsystem that produces speech, dialog, or text for the user
-**SHOULD** read `session.lang` to decide which language to render
-in.
+- **Narrating already-produced text** — TTS — is keyed on the
+  payload language of the text being spoken (`data.lang` on the
+  Message carrying the text), not on `session.lang`. The text was
+  rendered in whatever language its producer chose; TTS only voices
+  what is there. A TTS subsystem **MUST** select voice and
+  pronunciation per the payload `data.lang` when it is set, and
+  **MUST** fall back to `session.lang` only when the payload carries
+  no language signal at all (per the resolution order below).
 
 #### `data.lang` vs. `session.lang`
 
