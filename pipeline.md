@@ -37,7 +37,7 @@ This specification defines:
 - the **pipeline plugin** abstraction (§3) — the only thing the
   orchestrator iterates;
 - the **match contract** (§4) — the only thing a plugin exposes;
-- the **`session.pipeline_stages`** field (§5) — how a session
+- the **`session.pipeline`** field (§5) — how a session
   chooses which plugins and in what order;
 - the **utterance lifecycle** (§6) — entry, transformer chain,
   iteration, dispatch, terminal events;
@@ -70,7 +70,7 @@ It does **not** define:
   registrations on the bus; whether and how a given plugin
   subscribes is the plugin's own business.
 - **the `session` lifecycle** — `session` is carried opaquely per
-  OVOS-MSG-1 §4. `session.pipeline_stages` is one internal field
+  OVOS-MSG-1 §4. `session.pipeline` is one internal field
   this spec prescribes (§5); other internal fields are deferred to
   a future session specification.
 - **per-plugin behavioural specs** — plugins have no behavioural
@@ -216,17 +216,17 @@ it to the dispatched handler.
 
 ---
 
-## 5. `session.pipeline_stages`
+## 5. `session.pipeline`
 
 The session (OVOS-MSG-1 §4) carries an ordered list of pipeline
-identifiers under the field name **`pipeline_stages`**:
+identifiers under the field name **`pipeline`**:
 
 ```json
 {
   "session": {
     "session_id": "default",
     "lang": "en-US",
-    "pipeline_stages": [
+    "pipeline": [
       "padatious-high",
       "adapt-high",
       "padatious-medium",
@@ -239,25 +239,25 @@ identifiers under the field name **`pipeline_stages`**:
 }
 ```
 
-`pipeline_stages` is a normative internal field inside `session`
+`pipeline` is a normative internal field inside `session`
 prescribed by this specification (analogous to `session_id` and
 `lang` from OVOS-MSG-1 §4). Other internal session fields remain
 opaque (deferred to a future session specification).
 
-For each utterance, the orchestrator iterates `pipeline_stages`
+For each utterance, the orchestrator iterates `pipeline`
 in order, calling `match` on each corresponding plugin (§6.2).
 
-If a `pipeline_id` in `pipeline_stages` does not correspond to
+If a `pipeline_id` in `pipeline` does not correspond to
 any loaded plugin, the orchestrator **MUST** skip it and
 **SHOULD** log a warning. It **MUST NOT** abort the utterance
 over an unknown identifier.
 
-If `session.pipeline_stages` is absent or empty, the orchestrator
+If `session.pipeline` is absent or empty, the orchestrator
 **MAY** fall back to a deployment-configured default. If no
 default is configured, the utterance proceeds to no-match
 (`complete_intent_failure`, §9.4).
 
-Different sessions may carry different `pipeline_stages`. This
+Different sessions may carry different `pipeline`. This
 is how a deployment provides different behaviour to different
 participants — for example, a remote-peer session may carry a
 restricted pipeline that excludes destructive plugins.
@@ -282,9 +282,9 @@ recognizer_loop:utterance               ← entry (§9.1)
    │           ovos.utterance.handled           (§9.6)
    │           STOP
    │
-   ├─ session retrieval; pipeline_stages read from session (§5)
+   ├─ session retrieval; pipeline read from session (§5)
    │
-   ├─ for pipeline_id in session.pipeline_stages:
+   ├─ for pipeline_id in session.pipeline:
    │     plugin = loaded_plugins[pipeline_id]     # skip if not loaded
    │     match = plugin.match(utterance, session)
    │     if match is not None:
@@ -303,7 +303,7 @@ recognizer_loop:utterance               ← entry (§9.1)
 
 For each utterance, the orchestrator **MUST**:
 
-- iterate `session.pipeline_stages` in order;
+- iterate `session.pipeline` in order;
 - for each `pipeline_id`, call `match` on the corresponding loaded
   plugin (skipping unknown identifiers, §5);
 - stop at the **first plugin** that returns a non-`None` `Match`;
@@ -355,6 +355,12 @@ on the topic:
 
 where `<owner_id>` is `Match.owner_id` (a `skill_id` or a
 `pipeline_id`) and `<intent_name>` is `Match.intent_name`.
+
+The delimiter is the **first** `:` in the topic. `skill_id` and
+`pipeline_id` **MUST NOT** contain `:` so the split is
+unambiguous; `intent_name` MAY contain further `:` characters
+(downstream consumers can use it to namespace dispatched topics
+inside their own surface).
 
 ### 7.1 Routing and payload
 
@@ -643,7 +649,7 @@ contract of §4 applies to pipeline plugins only.
 - if any transformer set `context["canceled"] = true`, emit
   `ovos.utterance.cancelled` and **MUST NOT** iterate the
   pipeline (§10.2);
-- iterate `session.pipeline_stages` in order (§6.2) and stop at
+- iterate `session.pipeline` in order (§6.2) and stop at
   the first plugin returning a non-`None` `Match`;
 - skip unknown `pipeline_id`s without failing the utterance (§5);
 - emit `complete_intent_failure` when no plugin claimed (§9.4);
@@ -689,7 +695,7 @@ The following are explicitly outside this specification: plugin
 loading and discovery; transformer discovery and ordering; ASR
 n-best ranking semantics within plugins; per-plugin behavioural
 specs; the `session` object's full internal shape beyond
-`session_id`, `lang` (OVOS-MSG-1 §4), and `pipeline_stages`
+`session_id`, `lang` (OVOS-MSG-1 §4), and `pipeline`
 (§5).
 
 ---
@@ -698,7 +704,7 @@ specs; the `session` object's full internal shape beyond
 
 - *Bus Message Specification* (OVOS-MSG-1) — the envelope, the
   single-flip routing model, the `session` carrier that holds
-  `pipeline_stages`.
+  `pipeline`.
 - *Intent and Entity Registration Bus Contract* (OVOS-INTENT-4) —
   the registration wire format plugins consume (when they choose
   to).
