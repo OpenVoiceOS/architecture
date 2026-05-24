@@ -312,12 +312,33 @@ stage that re-transcribes.
 
 #### 3.2.4 `request_lang`
 
-`request_lang` — string — the BCP-47 tag the **caller explicitly
-requested** for downstream processing of this session. It is the
-"please treat this session as language X" override: a remote client,
-a UI selector, or a layer-2 router populates it to pin language
-behaviour regardless of what the user is preferring (`lang`) or what
-the audio was transcribed as (`stt_lang`).
+`request_lang` — string — the BCP-47 tag the **emitter reported**
+for this utterance at the point it was emitted. It is a hint about
+what language the emitter expects the content to be in — not an
+authoritative claim and not an override.
+
+Typical sources of `request_lang`:
+
+- a **multi-wakeword** setup where each wake word is associated
+  with a language: the wakeword that triggered the capture
+  determines the reported hint (the user pressed an "English wake
+  word" so the emitter reports `en-US`);
+- a UI lang selector the user toggled before speaking;
+- a layer-2 router that knows the per-peer expected language.
+
+The hint is **not authoritative**. The user may speak a different
+language than the emitter expected (wake-word trigger does not
+constrain what the user actually says next), and downstream stages
+**MUST NOT** treat `request_lang` as a guarantee. The actual decoded
+language is recorded by `stt_lang` (§3.2.3); a language-detection
+component's opinion is recorded by `detected_lang` (§3.2.5);
+disagreement between the three is normal.
+
+A consumer **MAY** use `request_lang` as a prior — for example to
+bias an STT model toward the reported language, or to break ties
+when other signals are missing — but **MUST NOT** reject or override
+contradictory `stt_lang` / `detected_lang` values purely on the
+strength of `request_lang`.
 
 #### 3.2.5 `detected_lang`
 
