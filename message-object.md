@@ -1,6 +1,6 @@
 # Bus Message Specification
 
-**Spec ID:** OVOS-MSG-1 · **Version:** 1.1 · **Status:** Draft
+**Spec ID:** OVOS-MSG-1 · **Version:** 1 · **Status:** Draft
 
 This document defines the **bus message** — the single unit of
 communication exchanged between components of an OVOS-style voice

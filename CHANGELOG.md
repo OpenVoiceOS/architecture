@@ -50,15 +50,6 @@ tool does not recognize the token and cannot expand the template.
 
 ## OVOS-MSG-1 — Bus Message
 
-### 1.1
-
-- §2 — `data` and `context` are no longer required top-level keys.
-  Producers MAY omit them when empty; consumers MUST treat an
-  absent `data` or `context` as equivalent to `{}`. Backwards
-  compatible: any v1-conformant Message (which always carries both
-  keys explicitly) remains v1.1-conformant. §7 conformance rules
-  updated accordingly.
-
 ### 1
 
 - Initial draft. Formalizes existing OVOS bus behaviour as a single
