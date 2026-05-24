@@ -31,7 +31,7 @@ open a PR adding it.
 | **Keyword intent / template intent** | The two definition methods — keyword constraints, or sentence templates ([INTENT-3 §2](intent-definition.md)). |
 | **Handler** | The code an intent triggers when its command is recognized ([INTENT-3 §1, §6](intent-definition.md)). |
 | **Intent engine** | A classifier + slot extractor: consumes definitions, identifies the triggered intent ([INTENT-3 §6.2](intent-definition.md)). |
-| **Host** | The intent system that owns the engines and routes match results to handlers ([INTENT-3 §6.1](intent-definition.md)). |
+| **Orchestrator** | The component that coordinates intent matching and dispatch — owns the engines / pipeline plugins and routes match results to handlers ([INTENT-3 §6.1](intent-definition.md)). Distinct from the messagebus (transport) and from individual engines / plugins. |
 | **Registration** | Submitting an intent's definition and handler together, as one unit ([INTENT-3 §6.1](intent-definition.md)). |
 | **Message** | The unit of communication on the bus: a JSON object with `type`, `data`, `context` ([MSG-1 §2](message-object.md)). |
 | **Context** | The assistant-metadata object on a Message; an extensible JSON object whose keys are defined by companion specs ([MSG-1 §2.3](message-object.md)). |
