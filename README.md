@@ -74,8 +74,8 @@ order: OVOS-INTENT-1 defines the template grammar; OVOS-INTENT-2
 builds on it to define the resource files; OVOS-INTENT-3 builds on
 both to define what an intent is. OVOS-MSG-1 is the bus-layer
 envelope and the routing / session model — readable at any point.
-OVOS-PIPELINE-1 is the host-side spec: it defines the utterance
-lifecycle that wraps everything else (transformers, ordered stages,
+OVOS-PIPELINE-1 is the orchestrator-side spec: it defines the utterance
+lifecycle that wraps everything else (ordered stages,
 terminal events) and builds on OVOS-MSG-1.
 
 For background — design rationale, comparisons with other systems,
