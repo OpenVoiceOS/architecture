@@ -161,8 +161,7 @@ refinement**, not a wholesale new abstraction. It:
   handlers;
 - prescribes the **universal `ovos.utterance.handled` end-marker**
   on every terminal path;
-- renames `session.pipeline` → `session.pipeline_stages` and the
-  `mycroft.skill.handler.*` trio → `ovos.intent.handler.*`.
+- renames the `mycroft.skill.handler.*` trio → `ovos.intent.handler.*`.
 
 The current high/medium/low confidence-tier convention is
 **compatible** with PIPELINE-1 and out of scope for the spec.
@@ -352,7 +351,7 @@ reasoning, not the requirement.
   terminal path.** One reserved invariant lets observers count
   turns, route fallbacks, and know "the assistant is idle now"
   without per-stage knowledge.
-- **`session.pipeline_stages` is per-session.** Different
+- **`session.pipeline` is per-session.** Different
   sessions can carry different pipeline configurations — for
   example, a remote-peer session may run a restricted pipeline
   that excludes destructive plugins. This composes with the
@@ -541,7 +540,6 @@ needs no implementation change:
 | Spec | Current | Prescribed | Notes |
 |------|---------|------------|-------|
 | INTENT-3 v1.1 | "host" | "orchestrator" | Editorial; conformance unchanged. |
-| PIPELINE-1 | `session.pipeline` | `session.pipeline_stages` | The current field name is ambiguous; the new name is explicit. |
 | PIPELINE-1 | `mycroft.skill.handler.start` / `.complete` / `.error` | `ovos.intent.handler.start` / `.complete` / `.error` | Renamed into the `ovos.intent.*` namespace for uniformity. Breaks every existing handler-lifecycle observer; the migration cost is real (see §B in PR #11 discussion). |
 
 ### 6.3 Prescriptive shape changes
@@ -610,7 +608,7 @@ needs no implementation change:
 ### 6.6 Things the specs do *not* change
 
 - The session object's internal shape beyond `session_id`,
-  `lang`, and `pipeline_stages` (deferred to a future session
+  `lang`, and `pipeline` (deferred to a future session
   spec).
 - The `mycroft.*` topic prefix outside the intent layer (e.g.
   `mycroft.audio.*`) — these are not part of any spec here.
@@ -678,7 +676,7 @@ number of legacy names. Implementer migration aid:
   prescribes.
 - **A session specification.** MSG-1 §4 carries `session` opaquely
   and names only `session_id` and `lang`; PIPELINE-1 §5 adds
-  `pipeline_stages`. Everything else about the session is
+  `pipeline`. Everything else about the session is
   deferred — session lifecycle (start, end, expiry, resumption),
   the full set of session preferences current OVOS already carries
   (`site_id`, `persona_id`, `time_format`, `date_format`,
