@@ -694,6 +694,15 @@ number of legacy names. Implementer migration aid:
   `remove_context` feature — where one intent's match influences a
   later intent's eligibility — is not formalized at the spec
   level.
+- **The utterance-transformer chain.** Current OVOS runs an
+  ordered chain of *transformers* before the pipeline that can
+  rewrite the utterance, mutate `message.context`, or cancel the
+  utterance entirely (via `context["canceled"] = true`, observed
+  on the bus as `ovos.utterance.cancelled`). PIPELINE-1
+  intentionally **does not** cover this — transformers don't
+  match, don't dispatch, and don't own a handler; their loading,
+  ordering, and contract are a separate concern. A future
+  transformer specification picks this up.
 - **Text normalization of ASR output.** The basis for slot value
   typing (OVOS-INTENT-1 §5.3). Deferred to its own specification.
 - **A machine-checkable conformance corpus** of `template → sample
