@@ -499,14 +499,17 @@ For the avoidance of doubt:
 
 OVOS-MSG-1 §4.3 permits an implementation to **materialize** a
 default session on a derived Message when the source Message had no
-`session`. A materialized default **MUST** set
+`session`. That section permits "any device-local fields the
+implementation chooses"; this specification narrows that permission
+for the field set §3 claims. A materialized default **MUST** set
 `session_id: "default"`. A materialized default **MUST NOT** populate
 the per-component override fields of §3 (`pipeline`, `intent_context`,
 the six `*_transformers`, `blacklisted_skills`, `blacklisted_intents`,
-`blacklisted_pipelines`, `site_id`) — those fields have meaning only when explicitly set by
-the session origin, and a materialized default would falsely
-declare a divergence from deployment defaults that the origin never
-asked for.
+`blacklisted_pipelines`, `site_id`) — those fields have meaning only
+when explicitly set by the session origin, and a materialized default
+would falsely declare a divergence from deployment defaults that the
+origin never asked for. Fields outside the §3 closed set remain
+governed by OVOS-MSG-1 §4.3 alone.
 
 ---
 
