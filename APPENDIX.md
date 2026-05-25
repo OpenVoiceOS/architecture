@@ -376,6 +376,21 @@ reasoning, not the requirement.
   a bus event); CONTEXT-1 names the scopes explicitly and routes
   both through one bus surface (`intent.context.set` / `.unset` /
   `.clear` / `.list`).
+- **Why private is the default.** A skill that calls
+  `ovos.context.set` without specifying `scope` gets a private
+  entry. This optimises for the safer case at the cost of being
+  the less-useful case: the spec's own worked example
+  (Person → Bob) is naturally cross-skill, and a reader might
+  expect shared to be the default. The choice favours migration
+  fidelity (the current Adapt `set_context` pattern is
+  effectively skill-private — keyed under `alphanumeric_skill_id`),
+  the safer footgun direction (a cross-skill leak from an
+  accidentally-shared entry is harder to debug than a
+  cross-skill miss from an accidentally-private entry), and
+  authorability (cross-skill coordination is a conscious decision
+  that deserves an explicit `scope: "shared"`). Skills that
+  routinely act across the skill boundary set the scope
+  explicitly; skills that don't get safety by default.
 - **Prior art for the negative gate.** Three in-tree intent
   engines under `/plugins-pipeline/` —
   [jurebes](https://github.com/OpenJarbas/jurebes),
