@@ -37,8 +37,10 @@ This specification defines:
 - the **pipeline plugin** abstraction (§3) — the only thing the
   orchestrator iterates;
 - the **match contract** (§4) — the only thing a plugin exposes;
-- the **`session.pipeline`** field (§5) — how a session
-  chooses which plugins and in what order;
+- the **session fields owned by this specification** (§5):
+  `session.pipeline` (positive whitelist + ordering),
+  `session.blacklisted_pipelines`, `session.blacklisted_skills`,
+  `session.blacklisted_intents` (negative filters);
 - the **utterance lifecycle** (§6) — entry, iteration, dispatch,
   terminal events;
 - the **dispatch** topic shape (§7) — `<owner_id>:<intent_name>`;
@@ -68,9 +70,9 @@ It does **not** define:
   registrations on the bus; whether and how a given plugin
   subscribes is the plugin's own business.
 - **the `session` lifecycle** — `session` is carried opaquely per
-  OVOS-MSG-1 §4. `session.pipeline` is one internal field
-  this spec prescribes (§5); other internal fields are deferred to
-  a future session specification.
+  OVOS-MSG-1 §4. The session fields this spec owns are listed in §5;
+  other internal fields are owned by other specifications via the
+  OVOS-SESSION-1 §2.1 registry mechanism.
 - **per-plugin behavioural specs** — plugins have no behavioural
   contract beyond §4. A `converse` plugin, a `fallback` plugin, a
   persona plugin, a language-model plugin, a chatbot plugin: each
@@ -235,14 +237,24 @@ it to the dispatched handler.
 
 ---
 
-## 5. `session.pipeline`
+## 5. Session fields owned by this specification
 
-This specification claims **`pipeline`** as a session field per
-OVOS-SESSION-1 §2.1: an array of `pipeline_id` strings, ordered,
-session-scoped, propagating with the session, with the
-deployment-default-fallback absence rule (an omitted, empty, or
-absent `session.pipeline` resolves to the deployment-configured
-default at consumption, per OVOS-SESSION-1 §2.5).
+This specification claims four session fields per OVOS-SESSION-1
+§2.1: one **positive** ordering field (§5.1 `pipeline`) and three
+**negative** filtering fields (§5.2 `blacklisted_pipelines`, §5.3
+`blacklisted_skills`, §5.4 `blacklisted_intents`). All four are
+session-scoped, propagate with the session under OVOS-SESSION-1 §4,
+and follow the deployment-default-fallback absence rule of
+OVOS-SESSION-1 §2.5: an omitted, empty, or absent field resolves at
+consumption to the deployment-configured default.
+
+§5.5 fixes how the positive and negative fields compose when both
+are set; §5.6 is an informative note on layer-2 authorization use.
+
+### 5.1 `session.pipeline`
+
+An ordered array of `pipeline_id` strings naming the plugins this
+session runs, in iteration order.
 
 Example:
 
@@ -281,6 +293,129 @@ Different sessions may carry different `pipeline`. This is how a
 deployment provides different behaviour to different participants —
 for example, a remote-peer session may carry a restricted pipeline
 that excludes destructive plugins.
+
+### 5.2 `session.blacklisted_pipelines`
+
+An unordered array of `pipeline_id` strings the orchestrator
+**MUST NOT** invoke for this session.
+
+`blacklisted_pipelines` exists because `session.pipeline` is a
+positive whitelist — to express "the deployment default, minus the
+LLM plugin" with `pipeline` alone, the session origin would need to
+enumerate the deployment's full default. The denylist lets a session
+origin (typically a layer-2 substrate or a multi-tenant policy
+layer) suppress specific plugins from whatever ordering is in
+effect without knowing what that ordering is.
+
+Filtering is **orchestrator-only**: when the orchestrator iterates
+its effective pipeline (per §5.5), it **MUST** skip any
+`pipeline_id` listed here as if it were not loaded. No `match` call
+is made; no bus event is emitted for the skip. The filtering is
+observable only as a non-invocation.
+
+Unknown `pipeline_id`s in `blacklisted_pipelines` are harmless and
+**MUST NOT** cause the utterance to abort — they simply match
+nothing.
+
+An empty array (`[]`) is an explicit "no pipelines are denied for
+this session" and is **not** equivalent to omission, which falls
+back to the deployment default per OVOS-SESSION-1 §2.5.
+
+### 5.3 `session.blacklisted_skills`
+
+An unordered array of `skill_id` strings (OVOS-INTENT-3) whose
+intents **MUST NOT** be matched for this session.
+
+The contract is **two-tier**:
+
+1. A pipeline plugin **SHOULD NOT** return a `Match` whose
+   `owner_id` (§7.1) is a `skill_id` listed here. A plugin's
+   internal handling of would-match-but-blacklisted candidates is
+   **not specified** — it MAY skip the candidate before scoring,
+   suppress its score below a match threshold, route to a
+   plugin-internal default-handler, or anything else — as long as
+   the returned `Match` does not name a blacklisted skill.
+2. A pipeline plugin that does not implement filtering is **not
+   conformant** with this field. The orchestrator **MUST** therefore
+   act as backstop: after a plugin returns a candidate `Match`, the
+   orchestrator **MUST** check `Match.owner_id` against
+   `blacklisted_skills` and, if listed, **MUST** treat the match as
+   if the plugin had declined — continue iteration to the next
+   plugin per §6.2. No bus event is emitted for backstop filtering;
+   it is observable only as a non-match.
+
+Empty-array semantics match §5.2: `[]` is explicit "none denied"
+and is not equivalent to omission.
+
+### 5.4 `session.blacklisted_intents`
+
+An unordered array of fully-qualified `<owner_id>:<intent_name>`
+strings (the dispatch-topic shape of §7) whose specific intents
+**MUST NOT** be matched for this session.
+
+The contract is identical in shape to §5.3 (two-tier:
+plugin-SHOULD + orchestrator-MUST-backstop), with the comparison
+performed against the candidate `Match`'s dispatch identity
+`<Match.owner_id>:<Match.intent_name>`.
+
+The bare `intent_name` form is **not** accepted in this field.
+`intent_name` is only unique within an owner, so a bare entry would
+silently denylist every same-named intent across every skill and
+every pipeline plugin in the deployment — a sharp footgun. A
+producer **MUST** emit fully-qualified entries; a consumer **MAY**
+reject malformed (non-colon-bearing) entries or **MAY** ignore them
+silently, but **MUST NOT** broaden a bare entry to all owners.
+
+Empty-array semantics match §5.2.
+
+### 5.5 Composition of the positive and negative fields
+
+When more than one of §5.1–§5.4 is set, they compose as follows.
+The orchestrator computes its **effective pipeline** for an
+utterance in this order:
+
+1. Take `session.pipeline` if set and non-empty; otherwise take the
+   deployment-default pipeline ordering.
+2. Remove any `pipeline_id` listed in `session.blacklisted_pipelines`.
+
+The result is the ordered list of `pipeline_id`s the orchestrator
+iterates for this utterance.
+
+`session.blacklisted_skills` and `session.blacklisted_intents` are
+**not** applied at this stage. They apply per-candidate, against
+each `Match` a plugin returns during iteration (§5.3, §5.4).
+
+Two rules follow from this composition:
+
+- An **explicit `session.pipeline`** is authoritative. If the
+  session origin enumerated the plugins it wants, the deployment
+  default is not consulted; `blacklisted_pipelines` still applies
+  to the explicit list, though in practice a session origin that
+  knows the full positive list rarely also needs the negative one.
+- `blacklisted_pipelines` only meaningfully *adds* information when
+  `session.pipeline` is omitted — that is the case it was designed
+  for. The interaction is intentional: positive control wins, and
+  the negative field exists as the ergonomic alternative when the
+  origin lacks the deployment-default knowledge to construct one.
+
+### 5.6 Use under layer-2 substrates (informative)
+
+A layer-2 system (per OVOS-MSG-1 §3.4 / §4.4) that already attaches
+a per-peer session and uses `source` / `destination` for routing
+can use §5.2 / §5.3 / §5.4 as the **authorization surface** for
+multi-tenant deployments: when a remote participant opens a
+session, the layer-2 system populates the denylists from the peer's
+permission grant, and the orchestrator-side enforcement above
+guarantees the policy holds even against non-conformant pipeline
+plugins.
+
+This composes with the single-flip routing model of OVOS-MSG-1 §5
+without orchestrator-side changes: the denylists ride on every
+derived Message through OVOS-SESSION-1 §4 propagation, so no
+per-hop re-authorization is needed. This specification reserves no
+fields for layer-2 authorization beyond the three denylists; the
+broader authorization model is the layer-2 substrate's concern,
+not PIPELINE-1's.
 
 ---
 
