@@ -445,13 +445,14 @@ narrow what the pipeline is allowed to match:
 - `blacklisted_skills` — opaque `skill_id` strings. A pipeline plugin
   **SHOULD NOT** return a `Match` whose `owner_id` (PIPELINE-1 §7.1)
   is a `skill_id` listed here.
-- `blacklisted_intents` — opaque intent identifiers. A pipeline
-  plugin **SHOULD NOT** return a `Match` whose `intent_name` (the
-  right-hand side of the dispatch topic `<owner_id>:<intent_name>`,
-  PIPELINE-1 §7) is listed here. The string shape is the bare
-  `intent_name`; deployments **MAY** also list fully-qualified
-  `<owner_id>:<intent_name>` entries, and a conformant plugin
-  **SHOULD** honour either form.
+- `blacklisted_intents` — fully-qualified `<owner_id>:<intent_name>`
+  strings (PIPELINE-1 §7), matching the dispatch topic shape. A
+  pipeline plugin **SHOULD NOT** return a `Match` whose dispatch
+  identity `<owner_id>:<intent_name>` is listed here. The bare
+  `intent_name` form is **not** accepted: `intent_name` is only
+  unique within an owner, and a bare entry would silently denylist
+  every same-named intent across every skill and pipeline plugin
+  in the deployment.
 
 The fields are **consumed by pipeline plugins**, not by the
 orchestrator alone. A plugin's internal behaviour when a blacklisted
@@ -464,8 +465,8 @@ A pipeline plugin that does not implement filtering is **not
 conformant** with these fields. The orchestrator **MUST** therefore
 act as backstop: after a plugin returns a candidate `Match`, the
 orchestrator **MUST** check `owner_id` against `blacklisted_skills`
-and `intent_name` against `blacklisted_intents` (in both bare and
-`<owner_id>:<intent_name>` forms), and **MUST** treat a filtered
+and the dispatch identity `<owner_id>:<intent_name>` against
+`blacklisted_intents`, and **MUST** treat a filtered
 match as if the plugin had declined (continue iteration to the next
 plugin per PIPELINE-1 §6). No bus event is defined for a backstop
 filtering; the filtering is observable only as a non-match.
