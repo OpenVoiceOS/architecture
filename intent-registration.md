@@ -125,12 +125,28 @@ Three consequences of this model:
 
 ### 3.1 Skills self-identify on every emission
 
-A skill **MUST** set `Message.context["skill_id"]` on **every
-Message it emits**, to its own `skill_id` (OVOS-INTENT-3 §3). This
+A skill **MUST** set `Message.context["skill_id"]` to its own
+`skill_id` (OVOS-INTENT-3 §3) on (a) every Message it originates
+to the bus, and (b) every Message it modifies in place before
+that Message proceeds. Together: whenever the skill's hands have
+been on a Message, `context["skill_id"]` reflects it. This
 applies to registration messages (§§5–8), to handler emissions
 under dispatch (responses, speech, side-effect emissions on other
-topics), and to any other bus traffic the skill originates — there
-is no exemption for any topic.
+topics), and to any other bus traffic the skill originates or
+modifies — there is no exemption for any topic.
+
+**Coexistence with other identity keys.** A Message **MAY** carry
+other component-identity context keys claimed by other
+specifications in addition to `context["skill_id"]` — concretely
+`context["pipeline_id"]` (OVOS-PIPELINE-1 §3.1) and the six
+`<type>_transformer_id` keys (OVOS-TRANSFORM-1 §1.3). The
+derivation rules of OVOS-MSG-1 §5 preserve every such key
+inherited from upstream Messages; this specification does not
+require a skill to strip them, and a consumer **MUST NOT** treat
+the presence of additional identity keys as malformed. Each key
+names a different component in the chain that produced the
+Message. Attribution consumers needing a single owner apply the
+precedence rule of OVOS-CONTEXT-1 §5.2.
 
 `Message.context["skill_id"]` is the **authoritative attribution
 key** for skill-originated bus traffic. It lets observers
@@ -208,9 +224,18 @@ absence-detection rule below.
 The orchestrator and other infrastructure components are not
 bound by this rule — they do not have a `skill_id`. Other
 component types identify themselves through component-specific
-reserved context keys their owning specifications define
-(`pipeline_id`, `transformer_id`, future entry-service identity,
-etc.). The rule above is **specifically a skill discipline**.
+reserved context keys their owning specifications claim — the
+parallel discipline for pipeline plugins is OVOS-PIPELINE-1 §3.1
+(`context["pipeline_id"]`), and for transformers
+OVOS-TRANSFORM-1 §1.3 (the six per-type
+`<type>_transformer_id` keys: `audio_transformer_id`,
+`utterance_transformer_id`, `metadata_transformer_id`,
+`intent_transformer_id`, `dialog_transformer_id`,
+`tts_transformer_id`). Future component types each claim their
+own context key. The rule above is **specifically a skill
+discipline**; the same uniform MUST-stamp-on-originate-or-modify
+shape applies across every component type that claims an
+identity key.
 
 `source` (OVOS-MSG-1 §3.2) is **not** an identity surface for any
 component. It is opaque metadata typically populated by the
