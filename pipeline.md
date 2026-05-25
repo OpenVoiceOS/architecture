@@ -417,9 +417,11 @@ Unknown `pipeline_id`s in `blacklisted_pipelines` are harmless and
 **MUST NOT** cause the utterance to abort — they simply match
 nothing.
 
-An empty array (`[]`) is an explicit "no pipelines are denied for
-this session" and is **not** equivalent to omission, which falls
-back to the deployment default per OVOS-SESSION-1 §2.5.
+An empty array (`[]`) is wire-equivalent to omission: both fall
+back to the deployment default per OVOS-SESSION-1 §2.5. A
+producer with no pipelines to deny **SHOULD** omit the field
+rather than emit `[]`, per the wire-weight guidance of
+OVOS-SESSION-1 §3.4.
 
 ### 5.3 `session.blacklisted_skills`
 
@@ -444,8 +446,9 @@ The contract is **two-tier**:
    plugin per §6.2. No bus event is emitted for backstop filtering;
    it is observable only as a non-match.
 
-Empty-array semantics match §5.2: `[]` is explicit "none denied"
-and is not equivalent to omission.
+Empty-array semantics match §5.2: `[]` is wire-equivalent to
+omission. A producer with no skills to deny **SHOULD** omit the
+field.
 
 ### 5.4 `session.blacklisted_intents`
 
@@ -475,7 +478,8 @@ denylist. A deployment that needs language-scoped denial expresses
 it through a session whose `lang` already narrows the set of
 matchable registrations.
 
-Empty-array semantics match §5.2.
+Empty-array semantics match §5.2: `[]` is wire-equivalent to
+omission. SHOULD-omit when there is nothing to deny.
 
 ### 5.5 Composition: preference, availability, policy
 
