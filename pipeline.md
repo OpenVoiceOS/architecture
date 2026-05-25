@@ -805,7 +805,43 @@ listening to (a configuration bug) **MUST NOT** run the handler
 and **SHOULD** log the discrepancy. The orchestrator does not
 police subscriptions.
 
-### 7.3 In-process equivalence
+### 7.3 Reserved intent_names and dispatch suppression
+
+Other normative specifications **MAY** reserve specific
+`intent_name` values for orchestrator-internal dispatch semantics
+that diverge from §7's "match returns Match → orchestrator
+dispatches" flow. When a specification reserves an intent_name:
+
+- skills and pipelines **MUST NOT** register intents under that
+  name (OVOS-INTENT-4 §6 — registration MUST be rejected by the
+  orchestrator);
+- the orchestrator **MUST** recognise the reservation and apply
+  whatever dispatch-modification rule the reserving specification
+  defines.
+
+The most common modification is **dispatch suppression**: a
+plugin's `match` returns a `Match` whose `intent_name` is the
+reserved value, but the dispatch has *already happened* during
+the plugin's match-phase work, so the orchestrator emits
+`ovos.intent.matched` (§9) and the universal end-marker (§9) but
+**MUST NOT** emit a second `<owner_id>:<intent_name>` dispatch on
+the topic. Suppression scopes strictly to matches whose
+`intent_name` is the reserved value; all other matches dispatch
+normally per §7.
+
+Reservations currently in force:
+
+| Reserved intent_name | Reserving spec | Modification |
+|----------------------|----------------|--------------|
+| `converse` | OVOS-CONVERSE-1 §4.3 | dispatch suppression (the converse plugin has already polled the claimant via the same dispatch topic during match) |
+| `response` | OVOS-CONVERSE-1 §5.2 | dispatch suppression (the orchestrator itself emits the `<owner_id>:response` delivery dispatch directly from the response-mode delivery path) |
+
+A reservation costs namespace and is paid only when the reserving
+specification's dispatch model strictly requires it; this
+specification fixes only the registry mechanism (reservation +
+suppression), not the individual reservations.
+
+### 7.4 In-process equivalence
 
 When the handler-owning component (skill or plugin) runs in the
 same process as the orchestrator, the orchestrator **MAY** invoke
