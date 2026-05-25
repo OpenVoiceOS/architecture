@@ -803,7 +803,30 @@ The spec recognises two handler-owner shapes:
 | Shape | How matches are produced | Identifier roles |
 |-------|--------------------------|------------------|
 | **Plain skill** | Some pipeline plugin (matching engine) consumes the skill's OVOS-INTENT-4 registrations and returns a `Match` whose `owner_id` is the skill's `skill_id`. | `skill_id` only; `pipeline_id` does not apply. |
-| **Pipeline plugin with bundled handlers** (converse, fallback, common-query, persona, OCP, …) | The plugin's own `match` returns a `Match` whose `owner_id` is the plugin's own identity, on an `intent_name` the plugin defines for itself. | `pipeline_id == skill_id` — both names refer to the same identifier. The plugin **MUST NOT** register its bundled-handler intents under OVOS-INTENT-4 (they are not skill registrations and would create a circular dependency through whichever matcher consumes the registry). |
+| **Pipeline plugin with bundled handlers** (fallback, common-query, persona, OCP, …) | The plugin's own `match` returns a `Match` whose `owner_id` is the plugin's own identity, on an `intent_name` the plugin defines for itself. | `pipeline_id == skill_id` — both names refer to the same identifier. The plugin **MUST NOT** register its bundled-handler intents under OVOS-INTENT-4 (they are not skill registrations and would create a circular dependency through whichever matcher consumes the registry). |
+
+The examples in the second row are plugins whose own `match`
+emits matches addressed back to itself. A different shape — a
+**pure-matcher** pipeline plugin (Padatious / Adapt for skill
+intents; the converse plugin of OVOS-CONVERSE-1 for the
+reserved intent_names `converse` / `response`) — is also a
+pipeline plugin per §3 but is **not a handler-owner**: its
+`match` returns matches whose `owner_id` is some *other*
+component's identity. Pure-matcher plugins have only a
+`pipeline_id`; they have no `skill_id` and they own no
+dispatch-handler subscription. §7.0's table only enumerates
+handler-owner shapes (the targets of dispatch); pure-matcher
+plugins live alongside both rows.
+
+A **plain skill** may also handle a reserved-intent-name
+dispatch topic when a companion specification defines one. For
+example, a skill that defines a `converse` method (OVOS-CONVERSE-1
+§9.3) subscribes to `<own_skill_id>:converse` via framework
+convention, not via OVOS-INTENT-4 registration — the reserved
+name is not registrable (§7.3). The plain-skill row above lists
+INTENT-4-registered intents as the *normal* path; reserved
+intent_names handled by framework convention extend it without
+changing the dispatch shape.
 
 The pipeline-plugin-with-handlers case is normative: **if a
 pipeline plugin emits matches whose `owner_id` equals its own
