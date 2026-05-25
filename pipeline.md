@@ -182,22 +182,40 @@ plugin; without this rule that attribution has no wire-level
 source.
 
 **Stamp rule.** A plugin **MUST** set
-`Message.context["pipeline_id"]` to its own identity on:
+`Message.context["pipeline_id"]` to its own identity on **every
+Message it places on the bus** and on every Message it **modifies
+in place** before that Message proceeds. "Places on the bus"
+covers all the ways a plugin can cause a Message to appear on the
+bus:
 
-1. every Message it **originates** to the bus (a fresh emission,
-   not a `forward` / `reply` / `response` derivation); and
-2. every Message it **modifies in place** before that Message
-   proceeds — the act of mutating `Message.context` (or any other
-   field) within the plugin's execution window counts as touching
-   the chain.
+- a fresh emission (the plugin constructs and emits a new
+  Message);
+- a derivation it performs and then emits — `Message.forward(...)`,
+  `Message.reply(...)`, or `Message.response(...)` from a prior
+  Message the plugin received or held (OVOS-MSG-1 §5). The
+  derivation mechanism is irrelevant to the stamp rule: the
+  plugin is the origin of the *resulting* Message-on-wire even
+  when context propagated from upstream, and the resulting
+  Message **MUST** carry `context["pipeline_id"]` set to the
+  plugin's id, overwriting whatever inherited
+  `context["pipeline_id"]` may have been there from an earlier
+  pipeline plugin in a multi-plugin chain.
 
-The two cases together: whenever the plugin's hands have been on
-a Message, `context["pipeline_id"]` reflects it.
+Modify-in-place covers the case where the plugin mutates an
+existing Message (its `context`, its `data`, the session it
+carries — for example, a CONTEXT-1 §5.3 direct mutation) without
+itself causing a fresh emission; the next emitter still propagates
+the modified Message, and `context["pipeline_id"]` must reflect
+the plugin that mutated.
+
+The combined effect: whenever the plugin's hands have been on a
+Message that subsequently appears on the bus, `context["pipeline_id"]`
+reflects it.
 
 **Coexistence with other identity keys.** When a plugin emits via
 `Message.forward` / `.reply` / `.response` (OVOS-MSG-1 §5) from a
 prior Message that already carries `context["skill_id"]` from an
-upstream dispatch (or any of the six `<type>_transformer_id` keys
+upstream dispatch (or any of the six `<type>_transformer_ids` keys
 of OVOS-TRANSFORM-1 §1.3 from upstream transformer stages), the
 inherited keys are preserved by the derivation rule and **not**
 stripped. Each names a different component in the chain that
