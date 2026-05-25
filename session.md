@@ -468,11 +468,42 @@ Sessions carrying every per-component override populated may add
 several hundred bytes to each Message. Because §4 propagates
 `session` across every `forward` / `reply` / `response` derivation,
 the override bytes ride along on every handler emission, on every
-observer notification, on every cross-process hop. Producers **SHOULD
-NOT** populate per-component override fields whose values match the
-deployment default — set them only when the session genuinely diverges
-from the default. Consumers **MUST** tolerate the resulting wire
-weight; this specification places no maximum on session size.
+observer notification, on every cross-process hop. This section
+defines the **canonical wire-weight rule** consumed by every
+other field-claiming specification in the registry.
+
+**Omit-when-wire-equivalent-to-omission.** A producer **SHOULD**
+omit any field whose value is wire-equivalent to omission. Three
+canonical cases:
+
+1. **`session_id == "default"`.** Per §3.1, an omitted `session_id`,
+   an absent `session`, an empty `session: {}`, and an explicit
+   `session_id: "default"` are all wire-equivalent. A producer that
+   intends device-local origin **SHOULD** omit `session_id` (or
+   `session` entirely) rather than emit the reserved string.
+2. **A per-component override field whose value matches the
+   deployment default.** Producers **SHOULD NOT** populate
+   `pipeline`, `intent_context`, the six `*_transformers` lists,
+   `blacklisted_skills`, `blacklisted_intents`,
+   `blacklisted_pipelines`, or `site_id` with a value the consumer
+   would compute as the deployment default anyway. Set them only
+   when the session genuinely diverges from the default.
+3. **An empty array on a list-valued override field.** For every
+   list-valued override field claimed by §3 (and by other specs
+   via the §2.1 registry), an empty array (`[]`) is
+   wire-equivalent to omission: both resolve to the
+   deployment default at consumption (§2.5). A producer
+   **SHOULD** omit the field rather than emit `[]`. This includes
+   the three denylists (`blacklisted_*`), the six
+   `*_transformers` chains, and the `pipeline` ordering.
+
+The rule is **SHOULD**, not **MUST**: a producer that emits a
+redundant default-valued field is non-optimal but conformant. A
+consumer **MUST** tolerate the resulting wire weight; this
+specification places no maximum on session size.
+
+Other specifications claiming session fields via §2.1 inherit
+this rule for the fields they claim — they need not restate it.
 
 ---
 
