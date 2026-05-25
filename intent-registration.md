@@ -126,28 +126,37 @@ Three consequences of this model:
 ### 3.1 Skills self-identify on every emission
 
 A skill **MUST** set `Message.context["skill_id"]` to its own
-`skill_id` (OVOS-INTENT-3 §3) on **every Message it places on the
-bus** and on every Message it **modifies in place** before that
-Message proceeds. "Places on the bus" covers every way a skill
-causes a Message to appear on the bus:
+`skill_id` (OVOS-INTENT-3 §3) on every Message it places on the
+bus by **authorial action** and on every Message it **modifies in
+place** before that Message proceeds. Authorial action covers the
+cases where the skill is asserting itself as the originator of a
+new Message-on-wire:
 
 - a fresh emission (the skill constructs and emits a new
   Message — registration messages of §§5–8, ad-hoc skill-defined
   topics, etc.);
-- a derivation the skill performs and then emits —
-  `Message.forward(...)`, `Message.reply(...)`, or
-  `Message.response(...)` from a prior Message the skill received
-  (OVOS-MSG-1 §5). The most common case is a skill handler under
-  dispatch deriving its `.speak` / `.response` via `.forward`
-  from the dispatch Message: the derivation mechanism is
-  irrelevant to the stamp rule, and the **resulting Message-on-wire
-  MUST carry `context["skill_id"]` set to the skill's id**,
-  overwriting whatever `context["skill_id"]` the upstream
-  dispatch carried if it differs. (The dispatch-stamping rule
-  below means the upstream value will normally already be the
-  skill's own id, so the rule is structurally satisfied for
-  dispatch-derived emissions; it binds explicitly for
-  derivations from non-dispatch sources.)
+- `Message.reply(...)` or `Message.response(...)` (OVOS-MSG-1 §5)
+  derived from a prior Message — these derivations swap routing
+  keys and create a new authorial step. The resulting
+  Message-on-wire **MUST** carry `context["skill_id"]` set to
+  the skill's id, overwriting any differing
+  `context["skill_id"]` carried by the source Message.
+
+A skill handler running under dispatch normally derives its
+`.speak` / `.response` via `.forward` from the dispatch Message;
+the dispatch-stamping rule below means the upstream value is
+already the skill's own id, so propagation alone keeps the
+attribution correct without an extra stamp step.
+
+**Pure-forward propagation is exempt.** `Message.forward(...)`
+(OVOS-MSG-1 §5.1) preserves `context` unchanged by design, and
+the deriving skill is not asserting authorship of the forwarded
+Message-on-wire. A skill that `.forward`s a Message **MUST NOT**
+overwrite an inherited `context["skill_id"]` with its own —
+preserving upstream attribution is the point of the forward
+derivation. If the skill wants to claim authorship of the
+resulting Message (rather than propagate someone else's), it
+**SHOULD** use `.reply` or `.response`, or emit fresh.
 
 Modify-in-place — mutating an existing Message's `context`,
 `data`, or carried session before that Message proceeds — also
@@ -326,11 +335,26 @@ Rejection:
 { "ok": false, "error_code": "malformed_payload", "error": "free-form human-readable detail" }
 ```
 
-Whether to emit a response is a plugin-level decision. A plugin that
-chose to consume a particular registration **MAY** emit `ok: true` on
-success or `ok: false` with a normative `error_code` (§3.4) on
-rejection. A plugin that did **not** consume a registration emits
-nothing.
+A plugin that chose to consume a particular registration:
+
+- **MUST** emit `ok: false` with a normative `error_code` (§3.4)
+  on rejection. Silent rejection is non-conformant — the producer
+  cannot distinguish "rejected by this plugin" from "no plugin
+  consumed it", and rejection always has a structured reason worth
+  surfacing.
+- **SHOULD** emit `ok: true` on success. Silent success is
+  permitted (a plugin that doesn't bother is non-optimal but
+  conformant); consumers building tooling on success-confirmation
+  must use the introspection topics (§10), not absence of
+  response.
+
+A plugin that did **not** consume a registration emits nothing.
+
+The asymmetry is deliberate: rejection carries information a
+producer needs to act on (correct the malformed payload, retry,
+abandon); success carries no actionable information beyond
+"it happened", which §10 introspection answers more reliably than
+per-emission acknowledgement.
 
 Producers (skills) **MUST NOT** require any response and **MUST
 NOT** block waiting for one. A registration that produces no
