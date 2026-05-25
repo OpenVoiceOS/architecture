@@ -47,7 +47,7 @@ This specification defines:
 - the **handler-lifecycle trio** (§8) —
   `ovos.intent.handler.start` / `.complete` / `.error`;
 - the **utterance-layer bus events** (§9) —
-  the utterance entry topic (§9.1, name deferred),
+  the utterance entry topic `ovos.utterance.handle` (§9.1),
   `ovos.intent.matched`, `complete_intent_failure`,
   `ovos.utterance.handled`;
 - **conformance** (§10).
@@ -83,8 +83,8 @@ It does **not** define:
 ## 2. The orchestrator and the pipeline plugin
 
 The **orchestrator** (OVOS-INTENT-3 §6.1) is the logical role that
-consumes the utterance-layer entry topic (§9.1; topic name
-deferred to a future spec), iterates plugins per session, emits
+consumes the utterance-layer entry topic `ovos.utterance.handle`
+(§9.1), iterates plugins per session, emits
 dispatch and terminal events, and guarantees the universal
 end-marker `ovos.utterance.handled`.
 The orchestrator is distinct from the **messagebus** (the transport
@@ -588,7 +588,7 @@ to terminate** with exactly one `ovos.utterance.handled` event
 ### 6.1 The flow
 
 ```
-entry topic                              ← entry (§9.1)
+ovos.utterance.handle                    ← entry (§9.1)
    │
    ├─ session retrieval; effective pipeline composed (§5.5)
    │  (preference → availability → policy)
@@ -881,22 +881,22 @@ This specification formalizes five utterance-layer bus events.
 All travel in standard OVOS-MSG-1 envelopes; routing follows the
 single-flip model of OVOS-MSG-1 §5.2.
 
-### 9.1 The utterance-layer entry point
+### 9.1 The utterance-layer entry point — `ovos.utterance.handle`
 
-The orchestrator subscribes to an **utterance-layer entry-point
-topic** produced by any component that wants to feed an utterance
-into the assistant — a listener, a chat bridge, a CLI, a test
-harness, a remote-peer client. Receiving on this topic kicks off
-the lifecycle of §6.
+The orchestrator subscribes to **`ovos.utterance.handle`**, the
+**utterance-layer entry-point topic** produced by any component
+that wants to feed an utterance into the assistant — a listener,
+a chat bridge, a CLI, a test harness, a remote-peer client.
+Receiving on this topic kicks off the lifecycle of §6.
 
-The **topic name itself is not prescribed by this
-specification**; it is the subject of a separate spec covering
-audio-input ↔ assistant-core wire contracts. Current deployments
-use **`recognizer_loop:utterance`** as the entry topic; a
-conformant orchestrator MAY subscribe to that name for
-compatibility while the entry-point spec is in flight.
+The topic name follows the naming conventions of OVOS-MSG-1 §2.1.2:
+imperative-mood verb (`handle` — a request for the assistant to
+handle this utterance), dot-separated hierarchy, no `:` (which is
+reserved for component-pair dispatch topics), and pairs with the
+past-tense terminal event `ovos.utterance.handled` (§9.5) by
+shared root verb.
 
-Payload shape on the entry topic (current convention):
+Payload shape:
 
 ```json
 {
@@ -910,11 +910,18 @@ Payload shape on the entry topic (current convention):
 | `utterances` | array of strings | yes | One or more candidate utterance strings. |
 | `lang` | string | no | BCP-47 language tag of the utterance. If absent, the orchestrator **MUST** fall back to `session.lang` (OVOS-SESSION-1 §3.2.1) — the session-scoped user-preference signal — and if that too is absent, to the deployment default. The consolidation guidance of OVOS-SESSION-1 §3.2.7 is informative for downstream stages but does not apply to this entry-point field, which has only the two normative sources named here. |
 
-What **is** normative in this specification is the *behaviour
-after entry*: every utterance the orchestrator accepts proceeds
-through §6, terminates with exactly one `ovos.utterance.handled`
-(§9.5), and carries the universal lifecycle obligations of
-§§7–8. The entry topic's exact name and payload shape are not.
+**Migration from `recognizer_loop:utterance`.** Pre-spec
+deployments use the topic name `recognizer_loop:utterance` for
+the same purpose. That name pre-dates the naming conventions of
+OVOS-MSG-1 §2.1.2: it uses `:` as a segment separator (where `:`
+is reserved for `<owner_id>:<intent_name>` dispatch shapes), and
+its leading segment names an implementation role (the audio-input
+"recognizer loop") rather than a stable assistant root. A
+deployment migrating to this specification **SHOULD** emit
+`ovos.utterance.handle` as the canonical entry topic. A
+transitional deployment **MAY** subscribe to both names during
+migration; the legacy topic carries no normative status under
+this specification.
 
 ### 9.2 `ovos.intent.matched`
 
