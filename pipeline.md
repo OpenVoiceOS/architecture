@@ -196,7 +196,7 @@ the Message as malformed and **SHOULD** log the drift.
 
 `Message.context["pipeline_id"]` is the emitter, parallel to the
 `context["skill_id"]` / `data["skill_id"]` distinction of
-OVOS-INTENT-4 §3.1.4. The corresponding payload field — when a
+OVOS-INTENT-4 §3.1. The corresponding payload field — when a
 topic's `data` schema carries `pipeline_id` to identify a *subject*
 of the message rather than its emitter — is owned by that topic's
 spec; a consumer reading `data.pipeline_id` is reading a subject,
