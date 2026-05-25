@@ -58,12 +58,17 @@ The specifications are built bottom-up in three stacks:
 - **The orchestrator stack**: OVOS-PIPELINE-1 defines the
   orchestrator, the pipeline-plugin abstraction, the utterance
   lifecycle, and the handler-lifecycle trio. OVOS-CONTEXT-1
-  defines per-session intent-context state. OVOS-TRANSFORM-1
-  defines the six injection-point transformer chains. The
-  orchestrator stack sits on top of the bus stack (uses MSG-1's
-  envelope and routing, SESSION-1's session carrier) and around
-  the intent stack (intent registrations are one kind of input
-  pipeline plugins consume).
+  defines per-session intent-context state (the **declarative**
+  continuous-dialog primitive). OVOS-CONVERSE-1 defines the
+  active-handler recency stack, the converse plugin role, and
+  the interactive response-collection mechanism (the
+  **imperative** continuous-dialog primitive, complementary to
+  CONTEXT-1 — its §7 fixes the evaluation order between the two
+  surfaces). OVOS-TRANSFORM-1 defines the six injection-point
+  transformer chains. The orchestrator stack sits on top of the
+  bus stack (uses MSG-1's envelope and routing, SESSION-1's
+  session carrier) and around the intent stack (intent
+  registrations are one kind of input pipeline plugins consume).
 
 ### 1.3 Compatibility levels
 
@@ -1449,14 +1454,6 @@ uniformity is in the namespace, not in a fixed depth.
   `time_format`, `date_format`, `system_unit`,
   `tts_preferences`, `location`, …) are deferred to a
   future specification.
-- **A multi-turn conversation specification.** When a skill
-  asks the user a question and waits for the next utterance,
-  the "next utterance belongs to that pending question" link
-  is not formalized today (handled informally by the
-  `converse` plugin type plus skill-side state). MSG-1's
-  async-by-default stance (§3.1.2) leaves room for this to
-  be formalized either in the session spec or as a separate
-  one.
 - **Text normalization of ASR output.** The basis for slot
   value typing (INTENT-1 §5.3). Deferred to its own
   specification.
