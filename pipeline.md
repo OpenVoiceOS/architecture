@@ -265,7 +265,7 @@ behaviour.
 A plugin exposes one operation to the orchestrator:
 
 ```
-match(utterance, session) → Match | None
+match(utterance, lang, session) → Match | None
 ```
 
 Inputs:
@@ -279,6 +279,18 @@ Inputs:
   language. A plugin is free to consider all candidates, only the
   first, or any subset; the orchestrator does not prescribe how
   candidates are weighted.
+- `lang` — the **optional** BCP-47 content-language tag of the
+  utterance, sourced by the orchestrator from `Message.data.lang`
+  of the entry-topic Message (§9.1). **Present only when the
+  producer authoritatively knew the content language; absent
+  otherwise.** The orchestrator **MUST NOT** synthesize a value
+  when `Message.data.lang` is absent — in particular, it
+  **MUST NOT** fall back to `session.lang` or to any per-utterance
+  language signal of OVOS-SESSION-1 §3.2. A plugin that needs a
+  language and receives `lang: None` **MAY** consult `session`
+  for OVOS-SESSION-1 §3.2 signals or apply its own resolution
+  policy — the choice is the plugin's. A plugin that does not
+  need the language ignores the parameter.
 - `session` — the session carrier from `context.session` of the
   utterance Message (OVOS-MSG-1 §4, OVOS-SESSION-1).
 
@@ -598,7 +610,7 @@ ovos.utterance.handle                    ← entry (§9.1)
    │
    ├─ for pipeline_id in effective pipeline:
    │     plugin = loaded_plugins[pipeline_id]     # skip if not loaded
-   │     match = plugin.match(utterance, session)
+   │     match = plugin.match(utterance, lang, session)
    │     if match is not None:
    │         orchestrator-backstop denylist check (§5.3/§5.4)
    │         if filtered:  continue
@@ -908,7 +920,7 @@ Payload shape:
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `utterances` | array of strings | yes | One or more candidate utterance strings. |
-| `lang` | string | no | BCP-47 language tag of the utterance. If absent, the orchestrator **MUST** fall back to `session.lang` (OVOS-SESSION-1 §3.2.1) — the session-scoped user-preference signal — and if that too is absent, to the deployment default. The consolidation guidance of OVOS-SESSION-1 §3.2.7 is informative for downstream stages but does not apply to this entry-point field, which has only the two normative sources named here. |
+| `lang` | string | no | BCP-47 language tag of the utterance. **Present only when the producer authoritatively knows the content language** (e.g. a chat client emitting text it locally typed in `de-DE`, or an audio service emitting text from an STT decoder run in `en-US`). When absent, the content language is **not authoritatively known**; the orchestrator **MUST NOT** synthesize a value (in particular, **MUST NOT** fall back to `session.lang` or any per-utterance language signal of OVOS-SESSION-1 §3.2). The absence is propagated through to consumers (pipeline plugins, transformers, skills), each of which decides how to resolve language per its own policy — typically by consulting OVOS-SESSION-1 §3.2 signals (user preference, lang-detect signals) and applying its stage-appropriate consolidation. |
 
 `ovos.utterance.handle` is the only entry topic name this
 specification recognizes. A conformant orchestrator subscribes to
@@ -1102,7 +1114,7 @@ from the hosting process.
 
 ### A **pipeline plugin** **MUST**:
 
-- expose a `match(utterance, session) → Match | None` operation
+- expose a `match(utterance, lang, session) → Match | None` operation
   (§4);
 - be **side-effect-free during `match`** (§4.2) — no Messages
   emitted, no state changed beyond what is needed to decide;
