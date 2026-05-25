@@ -303,6 +303,7 @@ fields below.
 |-------|------|----------|---------|
 | `owner_id` | string | yes | The `skill_id` of the skill that owns the handler, **or** the `pipeline_id` of the plugin itself if the plugin bundles its own handler. |
 | `intent_name` | string | yes | An opaque non-empty string that, together with `owner_id`, names the handler to invoke. For skill-owned matches this is the intent name the skill registered. For plugin-owned matches this is whatever label the plugin chose for this response. |
+| `lang` | string | no | The BCP-47 language tag the match was performed against. When the plugin received a non-`None` `lang` parameter (§4), this is typically that value (the plugin matched in the language the caller declared). A plugin that determined the language by other means (a multilingual matcher, a content-language-detecting matcher, a hard-coded engine) **MAY** set `lang` to whatever value reflects the language of the match. Absent when the plugin does not commit to a language — for example, a fallback plugin matching on language-independent rules. Downstream stages (intent-transformer chain per OVOS-TRANSFORM-1 §3.4, handlers under dispatch) treat `Match.lang` as authoritative for the match's language. |
 | `captures` | object (string→string) | yes | The capture map (§4.3). MAY be empty. |
 | `utterance` | string | no | The specific candidate string from the input list that won the match. |
 
@@ -655,6 +656,16 @@ Pseudocode is informative; normative rules are in §§4–9.
 
 For each utterance, the orchestrator **MUST**:
 
+- run the utterance-transformer and metadata-transformer chains
+  (OVOS-TRANSFORM-1 §3.2, §3.3) before pipeline iteration begins;
+- if the utterance-transformer chain returns an **empty
+  utterance list**, skip pipeline iteration entirely and proceed
+  directly to `complete_intent_failure` (§9.3) — `match()` is
+  contractually defined over a non-empty list (§4) and the
+  orchestrator **MUST NOT** invoke any plugin with an empty
+  list. (If the empty list arrived together with cancellation
+  context per OVOS-TRANSFORM-1 §8.1, the cancellation terminal
+  path of §8.2 there takes precedence over no-match here.)
 - iterate `session.pipeline` in order;
 - for each `pipeline_id`, call `match` on the corresponding loaded
   plugin (skipping unknown identifiers, §5);
@@ -696,13 +707,14 @@ keyed on `session.session_id` (per OVOS-MSG-1 §5.4 —
 
 ### 6.4 Terminal events
 
-Every utterance terminates in exactly one of two ways, each
+Every utterance terminates in exactly one of three ways, each
 followed by the universal end-marker `ovos.utterance.handled`:
 
 | Outcome | Sequence of utterance-layer events |
 |---------|------------------------------------|
 | Matched by a plugin | `ovos.intent.matched` → dispatch + (handler trio §8) → `ovos.utterance.handled` |
 | No plugin matched | `complete_intent_failure` → `ovos.utterance.handled` |
+| Cancelled by a transformer | `ovos.utterance.cancelled` → `ovos.utterance.handled` (see OVOS-TRANSFORM-1 §8.2) |
 
 If a dispatched handler emits `ovos.intent.handler.error` (§8)
 instead of `.complete`, the orchestrator still emits
@@ -1091,9 +1103,8 @@ from the hosting process.
 
 ### An **orchestrator** **MUST**:
 
-- subscribe to the utterance-layer entry topic (§9.1) — name
-  deferred to a future spec; current deployments use
-  `recognizer_loop:utterance`;
+- subscribe to the utterance-layer entry topic
+  `ovos.utterance.handle` (§9.1);
 - run every received utterance through the lifecycle of §6
   exactly once;
 - emit `ovos.utterance.handled` (§9.5) exactly once per
