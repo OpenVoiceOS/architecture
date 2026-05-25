@@ -181,26 +181,27 @@ attribute a plugin-emitted `ovos.context.set` to its owning
 plugin; without this rule that attribution has no wire-level
 source.
 
-Reserved-key precedence: when a plugin emits via
+Reserved-key coexistence: when a plugin emits via
 `Message.forward` / `.reply` / `.response` (OVOS-MSG-1 §5) from a
-prior Message that already carries `context["skill_id"]` (a
-dispatch the plugin matched but bundles its own handler for, for
-example), the plugin **MUST** ensure the outbound Message carries
-`context["pipeline_id"]` set to its own identity and **MUST NOT**
-leave the inherited `context["skill_id"]` in place. The two keys
-identify different component types and **MUST NOT** appear together
-on the same Message: a Message carries exactly one of
-`context["skill_id"]` (skill-originated) or `context["pipeline_id"]`
-(plugin-originated). A consumer that observes both **SHOULD** treat
-the Message as malformed and **SHOULD** log the drift.
+prior Message that already carries `context["skill_id"]` from an
+upstream dispatch, the inherited `context["skill_id"]` is
+preserved by the derivation rule and is **not** stripped — it
+remains a valid attribution of the upstream dispatch this emission
+flows from. The plugin additionally stamps `context["pipeline_id"]`
+with its own identity. The two keys may legitimately coexist on
+the same Message: each names a different component in the chain
+that produced it. Attribution consumers (CONTEXT-1 §5.2, audit /
+telemetry observers) apply a precedence — most-specific identity
+wins — to pick one when they need to attribute a single emitter
+(see CONTEXT-1 §5.2).
 
-`Message.context["pipeline_id"]` is the emitter, parallel to the
-`context["skill_id"]` / `data["skill_id"]` distinction of
-OVOS-INTENT-4 §3.1. The corresponding payload field — when a
-topic's `data` schema carries `pipeline_id` to identify a *subject*
-of the message rather than its emitter — is owned by that topic's
-spec; a consumer reading `data.pipeline_id` is reading a subject,
-not an emitter.
+`Message.context["pipeline_id"]` is the plugin's **self-attribution**.
+Mirroring the `context["skill_id"]` / `data["skill_id"]` distinction
+of OVOS-INTENT-4 §3.1, a topic's `data` schema may also carry
+`pipeline_id` as the **subject** of the message (the plugin a
+query is filtered against, the plugin being described, etc.); a
+consumer reading `data.pipeline_id` is reading a subject, not a
+self-attribution.
 
 #### Orchestrator-side enforcement
 
