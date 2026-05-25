@@ -203,9 +203,10 @@ everything else is owned by the cited specification.
 | `intent_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
 | `dialog_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
 | `tts_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
-| `blacklisted_skills` | array of string | §3.3 (this spec) |
-| `blacklisted_intents` | array of string | §3.3 (this spec) |
-| `site_id` | string | §3.4 (this spec) |
+| `blacklisted_skills` | array of string | OVOS-PIPELINE-1 §5 |
+| `blacklisted_intents` | array of string | OVOS-PIPELINE-1 §5 |
+| `blacklisted_pipelines` | array of string | OVOS-PIPELINE-1 §5 |
+| `site_id` | string | §3.3 (this spec) |
 
 Every field above is OPTIONAL on the wire. A producer that sets a
 field **MUST** use the wire type listed and the value space defined
@@ -437,74 +438,7 @@ A consumer that needs the payload's content language reads
 `data.lang` directly; it **MUST NOT** assume `data.lang` equals
 `session.lang` or any other session-level signal.
 
-### 3.3 Negative pipeline filters
-
-Two array-of-string fields express **per-session denylists** that
-narrow what the pipeline is allowed to match:
-
-- `blacklisted_skills` — opaque `skill_id` strings. A pipeline plugin
-  **SHOULD NOT** return a `Match` whose `owner_id` (PIPELINE-1 §7.1)
-  is a `skill_id` listed here.
-- `blacklisted_intents` — fully-qualified `<owner_id>:<intent_name>`
-  strings (PIPELINE-1 §7), matching the dispatch topic shape. A
-  pipeline plugin **SHOULD NOT** return a `Match` whose dispatch
-  identity `<owner_id>:<intent_name>` is listed here. The bare
-  `intent_name` form is **not** accepted: `intent_name` is only
-  unique within an owner, and a bare entry would silently denylist
-  every same-named intent across every skill and pipeline plugin
-  in the deployment.
-
-The fields are **consumed by pipeline plugins**, not by the
-orchestrator alone. A plugin's internal behaviour when a blacklisted
-candidate *would otherwise* match is **not specified**: it MAY skip
-the candidate, suppress its score before ranking, route to a
-plugin-internal default-handler, or anything else — as long as the
-returned `Match` does not name a blacklisted skill or intent.
-
-A pipeline plugin that does not implement filtering is **not
-conformant** with these fields. The orchestrator **MUST** therefore
-act as backstop: after a plugin returns a candidate `Match`, the
-orchestrator **MUST** check `owner_id` against `blacklisted_skills`
-and the dispatch identity `<owner_id>:<intent_name>` against
-`blacklisted_intents`, and **MUST** treat a filtered
-match as if the plugin had declined (continue iteration to the next
-plugin per PIPELINE-1 §6). No bus event is defined for a backstop
-filtering; the filtering is observable only as a non-match.
-
-Both fields are session-scoped overrides. A deployment may also carry
-default denylists in its configuration — those are deployment
-concerns, not part of the wire contract. When the session carries the
-field, the session value is authoritative for the duration of the
-session.
-
-Either field MAY be empty (`[]`). An empty array is **not** equivalent
-to omission: an empty array is an explicit "no skills/intents are
-denied for this session", while omission falls back to the deployment
-default (§2.5).
-
-Identifier strings are opaque to this specification (subject to the
-identifier constraints of OVOS-MSG-1 §2.1.1 for any string that may
-appear as a topic component). The specs that own the namespaces —
-INTENT-3 / INTENT-4 for `skill_id` and `intent_name` — fix their
-respective value spaces.
-
-**Use under layer-2 substrates (informative).** A layer-2 system
-(per OVOS-MSG-1 §3.4 / §4.4) that already attaches a per-peer
-session and uses `source` / `destination` for routing can use
-`blacklisted_skills` / `blacklisted_intents` as the **authorization
-surface** for multi-tenant deployments: when a remote participant
-opens a session, the layer-2 system populates the session denylists
-from the peer's permission grant, and the orchestrator backstop
-above guarantees the policy is enforced even against non-conformant
-pipeline plugins. This composes with the single-flip routing model
-(OVOS-MSG-1 §5) without orchestrator-side changes: the denylists
-ride on every derived Message through §4 propagation, so no per-hop
-re-authorization is needed. This specification reserves no fields
-for layer-2 authorization beyond the two denylists; the broader
-authorization model is the layer-2 substrate's concern, not
-SESSION-1's.
-
-### 3.4 `site_id`
+### 3.3 `site_id`
 
 `site_id` is an **opaque group identifier** for the session.
 Semantically it names a group the session belongs to; the grouping
@@ -523,12 +457,12 @@ Constraints:
   structure to `site_id` beyond string equality.
 - **No reserved value.** Unlike `session_id`, no specific string
   value carries spec-defined meaning. In particular, the value
-  `"unknown"` (used by current OVOS code as a placeholder) carries
-  no normative meaning under this specification.
+  `"unknown"` — a value some implementations use as a placeholder —
+  carries no normative meaning under this specification.
 - **Session-scoped.** Like every other field in §3, `site_id`
   propagates per §4 and is not derived per-message.
 
-### 3.5 Wire weight
+### 3.4 Wire weight
 
 Sessions carrying every per-component override populated may add
 several hundred bytes to each Message. Because §4 propagates
@@ -569,7 +503,7 @@ default session on a derived Message when the source Message had no
 `session_id: "default"`. A materialized default **MUST NOT** populate
 the per-component override fields of §3 (`pipeline`, `intent_context`,
 the six `*_transformers`, `blacklisted_skills`, `blacklisted_intents`,
-`site_id`) — those fields have meaning only when explicitly set by
+`blacklisted_pipelines`, `site_id`) — those fields have meaning only when explicitly set by
 the session origin, and a materialized default would falsely
 declare a divergence from deployment defaults that the origin never
 asked for.
