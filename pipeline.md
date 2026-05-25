@@ -253,8 +253,16 @@ are set; §5.6 is an informative note on layer-2 authorization use.
 
 ### 5.1 `session.pipeline`
 
-An ordered array of `pipeline_id` strings naming the plugins this
-session runs, in iteration order.
+An ordered array of `pipeline_id` strings expressing the **session
+origin's preference** for which plugins to run and in what order.
+It is a preference, not an authorization: the orchestrator narrows
+the requested list to what is loaded (below) and what policy permits
+(§5.5).
+
+Any session — local, remote, layer-2-attached, programmatic — MAY
+populate `session.pipeline` to request a specific ordering. The
+orchestrator does not interpret who set it; the field is a
+preference channel.
 
 Example:
 
@@ -262,10 +270,10 @@ Example:
 {
   "session": {
     "pipeline": [
-      "padatious-high",
-      "adapt-high",
-      "padatious-medium",
-      "adapt-medium",
+      "template-high",
+      "keyword-high",
+      "template-medium",
+      "keyword-medium",
       "common-qa",
       "persona-high",
       "fallback-low"
@@ -285,27 +293,31 @@ merely because one identifier is unknown — the remaining known
 identifiers are the effective ordered set.
 
 If `session.pipeline` is absent or empty (per OVOS-SESSION-1 §2.5),
-the orchestrator falls back to the deployment-configured default
-pipeline. If no default is configured, the utterance proceeds to
-no-match (`complete_intent_failure`, §9.3).
+the orchestrator falls back to the **default-session pipeline**: the
+pipeline configured for the reserved `session_id == "default"`
+session (OVOS-SESSION-1 §3.1). The default-session pipeline is owned
+and maintained by the orchestrator and represents what the
+deployment runs when no preference is expressed. If the default
+session itself has no `pipeline` configured, the utterance proceeds
+to no-match (`complete_intent_failure`, §9.3).
 
 Different sessions may carry different `pipeline`. This is how a
-deployment provides different behaviour to different participants —
-for example, a remote-peer session may carry a restricted pipeline
-that excludes destructive plugins.
+session origin expresses different preferences for different
+participants — for example, a remote-peer session may request a
+restricted pipeline tailored to that participant's needs. Whether
+that preference is honoured is a policy decision (§5.5).
 
 ### 5.2 `session.blacklisted_pipelines`
 
 An unordered array of `pipeline_id` strings the orchestrator
 **MUST NOT** invoke for this session.
 
-`blacklisted_pipelines` exists because `session.pipeline` is a
-positive whitelist — to express "the deployment default, minus the
-LLM plugin" with `pipeline` alone, the session origin would need to
-enumerate the deployment's full default. The denylist lets a session
-origin (typically a layer-2 substrate or a multi-tenant policy
-layer) suppress specific plugins from whatever ordering is in
-effect without knowing what that ordering is.
+`blacklisted_pipelines` is the **policy channel** for pipeline
+selection. Where `session.pipeline` (§5.1) is the session origin's
+preference, `blacklisted_pipelines` is enforcement: a plugin listed
+here **MUST NOT** be invoked for this session **even if the same
+`pipeline_id` is requested in `session.pipeline`**. Policy overrides
+preference (§5.5).
 
 Filtering is **orchestrator-only**: when the orchestrator iterates
 its effective pipeline (per §5.5), it **MUST** skip any
@@ -368,54 +380,93 @@ silently, but **MUST NOT** broaden a bare entry to all owners.
 
 Empty-array semantics match §5.2.
 
-### 5.5 Composition of the positive and negative fields
+### 5.5 Composition: preference, availability, policy
 
-When more than one of §5.1–§5.4 is set, they compose as follows.
-The orchestrator computes its **effective pipeline** for an
-utterance in this order:
+The four fields layer in a fixed order: a **preference** stage
+(§5.1), an **availability** stage (the loaded-plugin set), and a
+**policy** stage (§5.2 / §5.3 / §5.4). Each later stage may narrow
+the result of the earlier ones; no later stage adds anything an
+earlier stage rejected.
 
-1. Take `session.pipeline` if set and non-empty; otherwise take the
-   deployment-default pipeline ordering.
-2. Remove any `pipeline_id` listed in `session.blacklisted_pipelines`.
+The orchestrator computes the **effective pipeline** for an
+utterance:
+
+1. **Preference.** Start from `session.pipeline` if set and
+   non-empty; otherwise start from the default-session pipeline
+   (§5.1).
+2. **Availability.** Drop any `pipeline_id` that does not
+   correspond to a plugin loaded by the orchestrator. Unknown
+   identifiers do not abort the utterance and do not trigger
+   fallback to the default-session pipeline — the remaining known
+   identifiers are the effective ordered set (§5.1).
+3. **Policy.** Drop any `pipeline_id` listed in
+   `session.blacklisted_pipelines`, even if it was explicitly
+   requested in step 1. Policy overrides preference.
 
 The result is the ordered list of `pipeline_id`s the orchestrator
 iterates for this utterance.
 
 `session.blacklisted_skills` and `session.blacklisted_intents` are
-**not** applied at this stage. They apply per-candidate, against
-each `Match` a plugin returns during iteration (§5.3, §5.4).
+**not** applied at this stage. They are per-candidate policy filters
+applied during iteration against each `Match` a plugin returns
+(§5.3, §5.4). The two-tier shape (plugin SHOULD, orchestrator MUST
+backstop) ensures policy enforcement regardless of plugin
+conformance.
 
-Two rules follow from this composition:
+The intended separation of concerns is sharp:
 
-- An **explicit `session.pipeline`** is authoritative. If the
-  session origin enumerated the plugins it wants, the deployment
-  default is not consulted; `blacklisted_pipelines` still applies
-  to the explicit list, though in practice a session origin that
-  knows the full positive list rarely also needs the negative one.
-- `blacklisted_pipelines` only meaningfully *adds* information when
-  `session.pipeline` is omitted — that is the case it was designed
-  for. The interaction is intentional: positive control wins, and
-  the negative field exists as the ergonomic alternative when the
-  origin lacks the deployment-default knowledge to construct one.
+- **Any session origin — including the participant on the user
+  side of the bus — MAY request a preferred pipeline via
+  `session.pipeline`.** This is a request channel, available to
+  every emitter without authorization.
+- **Only policy** (the denylists, typically populated by the
+  orchestrator owner or by a layer-2 substrate that owns the
+  session, see §5.6) can refuse a request. Policy is enforcement;
+  preference is request. The two fields are layered, not
+  alternatives.
+
+If every requested `pipeline_id` is dropped by availability or
+policy, the effective pipeline is empty and the utterance proceeds
+directly to no-match (`complete_intent_failure`, §9.3). The
+orchestrator **MUST NOT** silently fall back to the default-session
+pipeline in this case — falling back would let a policy-rejected
+preference pull in a different ordering the origin never asked for
+and policy never approved.
 
 ### 5.6 Use under layer-2 substrates (informative)
 
-A layer-2 system (per OVOS-MSG-1 §3.4 / §4.4) that already attaches
-a per-peer session and uses `source` / `destination` for routing
-can use §5.2 / §5.3 / §5.4 as the **authorization surface** for
-multi-tenant deployments: when a remote participant opens a
-session, the layer-2 system populates the denylists from the peer's
-permission grant, and the orchestrator-side enforcement above
-guarantees the policy holds even against non-conformant pipeline
-plugins.
+The §5.5 layering — preference from any origin, enforcement from
+policy — is precisely what a layer-2 substrate (per OVOS-MSG-1
+§3.4 / §4.4) needs to express **granular per-peer permissions** in
+a multi-tenant deployment, without inventing a separate
+authorization channel.
 
-This composes with the single-flip routing model of OVOS-MSG-1 §5
-without orchestrator-side changes: the denylists ride on every
-derived Message through OVOS-SESSION-1 §4 propagation, so no
-per-hop re-authorization is needed. This specification reserves no
-fields for layer-2 authorization beyond the three denylists; the
-broader authorization model is the layer-2 substrate's concern,
-not PIPELINE-1's.
+The intended split:
+
+- A **client** (the participant on the user side of the bus —
+  local device, remote peer, satellite, programmatic caller) sets
+  `session.pipeline` to request what it would *like* to run.
+  Clients are not trusted to grant themselves capabilities; they
+  are only stating a preference.
+- A **layer-2 substrate** that owns the session (typically because
+  it attached the per-peer session at connection time) populates
+  `session.blacklisted_pipelines`, `session.blacklisted_skills`,
+  and `session.blacklisted_intents` from the peer's permission
+  grant. These ride on every derived Message through OVOS-SESSION-1
+  §4 propagation, so no per-hop re-authorization is needed and no
+  orchestrator-side change is required to add authorization.
+
+The orchestrator enforces the intersection: §5.5 step 3 drops
+disallowed pipelines from the request; §5.3 / §5.4 drop disallowed
+matches per candidate. A client that requests a forbidden plugin or
+intent simply gets no result for that part of its request — its
+preference is silently narrowed, exactly as if the plugin were not
+loaded.
+
+This specification reserves no fields for layer-2 authorization
+beyond the three denylists; the broader authorization model
+(identity verification, peer-to-grant binding, revocation,
+auditing) is the layer-2 substrate's concern, not PIPELINE-1's.
 
 ---
 
@@ -723,7 +774,7 @@ plugin's id:
   "lang": "en-US",
   "utterance": "play the beatles",
   "captures": { "query": "the beatles" },
-  "pipeline_id": "padatious-high"
+  "pipeline_id": "template-high"
 }
 ```
 
@@ -803,7 +854,7 @@ The plugin **MUST** reply with the currently-loaded intent set:
 
 ```json
 {
-  "pipeline_id": "padatious-high",
+  "pipeline_id": "template-high",
   "intents": [
     {
       "intent_name": "play_music",
