@@ -163,6 +163,63 @@ multiple matching modes (for example, a strict mode and a
 permissive mode). The orchestrator treats each `pipeline_id` as a
 distinct stage.
 
+### 3.1 Plugin self-identification on emission
+
+A pipeline plugin **MUST** set `Message.context["pipeline_id"]` on
+**every Message it emits to the bus**, to its own `pipeline_id`.
+This is the plugin-side analogue of the skill rule in
+OVOS-INTENT-4 §3.1: it makes plugin-originated traffic
+attributable to its emitter without parsing topic names or `data`
+payloads.
+
+The rule binds independent of the topic. It applies to bus events
+a plugin emits on its own initiative (background telemetry,
+diagnostics, plugin-defined topics), and — crucially for downstream
+specs — to events on shared topics owned by other specifications.
+For example, OVOS-CONTEXT-1 §5.2 reads `context["pipeline_id"]` to
+attribute a plugin-emitted `ovos.context.set` to its owning
+plugin; without this rule that attribution has no wire-level
+source.
+
+Reserved-key precedence: when a plugin emits via
+`Message.forward` / `.reply` / `.response` (OVOS-MSG-1 §5) from a
+prior Message that already carries `context["skill_id"]` (a
+dispatch the plugin matched but bundles its own handler for, for
+example), the plugin **MUST** ensure the outbound Message carries
+`context["pipeline_id"]` set to its own identity and **MUST NOT**
+leave the inherited `context["skill_id"]` in place. The two keys
+identify different component types and **MUST NOT** appear together
+on the same Message: a Message carries exactly one of
+`context["skill_id"]` (skill-originated) or `context["pipeline_id"]`
+(plugin-originated). A consumer that observes both **SHOULD** treat
+the Message as malformed and **SHOULD** log the drift.
+
+`Message.context["pipeline_id"]` is the emitter, parallel to the
+`context["skill_id"]` / `data["skill_id"]` distinction of
+OVOS-INTENT-4 §3.1.4. The corresponding payload field — when a
+topic's `data` schema carries `pipeline_id` to identify a *subject*
+of the message rather than its emitter — is owned by that topic's
+spec; a consumer reading `data.pipeline_id` is reading a subject,
+not an emitter.
+
+#### Orchestrator-side enforcement
+
+The orchestrator (or any component that loads pipeline plugins)
+**SHOULD** intercept / decorate the plugin's emit pathway at load
+time so non-compliant plugin code cannot emit a Message that lacks
+or misstates `context["pipeline_id"]`. This places the discipline
+on the plugin-loading infrastructure rather than on every plugin
+author, mirroring the skill-loader enforcement of OVOS-INTENT-4
+§3.1.
+
+A consumer that needs to attribute a plugin-emitted Message
+**MUST** read `context["pipeline_id"]` — it **MUST NOT** infer the
+plugin from `source`, `data` fields, or topic name. A Message
+without `context["pipeline_id"]` arriving on a topic that requires
+plugin attribution (per the topic's owning spec) is malformed at
+that topic's layer; the topic's spec defines the rejection
+behaviour.
+
 ---
 
 ## 4. The match contract
@@ -377,6 +434,15 @@ every pipeline plugin in the deployment — a sharp footgun. A
 producer **MUST** emit fully-qualified entries; a consumer **MAY**
 reject malformed (non-colon-bearing) entries or **MAY** ignore them
 silently, but **MUST NOT** broaden a bare entry to all owners.
+
+Entries are **language-agnostic.** OVOS-INTENT-4 §3.2 keys intent
+identity on the triple `(skill_id, intent_name, lang)`, so a single
+intent registered for `en-US` and `de-DE` is two separate
+registrations. A `blacklisted_intents` entry
+`<owner_id>:<intent_name>` denies both — there is no per-language
+denylist. A deployment that needs language-scoped denial expresses
+it through a session whose `lang` already narrows the set of
+matchable registrations.
 
 Empty-array semantics match §5.2.
 
@@ -750,7 +816,7 @@ Payload shape on the entry topic (current convention):
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `utterances` | array of strings | yes | One or more candidate utterance strings. |
-| `lang` | string | no | BCP-47 language tag of the utterance. If absent, the orchestrator falls back per OVOS-SESSION-1 §3.2. |
+| `lang` | string | no | BCP-47 language tag of the utterance. If absent, the orchestrator **MUST** fall back to `session.lang` (OVOS-SESSION-1 §3.2.1) — the session-scoped user-preference signal — and if that too is absent, to the deployment default. The consolidation guidance of OVOS-SESSION-1 §3.2.7 is informative for downstream stages but does not apply to this entry-point field, which has only the two normative sources named here. |
 
 What **is** normative in this specification is the *behaviour
 after entry*: every utterance the orchestrator accepts proceeds
