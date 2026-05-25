@@ -301,7 +301,7 @@ fields below.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `owner_id` | string | yes | The identifier of the handler-owner — a `skill_id`, a `pipeline_id`, or (for a hybrid plugin-skill per §7.0) an identifier that is **both** a `skill_id` and a `pipeline_id` (the two roles share one identifier). The orchestrator interprets `<owner_id>` uniformly across the three shapes; the dispatch topic shape is the same. |
+| `owner_id` | string | yes | The handler-owner's identity — the `skill_id` of the dispatched handler. For a pipeline plugin with bundled handlers, this is the plugin's identity, which is **the same identifier** as its `pipeline_id` (§7.0). The dispatch topic shape `<owner_id>:<intent_name>` is uniform across both handler-owner shapes. |
 | `intent_name` | string | yes | An opaque non-empty string that, together with `owner_id`, names the handler to invoke. For skill-owned matches this is the intent name the skill registered. For plugin-owned matches this is whatever label the plugin chose for this response. |
 | `lang` | string | no | The BCP-47 language tag the match was performed against. When the plugin received a non-`None` `lang` parameter (§4), this is typically that value (the plugin matched in the language the caller declared). A plugin that determined the language by other means (a multilingual matcher, a content-language-detecting matcher, a hard-coded engine) **MAY** set `lang` to whatever value reflects the language of the match. Absent when the plugin does not commit to a language — for example, a fallback plugin matching on language-independent rules. Downstream stages (intent-transformer chain per OVOS-TRANSFORM-1 §3.4, handlers under dispatch) treat `Match.lang` as authoritative for the match's language. |
 | `captures` | object (string→string) | yes | The capture map (§4.3). MAY be empty. |
@@ -789,33 +789,46 @@ is unambiguous.
 ### 7.0 Identifier polymorphism — `<owner_id>` is one identifier
 
 `<owner_id>` names the **handler-owner** of the matched intent.
-It is a single identifier string, used identically on the
-dispatch topic regardless of whether the handler is owned by a
-plain skill, a plain pipeline plugin, or a pipeline plugin that
-also registers intents.
+It is a single identifier string used identically on the
+dispatch topic regardless of whether the handler-owner is a
+plain skill or a pipeline plugin that owns its own handlers.
 
-The spec recognises three component shapes that own dispatched
-handlers:
+Conceptually, `skill_id` is the **voice-application identity** —
+the identity of whatever component the dispatch lands on.
+`pipeline_id` is the **matching-engine identity** — the identity
+of a component loaded as a pipeline plugin under §3.
 
-| Component shape | Registers intents under OVOS-INTENT-4 | Loaded as pipeline plugin under §3 | Identifier role |
-|-----------------|---------------------------------------|------------------------------------|-----------------|
-| **Plain skill** | yes | no | identifier is the `skill_id`; `pipeline_id` does not apply |
-| **Plain pipeline plugin** (matches only; no bundled handler) | no | yes | identifier is the `pipeline_id`; no dispatch lands on it |
-| **Plain pipeline plugin with bundled handler** (e.g., fallback, persona) | no | yes | identifier is the `pipeline_id`; dispatch lands on `<pipeline_id>:<intent_name>` |
-| **Hybrid plugin-skill** (matches AND registers intents AND handles them) | yes | yes | **identifier is shared: `pipeline_id == skill_id`**, both equal to the single `<owner_id>` |
+The spec recognises two handler-owner shapes:
 
-The hybrid case is normative: **if a pipeline plugin registers
-any intent under OVOS-INTENT-4, that plugin's `pipeline_id` MUST
-equal its `skill_id`** — they are the same identifier under two
-roles, not two identifiers that happen to coincide. The
-identifier `<owner_id>` carries both meanings (matching engine
-identity and handler-owner identity) for hybrid components.
+| Shape | How matches are produced | Identifier roles |
+|-------|--------------------------|------------------|
+| **Plain skill** | Some pipeline plugin (matching engine) consumes the skill's OVOS-INTENT-4 registrations and returns a `Match` whose `owner_id` is the skill's `skill_id`. | `skill_id` only; `pipeline_id` does not apply. |
+| **Pipeline plugin with bundled handlers** (converse, fallback, common-query, persona, OCP, …) | The plugin's own `match` returns a `Match` whose `owner_id` is the plugin's own identity, on an `intent_name` the plugin defines for itself. | `pipeline_id == skill_id` — both names refer to the same identifier. The plugin **MUST NOT** register its bundled-handler intents under OVOS-INTENT-4 (they are not skill registrations and would create a circular dependency through whichever matcher consumes the registry). |
 
-Conceptually, `skill_id` names the **voice application**
-(handler-owner, user-facing); `pipeline_id` names the **matching
-engine** (orchestrator-facing). A component that is both
-(persona, common-query, OCP, converse) carries one identifier
-that fills both roles.
+The pipeline-plugin-with-handlers case is normative: **if a
+pipeline plugin emits matches whose `owner_id` equals its own
+`pipeline_id`, that identifier is also its `skill_id`** for the
+purposes of OVOS-INTENT-3, OVOS-INTENT-4, and every other spec
+that addresses skills by id. They are not two identifiers that
+happen to coincide; they are the same identifier under two
+roles.
+
+**Passive index registration.** A pipeline plugin with bundled
+handlers **SHOULD** publish the set of `intent_name` values it
+owns through the per-pipeline introspection topic
+`ovos.pipeline.<pipeline_id>.intents.list` (§10). Observers and
+introspection tools rely on this index to enumerate every
+handler in the deployment; without it, plugin-owned handlers
+are invisible to deployment-wide tooling that walks
+OVOS-INTENT-4 only. This is **not** OVOS-INTENT-4 registration —
+the plugin's matches do not flow through any external matcher —
+it is a one-way declaration of "these are the intent_names I
+dispatch on."
+
+From the dispatch path's perspective the two shapes are
+indistinguishable. `<owner_id>:<intent_name>` carries no
+information about which shape `<owner_id>` is; the orchestrator
+applies §7.1 stamping uniformly.
 
 ### 7.1 Routing and payload
 
@@ -826,26 +839,24 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
   (OVOS-MSG-1 §5.2) — the orchestrator derives the dispatch via
   `reply`, so `destination` is the original utterance emitter and
   `source` is the orchestrator;
-- **`context["skill_id"]` stamping.** When the dispatched
-  `<owner_id>` is registered as a skill under OVOS-INTENT-4
-  (whether as a plain skill or as a hybrid plugin-skill per
-  §7.0), the orchestrator **MUST** stamp
-  `context["skill_id"] = <owner_id>`. This carries the skill's
-  identity forward into every Message the handler emits via
-  `forward` (OVOS-MSG-1 §5.1), satisfying OVOS-INTENT-4 §3.1
-  by construction. When `<owner_id>` denotes a plain pipeline
-  plugin with no intent registrations (a pipeline-bundled
-  handler that is not also a skill), the orchestrator **MUST
-  NOT** stamp `context["skill_id"]` — such handlers identify
-  themselves via `pipeline_id` only;
+- **`context["skill_id"]` stamping.** The orchestrator **MUST**
+  stamp `context["skill_id"] = <owner_id>` on every dispatch.
+  `skill_id` is the voice-application identity (§7.0) — every
+  dispatched handler owns one, whether it is a plain skill or a
+  pipeline plugin with bundled handlers (in which case
+  `skill_id == pipeline_id`). This stamping carries the
+  handler-owner's identity forward into every Message the
+  handler emits via `forward` (OVOS-MSG-1 §5.1), satisfying
+  OVOS-INTENT-4 §3.1 by construction.
 - **`context["pipeline_id"]` stamping.** When the dispatched
-  `<owner_id>` corresponds to a loaded pipeline plugin (whether
-  as a plain plugin with bundled handler or as a hybrid
-  plugin-skill per §7.0), the orchestrator **MUST** stamp
-  `context["pipeline_id"] = <owner_id>`. For a hybrid
-  plugin-skill both `context["skill_id"]` and
-  `context["pipeline_id"]` carry the same identifier; consumers
-  reading either key get the same value.
+  `<owner_id>` corresponds to a loaded pipeline plugin (the
+  pipeline-plugin-with-bundled-handlers case of §7.0), the
+  orchestrator **MUST** additionally stamp
+  `context["pipeline_id"] = <owner_id>`. For such a handler
+  `context["skill_id"]` and `context["pipeline_id"]` carry the
+  same identifier; consumers reading either key get the same
+  value. For a plain skill (not loaded as a pipeline plugin),
+  the orchestrator **MUST NOT** stamp `context["pipeline_id"]`.
 
 Any Message the skill subsequently emits **MUST** carry
 `context["skill_id"]` matching the `<owner_id>` of the dispatch
