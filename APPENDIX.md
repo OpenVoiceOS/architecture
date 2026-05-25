@@ -459,6 +459,23 @@ reasoning, not the requirement.
   right priority is stage-dependent. TRANSFORM-1 §7.1 names which
   transformer types are natural producers of which signals;
   consolidation is the consumer's decision per SESSION-1 §3.2.7.
+- **Per-type self-identification keys.** TRANSFORM-1 §1.3 claims
+  six `Message.context` keys — one per transformer type
+  (`audio_transformer_id`, `utterance_transformer_id`,
+  `metadata_transformer_id`, `intent_transformer_id`,
+  `dialog_transformer_id`, `tts_transformer_id`) — rather than a
+  single generic `transformer_id`. Two reasons. First, the role
+  matters: a Message at the dialog stage may have been touched by
+  five transformer types in sequence, and lumping them into one
+  slot loses the role partitioning that exists in every other
+  surface of the spec (the per-type registries of §1.1, the
+  per-type `*_transformers` overrides of SESSION-1 §3, the
+  per-type introspection topics of §6). Second, multi-type
+  plugins disambiguate: a plugin shipping both an utterance and
+  a dialog transformer under the same `transformer_id` (permitted
+  by §1.1) would, with a single generic key, leave consumers
+  unable to tell which role emitted; per-type keys make the role
+  unambiguous on the wire.
 
 ### Session (SESSION-1)
 
