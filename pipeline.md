@@ -181,19 +181,31 @@ attribute a plugin-emitted `ovos.context.set` to its owning
 plugin; without this rule that attribution has no wire-level
 source.
 
-Reserved-key coexistence: when a plugin emits via
+**Stamp rule.** A plugin **MUST** set
+`Message.context["pipeline_id"]` to its own identity on:
+
+1. every Message it **originates** to the bus (a fresh emission,
+   not a `forward` / `reply` / `response` derivation); and
+2. every Message it **modifies in place** before that Message
+   proceeds — the act of mutating `Message.context` (or any other
+   field) within the plugin's execution window counts as touching
+   the chain.
+
+The two cases together: whenever the plugin's hands have been on
+a Message, `context["pipeline_id"]` reflects it.
+
+**Coexistence with other identity keys.** When a plugin emits via
 `Message.forward` / `.reply` / `.response` (OVOS-MSG-1 §5) from a
 prior Message that already carries `context["skill_id"]` from an
-upstream dispatch, the inherited `context["skill_id"]` is
-preserved by the derivation rule and is **not** stripped — it
-remains a valid attribution of the upstream dispatch this emission
-flows from. The plugin additionally stamps `context["pipeline_id"]`
-with its own identity. The two keys may legitimately coexist on
-the same Message: each names a different component in the chain
-that produced it. Attribution consumers (CONTEXT-1 §5.2, audit /
-telemetry observers) apply a precedence — most-specific identity
-wins — to pick one when they need to attribute a single emitter
-(see CONTEXT-1 §5.2).
+upstream dispatch (or any of the six `<type>_transformer_id` keys
+of OVOS-TRANSFORM-1 §1.3 from upstream transformer stages), the
+inherited keys are preserved by the derivation rule and **not**
+stripped. Each names a different component in the chain that
+produced the Message; the plugin additionally stamps its own
+`context["pipeline_id"]`. Attribution consumers
+(OVOS-CONTEXT-1 §5.2, audit / telemetry observers) apply a
+lifecycle-position precedence — see OVOS-CONTEXT-1 §5.2 — to pick
+a single owner when they need one.
 
 `Message.context["pipeline_id"]` is the plugin's **self-attribution**.
 Mirroring the `context["skill_id"]` / `data["skill_id"]` distinction
