@@ -197,6 +197,8 @@ everything else is owned by the cited specification.
 | `detected_lang` | string (BCP-47) | §3.2 (this spec) |
 | `pipeline` | array of string | OVOS-PIPELINE-1 §5 |
 | `intent_context` | object | OVOS-CONTEXT-1 §2 |
+| `active_handlers` | array of `[string, number]` | OVOS-CONVERSE-1 §2.1 |
+| `response_mode` | string | OVOS-CONVERSE-1 §2.2 |
 | `audio_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
 | `utterance_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
 | `metadata_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
@@ -638,5 +640,7 @@ and any field not claimed under §2.1 by a normative specification.
   `session` unchanged.
 - **OVOS-PIPELINE-1** — owns `session.pipeline`.
 - **OVOS-CONTEXT-1** — owns `session.intent_context`.
+- **OVOS-CONVERSE-1** — owns `session.active_handlers` and
+  `session.response_mode`.
 - **OVOS-TRANSFORM-1** — owns the six `session.*_transformers`
   fields.
