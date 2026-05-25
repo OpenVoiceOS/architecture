@@ -182,24 +182,31 @@ plugin; without this rule that attribution has no wire-level
 source.
 
 **Stamp rule.** A plugin **MUST** set
-`Message.context["pipeline_id"]` to its own identity on **every
-Message it places on the bus** and on every Message it **modifies
-in place** before that Message proceeds. "Places on the bus"
-covers all the ways a plugin can cause a Message to appear on the
-bus:
+`Message.context["pipeline_id"]` to its own identity on every
+Message it places on the bus by **authorial action** and on every
+Message it **modifies in place** before that Message proceeds.
+Authorial action covers the cases where the plugin is asserting
+itself as the originator of a new Message-on-wire:
 
 - a fresh emission (the plugin constructs and emits a new
   Message);
-- a derivation it performs and then emits — `Message.forward(...)`,
-  `Message.reply(...)`, or `Message.response(...)` from a prior
-  Message the plugin received or held (OVOS-MSG-1 §5). The
-  derivation mechanism is irrelevant to the stamp rule: the
-  plugin is the origin of the *resulting* Message-on-wire even
-  when context propagated from upstream, and the resulting
-  Message **MUST** carry `context["pipeline_id"]` set to the
-  plugin's id, overwriting whatever inherited
-  `context["pipeline_id"]` may have been there from an earlier
-  pipeline plugin in a multi-plugin chain.
+- `Message.reply(...)` or `Message.response(...)` (OVOS-MSG-1 §5)
+  derived from a prior Message — these derivations swap routing
+  keys and create a new authorial step. The resulting
+  Message-on-wire **MUST** carry `context["pipeline_id"]` set to
+  the plugin's id, overwriting whatever inherited
+  `context["pipeline_id"]` value may have been there from an
+  upstream plugin in a multi-plugin chain.
+
+**Pure-forward propagation is exempt.** `Message.forward(...)`
+(OVOS-MSG-1 §5.1) is propagation semantics — it preserves
+`context` unchanged by design, and the deriving plugin is not
+asserting authorship of the forwarded Message-on-wire. A plugin
+that `.forward`s a Message **MUST NOT** overwrite an inherited
+`context["pipeline_id"]` with its own — preserving upstream
+attribution is the point of the forward derivation. If a plugin
+wants to claim authorship of the resulting Message, it
+**SHOULD** use `.reply` or `.response`, or emit fresh.
 
 Modify-in-place covers the case where the plugin mutates an
 existing Message (its `context`, its `data`, the session it
@@ -583,22 +590,54 @@ to terminate** with exactly one `ovos.utterance.handled` event
 ```
 entry topic                              ← entry (§9.1)
    │
-   ├─ session retrieval; pipeline read from session (§5)
+   ├─ session retrieval; effective pipeline composed (§5.5)
+   │  (preference → availability → policy)
    │
-   ├─ for pipeline_id in session.pipeline:
+   ├─ utterance-transformer chain runs   ← TRANSFORM-1 §3.2
+   ├─ metadata-transformer chain runs    ← TRANSFORM-1 §3.3
+   │
+   ├─ for pipeline_id in effective pipeline:
    │     plugin = loaded_plugins[pipeline_id]     # skip if not loaded
    │     match = plugin.match(utterance, session)
    │     if match is not None:
+   │         orchestrator-backstop denylist check (§5.3/§5.4)
+   │         if filtered:  continue
+   │
+   │         ┌── post-match-pre-dispatch window ──────────────┐
+   │         │ engine-side context promotion (CONTEXT-1 §5.3) │
+   │         │ intent-transformer chain runs (TRANSFORM-1     │
+   │         │   §3.4) — may modify Match.captures, MUST NOT  │
+   │         │   change owner_id / intent_name                │
+   │         │ post-decay turns_remaining-- (CONTEXT-1 §4)    │
+   │         └────────────────────────────────────────────────┘
+   │
    │         ovos.intent.matched                  (§9.2)
    │         dispatch on <match.owner_id>:<match.intent_name>  (§7)
    │         (handler runs; emits lifecycle trio §8)
+   │         dialog-transformer chain runs        ← TRANSFORM-1 §3.5
+   │         (TTS rendering; tts-transformer chain — §3.6)
    │         ovos.utterance.handled               (§9.5)
    │         break
    │
-   └─ if no plugin matched:
+   └─ if no plugin matched (or all matches filtered):
          complete_intent_failure                  (§9.3)
          ovos.utterance.handled                   (§9.5)
 ```
+
+The flow diagram shows where companion-spec chains plug into this
+specification's iteration loop. The **audio-transformer chain**
+(TRANSFORM-1 §3.1) runs entirely in the audio-input service before
+the entry topic is emitted and is therefore not visible here. The
+**utterance** and **metadata** transformer chains run after entry
+and before iteration, against the candidate utterance list. The
+**post-match-pre-dispatch window** (highlighted) is where
+CONTEXT-1 §5.3 sanctions engine-side `session.intent_context`
+mutation and where TRANSFORM-1 §3.4 inserts the intent-transformer
+chain over the chosen `Match`. The **dialog** and **TTS**
+transformer chains run on handler-emitted speak Messages and on
+the rendered audio respectively, off the dispatch return-path.
+
+Pseudocode is informative; normative rules are in §§4–9.
 
 ### 6.2 First-match-wins iteration
 
@@ -615,6 +654,24 @@ A plugin that raises an exception during `match` is treated as if
 it returned `None`. The orchestrator **MUST** continue to the next
 plugin and **SHOULD** log the exception. A single plugin's bug
 does not fail the whole utterance.
+
+**Repeated-exception circuit-breaker.** Persistent plugin failure
+is a deployment concern, not an utterance-level concern, but a
+defective plugin that raises on every invocation degrades every
+utterance until the deployment intervenes. An orchestrator
+**SHOULD** track per-plugin exception rates within a session (or
+across a configurable window) and **SHOULD** drop a plugin from
+the session's effective pipeline (§5.5) after a deployer-tunable
+threshold of consecutive exceptions — typically three. A dropped
+plugin behaves as if absent for the remainder of the session;
+recovery is a deployment concern (process restart, plugin reload).
+The threshold, the recovery policy, and whether the drop is
+per-session or process-wide are deployer-configurable; this
+specification fixes only that the discipline **SHOULD** exist.
+The orchestrator **MAY** broadcast an `ovos.pipeline.dropped`
+diagnostic event (payload `{pipeline_id, reason, exception_count}`)
+to make the drop observable; this event is informative and
+**MUST NOT** be relied upon for normative control flow.
 
 ### 6.3 Plugins do not see each other's matches
 
