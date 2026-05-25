@@ -489,20 +489,20 @@ INTENT-3 / INTENT-4 for `skill_id` and `intent_name` — fix their
 respective value spaces.
 
 **Use under layer-2 substrates (informative).** A layer-2 system
-(HiveMind being the canonical example, OVOS-MSG-1 §3.4 / §4.4) that
-already attaches a per-peer session and uses `source` / `destination`
-for routing can use `blacklisted_skills` / `blacklisted_intents` as
-the **authorization surface** for multi-tenant deployments: when a
-remote participant opens a session, the layer-2 system populates the
-session denylists from the peer's permission grant, and the
-orchestrator backstop above guarantees the policy is enforced even
-against non-conformant pipeline plugins. This composes with the
-single-flip routing model (OVOS-MSG-1 §5) without orchestrator-side
-changes: the denylists ride on every derived Message through §4
-propagation, so no per-hop re-authorization is needed. This
-specification reserves no fields for layer-2 authorization beyond
-the two denylists; the broader authorization model is layer-2's
-concern, not SESSION-1's.
+(per OVOS-MSG-1 §3.4 / §4.4) that already attaches a per-peer
+session and uses `source` / `destination` for routing can use
+`blacklisted_skills` / `blacklisted_intents` as the **authorization
+surface** for multi-tenant deployments: when a remote participant
+opens a session, the layer-2 system populates the session denylists
+from the peer's permission grant, and the orchestrator backstop
+above guarantees the policy is enforced even against non-conformant
+pipeline plugins. This composes with the single-flip routing model
+(OVOS-MSG-1 §5) without orchestrator-side changes: the denylists
+ride on every derived Message through §4 propagation, so no per-hop
+re-authorization is needed. This specification reserves no fields
+for layer-2 authorization beyond the two denylists; the broader
+authorization model is the layer-2 substrate's concern, not
+SESSION-1's.
 
 ### 3.4 `site_id`
 
