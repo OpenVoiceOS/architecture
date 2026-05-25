@@ -382,6 +382,7 @@ behalf.
 | `error_code` | Meaning |
 |--------------|---------|
 | `malformed_payload` | The Message's `data` violates the shape required by the topic (§§5–8). The plugin received the message and judged the shape invalid. |
+| `reserved_name` | The registration payload names an `intent_name` that another normative specification has reserved for orchestrator-internal dispatch semantics (see §3.5). |
 | `unknown_intent` | A deregister, enable, or disable request references an `(skill_id, intent_name, lang)` triple that the responding plugin has no record of. |
 | `unknown_entity` | Analogous to `unknown_intent`, for entities. |
 | `unknown_skill` | A `skill_id`-only request references a skill the responding plugin has no record of. |
@@ -402,6 +403,28 @@ already-cleared intent is the intended terminal state. Producers
 that want idempotent removal **MAY** ignore `unknown_intent` /
 `unknown_entity` / `unknown_skill` codes specifically and treat
 them as the operation having already completed.
+
+### 3.5 Reserved intent_names
+
+Other normative specifications **MAY** reserve specific
+`intent_name` values for orchestrator-internal dispatch semantics
+(see OVOS-PIPELINE-1 §7.3 for the reservation mechanism and its
+dispatch-suppression rule). A registration payload that names a
+reserved `intent_name` **MUST** be rejected by the orchestrator
+with `error_code: "reserved_name"`; skills and pipelines
+**MUST NOT** rely on registrations under reserved names.
+
+Reservations currently in force:
+
+| Reserved intent_name | Reserving spec |
+|----------------------|----------------|
+| `converse` | OVOS-CONVERSE-1 §4.3 |
+| `response` | OVOS-CONVERSE-1 §5.2 |
+
+This list is maintained by OVOS-PIPELINE-1 §7.3 — the registry
+of reserved names — not by this specification. Plugins consulting
+the list **MUST** read it from the authoritative spec, not from
+this informative copy.
 
 ---
 
