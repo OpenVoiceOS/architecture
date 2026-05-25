@@ -910,18 +910,9 @@ Payload shape:
 | `utterances` | array of strings | yes | One or more candidate utterance strings. |
 | `lang` | string | no | BCP-47 language tag of the utterance. If absent, the orchestrator **MUST** fall back to `session.lang` (OVOS-SESSION-1 §3.2.1) — the session-scoped user-preference signal — and if that too is absent, to the deployment default. The consolidation guidance of OVOS-SESSION-1 §3.2.7 is informative for downstream stages but does not apply to this entry-point field, which has only the two normative sources named here. |
 
-**Migration from `recognizer_loop:utterance`.** Pre-spec
-deployments use the topic name `recognizer_loop:utterance` for
-the same purpose. That name pre-dates the naming conventions of
-OVOS-MSG-1 §2.1.2: it uses `:` as a segment separator (where `:`
-is reserved for `<owner_id>:<intent_name>` dispatch shapes), and
-its leading segment names an implementation role (the audio-input
-"recognizer loop") rather than a stable assistant root. A
-deployment migrating to this specification **SHOULD** emit
-`ovos.utterance.handle` as the canonical entry topic. A
-transitional deployment **MAY** subscribe to both names during
-migration; the legacy topic carries no normative status under
-this specification.
+`ovos.utterance.handle` is the only entry topic name this
+specification recognizes. A conformant orchestrator subscribes to
+this topic; a conformant producer emits to it.
 
 ### 9.2 `ovos.intent.matched`
 
