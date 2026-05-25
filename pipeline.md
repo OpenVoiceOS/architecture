@@ -306,6 +306,7 @@ fields below.
 | `lang` | string | no | The BCP-47 language tag the match was performed against. When the plugin received a non-`None` `lang` parameter (§4), this is typically that value (the plugin matched in the language the caller declared). A plugin that determined the language by other means (a multilingual matcher, a content-language-detecting matcher, a hard-coded engine) **MAY** set `lang` to whatever value reflects the language of the match. Absent when the plugin does not commit to a language — for example, a fallback plugin matching on language-independent rules. Downstream stages (intent-transformer chain per OVOS-TRANSFORM-1 §3.4, handlers under dispatch) treat `Match.lang` as authoritative for the match's language. |
 | `captures` | object (string→string) | yes | The capture map (§4.3). MAY be empty. |
 | `utterance` | string | no | The specific candidate string from the input list that won the match. |
+| `updated_session` | object | no | A replacement `session` snapshot the plugin produced during `match` (§4.2). When present, the orchestrator MUST use this snapshot — in place of the inbound utterance's session — for the dispatch and every downstream stage. When absent, the inbound session is carried unchanged. This is the **only** mechanism by which a plugin's match-phase session mutations reach downstream consumers; in-place mutations of the inbound session object are not visible past the plugin boundary. |
 
 The orchestrator interprets a non-`None` return as a definitive
 claim. It does not score, rank, or rerank matches across plugins —
@@ -323,22 +324,53 @@ disambiguation question, or runs any other matching strategy
 that requires bus communication is conformant), and side effects
 on plugin-internal state are the plugin's own business.
 
-A plugin that takes side effects from declined matches MUST
-understand that the orchestrator may call `match` on multiple
-plugins before one claims (§6.2 first-match-wins); plugins that
-mutate shared state from `match` MUST tolerate being declined
-and called again, on a later utterance, with their prior side
-effects already applied. The spec **does not police** plugin
-internals beyond the return contract.
+**Session mutation via `Match.updated_session`.** A plugin MAY
+mutate session state as part of producing a Match — for
+example, an intent plugin setting `session.intent_context` on
+the match dispatch, a converse plugin setting
+`session.response_mode` because the matched intent enables a
+follow-up wait window, or any plugin reordering
+`session.pipeline` for subsequent utterances on this session.
+The mutation is communicated to the orchestrator via the
+`updated_session` field on the returned `Match` (§4.1): the
+plugin populates `updated_session` with the new session
+snapshot it wants downstream consumers to see, and the
+orchestrator MUST use that snapshot for the dispatch and every
+subsequent stage of the utterance lifecycle (§6). When
+`updated_session` is absent, the inbound utterance's session is
+carried unchanged.
 
-A plugin **SHOULD NOT** mutate `session` fields directly from
-`match` — `session` carries downstream-visible state (`pipeline`
-ordering, blacklists, intent_context, response_mode, active
-handlers) that a declined plugin would otherwise corrupt for the
-next plugin in iteration. Session mutations happen properly in
-the dispatched handler (§7), or via the direct-mutation pathways
-the field-owning specifications define (OVOS-CONTEXT-1 §5.3,
-OVOS-CONVERSE-1 §3.2, OVOS-TRANSFORM-1 §3.3).
+The `updated_session` pathway is **only effective for a claiming
+match**. A plugin that returns `null` (declines) does not return
+any `Match`, and therefore any session mutation it performed
+during its match call is **discarded** at the plugin boundary:
+the orchestrator continues iteration with the inbound session
+snapshot, untouched. This is what makes match-phase mutation
+safe under §6.2 first-match-wins iteration — a declined
+plugin's exploratory mutations never reach later plugins or
+downstream stages.
+
+The orchestrator-side pattern is uniform:
+
+```
+match = plugin.match(utterances, lang, session)
+if match is not None:
+    session = match.updated_session or session
+    # dispatch and downstream stages use this session
+```
+
+A plugin that mutates the inbound session object **in place**
+without populating `updated_session` is non-conformant — the
+in-place mutation may or may not be visible to the orchestrator
+depending on object identity, and the field is the spec's only
+guaranteed-visible channel. Plugins that need to mutate session
+state **MUST** do so via a fresh snapshot returned in
+`updated_session`, not via in-place mutation.
+
+The §6 flow diagram reflects this: `session = match.updated_session
+or session` is applied immediately after a non-null match,
+before the post-match-pre-dispatch window where intent
+transformers and CONTEXT-1's decay tick run.
 
 ### 4.3 The capture map
 
@@ -628,6 +660,8 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     if match is not None:
    │         orchestrator-backstop denylist check (§5.3/§5.4)
    │         if filtered:  continue
+   │
+   │         session = match.updated_session or session   # §4.1, §4.2
    │
    │         ┌── post-match-pre-dispatch window ──────────────┐
    │         │ engine-side context promotion (CONTEXT-1 §5.3) │
