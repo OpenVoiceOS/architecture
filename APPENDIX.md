@@ -562,6 +562,101 @@ plugin, a persona plugin: each defines itself. PIPELINE-1
 only defines the contract every plugin conforms to and the
 universal utterance lifecycle around the iteration.
 
+### 3.3 Interoperability with external protocols
+
+The spec family does not define new transport protocols and
+does not aim to replace existing ones. Where an external
+voice-assistant protocol — Wyoming, OpenAI Chat Completions,
+MCP tool calls, hassil templates, MQTT-based stacks — already
+exists and serves a population, the spec family is designed to
+**interoperate** with it through three well-defined injection
+points. An adapter that plugs an external protocol into the
+right injection point is a third-party implementation concern;
+the spec family makes the integration shape predictable.
+
+**1. Pipeline plugins (OVOS-PIPELINE-1 §3) — the dispatch-layer
+adapter.** A pipeline plugin wraps an external matcher,
+consumes the utterance, and returns a `Match` with the
+plugin's own `pipeline_id` as `owner_id`. The external
+protocol becomes a first-class participant in the dispatch
+surface, indistinguishable from a skill from the bus's
+perspective. This is how language-model APIs, deterministic
+template matchers, and external intent classifiers attach.
+
+**2. Transformer chains (OVOS-TRANSFORM-1 §3) — the
+artifact-pipeline adapter.** A transformer wraps an external
+protocol that operates on an audio, text, or rendered-output
+artifact but does not claim intents. Examples: a
+bidirectional-translation service at the utterance and dialog
+chains; an external STT-confidence validator at the utterance
+chain; a content-policy filter at the dialog or TTS chain; an
+acoustic-event detector at the audio chain.
+
+**3. Bus boundary (OVOS-MSG-1 §3.4) — the wire-level
+adapter.** A bridge component subscribes to the bus, translates
+to and from an external transport, and either operates entirely
+external (Wyoming-style audio / STT / TTS services talking
+over TCP to a bridge that proxies the OVOS bus) or remotes the
+whole bus (HiveMind-style layer-2 substrates). The
+single-flip routing of §3.1.1 and the no-central-state stance
+of §3.1.2 are what make the bus-boundary adapter feasible
+without modifying the assistant core.
+
+#### Per-protocol notes
+
+- **Wyoming** (the component protocol used by Home Assistant
+  Voice and its ecosystem) operates at the audio-input / STT /
+  intent / TTS service boundary. A Wyoming bridge sits at the
+  bus boundary (§3.1, injection point 3 above): translate
+  Wyoming's `transcript` event into an `ovos.utterance.handle`
+  emission and translate the assistant's `speak` Messages
+  into Wyoming's `synthesize` event. Pipeline plugins are
+  unaffected; Wyoming components plug in *under* the
+  utterance lifecycle, not into it.
+- **OpenAI Chat Completions and compatible APIs** (the
+  de-facto LLM interface). A persona-style pipeline plugin
+  wraps an OpenAI-compatible client (§3 of PIPELINE-1,
+  injection point 1 above). The plugin emits `Match` with
+  `owner_id = <pipeline_id>` and bundles its own handler
+  using the dispatch polymorphism of OVOS-PIPELINE-1 §7. The
+  user sees a normal response; the LLM is a first-class
+  intent owner.
+- **MCP (Model Context Protocol) and similar agent-tool
+  protocols.** A pipeline plugin can expose OVOS intents to
+  an MCP client (the OVOS-INTENT-4 §10 introspection topics
+  enumerate available intents) or call out to MCP tools from
+  within a plugin-bundled handler. Either direction sits at
+  injection point 1.
+- **hassil templates and the Home Assistant `intents`
+  corpus.** A pipeline plugin can wrap hassil as a
+  deterministic template matcher (injection point 1).
+  Separately, the OVOS-INTENT-1 / hassil grammar lineage is
+  close enough that a **translation tool** between
+  OVOS-INTENT-2 locale resources and HA's `intents` YAML is
+  mostly mechanical — both formats are template-and-vocabulary
+  YAML at the same level of abstraction. Such a tool would
+  let the HA `intents` corpus and the OVOS locale corpus
+  cross-pollinate without either project changing its
+  format. This is concrete planned tooling, not just an
+  architectural possibility (§7).
+- **MQTT-based stacks** (Rhasspy 2.x, miscellaneous IoT
+  voice systems). Bridge at the bus boundary (injection
+  point 3), same shape as Wyoming.
+- **A2A and other agent-bus protocols.** Same shape as MCP;
+  pipeline-plugin wrapper or bus-boundary bridge depending
+  on whether the protocol participates in intent dispatch
+  or in cross-process bus routing.
+
+The three injection points are not exhaustive of where
+adapters *could* go — a determined integrator can hook
+almost anywhere — but they are the points the spec family
+deliberately designs to keep clean. Any new protocol that
+needs deeper integration than the three points permit is a
+signal that the protocol genuinely overlaps the assistant's
+own architecture rather than complementing it, at which
+point the integration is a co-architecture decision rather
+than an adapter.
+
 ---
 
 ## 4. Design rationale, per specification
@@ -1377,6 +1472,13 @@ uniformity is in the namespace, not in a fixed depth.
 - **Conversation-level evaluation infrastructure.** Rasa
   has story-based testing and end-to-end success metrics;
   the OVOS specs do not currently have a counterpart.
+- **OVOS-INTENT-2 ↔ hassil `intents` translation tool.**
+  The grammar lineage (§2.1) makes a mechanical translator
+  between OVOS-INTENT-2 locale resources and HA's `intents`
+  YAML feasible. Such a tool would let the two corpora
+  cross-pollinate without either format changing. Sits at
+  injection point 3 of §3.3 conceptually but is
+  build-time rather than runtime tooling.
 - **i18n corpus.** OVOS-INTENT-2 defines the locale file
   format, and `ovos-localize` (§1.4) provides the
   operations layer; what remains is the *scale* of the
