@@ -206,6 +206,12 @@ everything else is owned by the cited specification.
 | `blacklisted_skills` | array of string | OVOS-PIPELINE-1 §5 |
 | `blacklisted_intents` | array of string | OVOS-PIPELINE-1 §5 |
 | `blacklisted_pipelines` | array of string | OVOS-PIPELINE-1 §5 |
+| `blacklisted_audio_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
+| `blacklisted_utterance_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
+| `blacklisted_metadata_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
+| `blacklisted_intent_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
+| `blacklisted_dialog_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
+| `blacklisted_tts_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `site_id` | string | §3.3 (this spec) |
 
 Every field above is OPTIONAL on the wire. A producer that sets a
@@ -536,7 +542,8 @@ for the field set §3 claims. A materialized default **MUST** set
 `session_id: "default"`. A materialized default **MUST NOT** populate
 the per-component override fields of §3 (`pipeline`, `intent_context`,
 the six `*_transformers`, `blacklisted_skills`, `blacklisted_intents`,
-`blacklisted_pipelines`, `site_id`) — those fields have meaning only
+`blacklisted_pipelines`, the six `blacklisted_*_transformers`,
+`site_id`) — those fields have meaning only
 when explicitly set by the session origin, and a materialized default
 would falsely declare a divergence from deployment defaults that the
 origin never asked for. Fields outside the §3 closed set remain
