@@ -461,21 +461,60 @@ reasoning, not the requirement.
   consolidation is the consumer's decision per SESSION-1 §3.2.7.
 - **Per-type self-identification keys.** TRANSFORM-1 §1.3 claims
   six `Message.context` keys — one per transformer type
-  (`audio_transformer_id`, `utterance_transformer_id`,
-  `metadata_transformer_id`, `intent_transformer_id`,
-  `dialog_transformer_id`, `tts_transformer_id`) — rather than a
-  single generic `transformer_id`. Two reasons. First, the role
-  matters: a Message at the dialog stage may have been touched by
-  five transformer types in sequence, and lumping them into one
-  slot loses the role partitioning that exists in every other
-  surface of the spec (the per-type registries of §1.1, the
-  per-type `*_transformers` overrides of SESSION-1 §3, the
-  per-type introspection topics of §6). Second, multi-type
+  (`audio_transformer_ids`, `utterance_transformer_ids`,
+  `metadata_transformer_ids`, `intent_transformer_ids`,
+  `dialog_transformer_ids`, `tts_transformer_ids`) — rather than
+  a single generic `transformer_ids`. Two reasons. First, the
+  role matters: a Message at the dialog stage may have been
+  touched by five transformer types in sequence, and lumping
+  them into one slot loses the role partitioning that exists in
+  every other surface of the spec (the per-type registries of
+  §1.1, the per-type `*_transformers` overrides of SESSION-1 §3,
+  the per-type introspection topics of §6). Second, multi-type
   plugins disambiguate: a plugin shipping both an utterance and
   a dialog transformer under the same `transformer_id` (permitted
   by §1.1) would, with a single generic key, leave consumers
   unable to tell which role emitted; per-type keys make the role
   unambiguous on the wire.
+- **List-valued attribution preserves chain provenance.**
+  Each of the six attribution context keys is a *list* of
+  `transformer_id` strings, not a single string. Transformers
+  chain by design — multiple transformers of the same type run
+  sequentially against the same Message-in-flight (§4) — and the
+  list preserves the full chain on the wire, in order of touch.
+  The last entry is the most-recent stamper. Skill and pipeline
+  identity keys (`context["skill_id"]`, `context["pipeline_id"]`)
+  remain single strings because skills and pipeline plugins
+  *originate* Messages rather than chain over them.
+- **Per-type denylists complete the policy surface.**
+  TRANSFORM-1 §5.2 claims six `blacklisted_<type>_transformers`
+  session fields, paralleling the six `<type>_transformers`
+  chain-ordering fields of §5.1 and the
+  `pipeline`/`blacklisted_pipelines` pair of OVOS-PIPELINE-1 §5.
+  Three-stage composition (preference → availability → policy)
+  in §5.3 mirrors PIPELINE-1 §5.5 exactly.
+- **The per-type "explosion" of session fields is deliberate.**
+  Counting transformer-related session-field claims: six chain
+  orderings (§5.1) + six denylists (§5.2) = twelve fields, plus
+  six `Message.context` attribution keys. That is a lot of
+  wire-surface names, and it is a deliberate tradeoff against
+  the alternative of a `transformer_<type>:<name>` prefix-encoded
+  single namespace. The per-type partition gives direct key
+  lookup, avoids prefix parsing in CONTEXT-1 §5.2 attribution and
+  in §5.3 chain composition, and matches the per-type
+  partitioning that already exists in the §1.1 registries, the
+  §4 chain ordering rules, and the §6 introspection topics.
+  Under the canonical SHOULD-omit rule of SESSION-1 §3.4, the
+  common case carries zero of these fields on the wire — a
+  session diverges from deployment defaults only as needed. If
+  the field count ever proves painful in practice, the cleanest
+  fallback is an object-valued form
+  (`session.transformers: {audio: [...], ...}` and
+  `session.blacklisted_transformers: {audio: [...], ...}`),
+  collapsing twelve flat fields into two structured ones with
+  the per-type partition preserved as object keys. The flat form
+  was chosen for parallelism with `pipeline` (array, not object)
+  and for direct field access.
 
 ### Session (SESSION-1)
 
