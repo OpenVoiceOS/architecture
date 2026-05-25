@@ -358,7 +358,9 @@ introspection index of §10.
 
 The orchestrator-level match notification, dispatch, and
 handler-lifecycle topics that some readers may expect to see here are
-defined in OVOS-PIPELINE-1 (§§9–10 there), not in this spec.
+defined in OVOS-PIPELINE-1 (§§7–9 there: §7 dispatch,
+§8 handler-lifecycle trio, §9 utterance-layer events), not in
+this spec.
 
 ---
 
