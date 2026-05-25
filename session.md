@@ -262,7 +262,7 @@ pipeline, by different components, or by an out-of-band caller).
 
 Their **meanings** are normative; how a consumer **consolidates**
 them into a single language for any given operation is not — that
-choice is stage-dependent and implementation-specific. §3.2.5
+choice is stage-dependent and implementation-specific. §3.2.7
 suggests a default consolidation pattern as informative guidance.
 
 #### 3.2.1 `lang`
@@ -337,7 +337,7 @@ that it is the goal.
 
 `output_lang` is not consulted by TTS voice selection directly: TTS
 narrates already-produced text and keys on the payload `data.lang`
-of the text being spoken (§3.2.1). `output_lang` influences which
+of the text being spoken (§3.2.8). `output_lang` influences which
 language the upstream renderer produced, which determines `data.lang`,
 which TTS then voices. The cascade is intentional: a single
 preference field controls the language of every output stage.
@@ -377,8 +377,8 @@ The hint is **not authoritative**. The user may speak a different
 language than the emitter expected (wake-word trigger does not
 constrain what the user actually says next), and downstream stages
 **MUST NOT** treat `request_lang` as a guarantee. The actual decoded
-language is recorded by `stt_lang` (§3.2.3); a language-detection
-component's opinion is recorded by `detected_lang` (§3.2.5);
+language is recorded by `stt_lang` (§3.2.4); a language-detection
+component's opinion is recorded by `detected_lang` (§3.2.6);
 disagreement between the three is normal.
 
 A consumer **MAY** use `request_lang` as a prior — for example to
@@ -545,10 +545,12 @@ A producer **MUST NOT**:
 - emit any session field with the JSON value `null` (§2); a field
   is either present with a value drawn from the owner specification's
   value space, or omitted entirely;
-- populate a per-component override field (§3 — `pipeline`, `context`,
-  the six `*_transformers`) with a value that matches the deployment
-  default merely as a form of explicit confirmation. Omit the field
-  and let the orchestrator's default apply (§2.5, §3.3).
+- populate a per-component override field (§3 — `pipeline`,
+  `intent_context`, the six `*_transformers`, `blacklisted_skills`,
+  `blacklisted_intents`, `blacklisted_pipelines`, `site_id`) with a
+  value that matches the deployment default merely as a form of
+  explicit confirmation. Omit the field and let the orchestrator's
+  default apply (§2.5, §3.4).
 
 ### A **consumer** of session-carrying Messages **MUST**:
 
