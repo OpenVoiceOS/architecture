@@ -699,11 +699,17 @@ registered under that `skill_id`. Payload:
 This is the message a orchestrator emits, or that a skill sends to the orchestrator, when a
 skill is unloaded (INTENT-3 §6.1).
 
-Deregistering an intent, entity, or skill that is not currently registered
-**MUST** be rejected with `error_code: "unknown_intent"`,
-`"unknown_entity"`, or `"unknown_skill"` respectively — silent no-ops mask
-bugs. A producer that wants idempotent removal can ignore those specific
-error codes.
+Deregistering an intent, entity, or skill that is not currently
+registered **SHOULD** be rejected with `error_code:
+"unknown_intent"`, `"unknown_entity"`, or `"unknown_skill"`
+respectively — surfacing the discrepancy keeps bugs visible. A
+plugin **MAY** alternatively treat the request as a no-op success
+(`{ "ok": true }`) when idempotent removal is the deliberate
+choice, per the §3.4 idempotent-deregistration carve-out (most
+commonly during a skill's shutdown sequence, where every plugin
+the skill ever talked to receives the deregistration whether or
+not it consumed the matching registration). The two responses
+are equally conformant; the choice is the plugin's.
 
 ### 8.5 `ovos.intent.enable` and `ovos.intent.disable`
 
