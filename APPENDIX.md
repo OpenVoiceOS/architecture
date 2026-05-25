@@ -10,7 +10,7 @@ OVOS-INTENT-3, OVOS-INTENT-4, OVOS-MSG-1, OVOS-SESSION-1,
 OVOS-PIPELINE-1, OVOS-CONTEXT-1, and OVOS-TRANSFORM-1.
 
 Pointers to specific OVOS code (file paths, class names, function
-names) and to specific real projects (HiveMind, Mycroft, Adapt,
+names) and to specific real projects (HiveMind, Adapt,
 padatious, ovos-audio, ovos-workshop, …) are deliberately kept
 *out* of the spec bodies and collected here, because implementation
 code moves and specifications must not.
@@ -237,31 +237,7 @@ shared-vocabulary model is correct for a curated one. The two
 models are right for different platforms; neither is
 universally better.
 
-### 2.3 Mycroft — the predecessor
-
-The merged OVOS specifications are effectively Mycroft plus
-corrections. The bus model, the `mycroft.skill.handler.*`
-trio, the `recognizer_loop:utterance` entry topic, the session
-concept — all inherited. Mycroft never wrote any of this down.
-
-OVOS's contribution is the *formalization*, plus the cleanups
-of the prescriptive divergence catalogue (§5):
-
-- Single-flip routing (formalized in OVOS-MSG-1 §5).
-- The `<owner_id>:<intent_name>` dispatch shape generalized
-  beyond skills (OVOS-PIPELINE-1 §7).
-- The per-injection-point transformer contracts of
-  OVOS-TRANSFORM-1 (Mycroft had ad-hoc audio / utterance /
-  TTS hooks but no normative IO contract).
-- The explicit gating semantics of OVOS-CONTEXT-1 (Mycroft
-  had `Message.context` adjacency rules but no normative
-  gate semantics).
-- The handler-lifecycle trio renamed `mycroft.skill.handler.*`
-  → `ovos.intent.handler.*`.
-- The entry-topic rename `recognizer_loop:utterance` →
-  `ovos.utterance.handle` (OVOS-PIPELINE-1 §9.1).
-
-### 2.4 Rasa — closest comparator for intent context
+### 2.3 Rasa — closest comparator for intent context
 
 Rasa's "active forms" and slot mappings perform context-aware
 matching, but they are baked into the policy engine; you
@@ -285,7 +261,7 @@ policy/preference split (TRANSFORM-1 §5.3) does not exist.
 TRANSFORM-1's six-injection-point model is genuinely more
 expressive.
 
-### 2.5 Amazon ASK / Alexa Skills Kit, Google Dialogflow
+### 2.4 Amazon ASK / Alexa Skills Kit, Google Dialogflow
 
 Both are closed-domain centrally-trained stacks. Their
 built-in entity-type systems (`AMAZON.DATE`,
@@ -307,7 +283,7 @@ they do not have first-class dispatch identity. OVOS-PIPELINE-1's
 advertise its own intent identity *to the user* on the bus,
 indistinguishable from a skill — original to OVOS.
 
-### 2.6 hassil — comparable only at the grammar layer
+### 2.5 hassil — comparable only at the grammar layer
 
 The Home Assistant template-matcher, comparable only to
 OVOS-INTENT-1 / -2 / -3 (grammar + locale resources + intent
@@ -318,7 +294,7 @@ transformers), or OVOS-CONTEXT-1 (no decaying session state).
 The grammar layer is broadly equivalent to OVOS-INTENT-1;
 everything above the grammar is OVOS-only.
 
-### 2.7 Summary — where OVOS leads, follows, and differs
+### 2.6 Summary — where OVOS leads, follows, and differs
 
 **OVOS leads architecturally** in three places:
 
@@ -328,8 +304,8 @@ everything above the grammar is OVOS-only.
   owner on the same dispatch surface.
 - **The six-injection-point transformer chain with per-session
   preference/policy separation.** Nothing in HA, Rhasspy,
-  Mycroft, Rasa, ASK, or Dialogflow has a comparable
-  lifecycle-uniform extensibility surface.
+  Rasa, ASK, or Dialogflow has a comparable lifecycle-uniform
+  extensibility surface.
 - **Negative gating (`excludes_context` "match if absent")
   in CONTEXT-1.** ASK/Dialogflow contexts are purely
   positive; Rasa forms are not engine-agnostic; HA has no
@@ -491,10 +467,11 @@ remote HiveMind sessions carry their own `session_id` and
 never `"default"`.
 
 None of this required HiveMind to modify OVOS core. The
-mechanism that makes it work — single-flip routing + opaque
-per-session identifiers + no central state — was already in
-`ovos-bus-client/message.py:194-198`; OVOS-MSG-1 just names
-and formalizes it.
+mechanism that makes it work — single-flip routing, opaque
+per-session identifiers, no central state — was an OVOS
+design, built into `ovos-bus-client/message.py:194-198`
+before this spec family was written; OVOS-MSG-1 formalizes
+the design rather than introducing it.
 
 A layer-2 substrate also has a uniform **authorization
 surface** in the spec family without inventing a separate
@@ -798,9 +775,9 @@ the normative sections.
 
 ### 4.6 Intent context (CONTEXT-1)
 
-- **Lifts intent context out of Adapt.** The Adapt-era
+- **Lifts intent context out of Adapt.** The Adapt-specific
   `add_context` / `remove_context` mechanism, and the
-  Mycroft-era `mycroft.skill.set_cross_context` /
+  legacy `mycroft.skill.set_cross_context` /
   `remove_cross_context` fan-out for cross-skill use, are
   Adapt-only at the matcher level — Padatious and other
   engines ignore them. CONTEXT-1 generalizes the mechanism
@@ -1120,7 +1097,7 @@ and needs no implementation change:
   interception covers off-dispatch emissions.
 - **Entry-point topic renamed `ovos.utterance.handle`**
   (PIPELINE-1 §9.1). Current deployments use the
-  Mycroft-era `recognizer_loop:utterance`. That name fails
+  legacy `recognizer_loop:utterance` topic name. That name fails
   the naming conventions of OVOS-MSG-1 §2.1.2 on three
   counts: it uses `:` as a segment separator (where `:` is
   reserved for `<owner_id>:<intent_name>` dispatch topics);
@@ -1147,7 +1124,7 @@ and needs no implementation change:
   §10). Introspection topics served from the orchestrator's
   passive registration index.
 - **`ovos.context.set` / `.unset` / `.clear` / `.list`**
-  (CONTEXT-1 §5). Skill-facing API replacing Adapt-era
+  (CONTEXT-1 §5). Skill-facing API replacing Adapt-specific
   `add_context` / `remove_context` plus
   `mycroft.skill.set_cross_context`.
 - **`ovos.transformer.{type}.list`** (TRANSFORM-1 §6).
