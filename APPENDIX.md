@@ -817,6 +817,27 @@ All four surfaces share the `ovos.<domain>.` prefix; verb segments
 vary by domain (some nest, some don't). The uniformity is in the
 namespace, not in a fixed depth.
 
+The word **"intent"** appears in three of the four topic strings
+above with three different meanings, which is worth flagging for
+implementers wiring observers:
+
+- `ovos.intent.list` (INTENT-4 §10) — list of registered *intents*
+  (the things skills declare; `data` entries name `intent_name`).
+- `ovos.pipeline.<pipeline_id>.intents.list` (PIPELINE-1 §10) —
+  list of *intents currently compiled by one plugin's matcher*
+  (`data` entries name `intent_name`).
+- `ovos.transformer.intent.list` (TRANSFORM-1 §6) — list of
+  *intent-transformer plugins* loaded at the intent-transformer
+  injection point (`data` entries name `transformer_id`). Despite
+  the topic shape, this is **not** an intent-listing surface; it
+  follows the per-chain pattern `ovos.transformer.<type>.list`
+  where `<type>` happens to be `intent` for this chain (alongside
+  `audio`, `utterance`, `metadata`, `dialog`, `tts`).
+
+The collision is at the human-reading level only; payload shapes
+are distinct and a consumer subscribing to one cannot accidentally
+parse responses from another.
+
 ### 6.6 Things the specs do *not* change
 
 - The session object's internal shape is now owned by
