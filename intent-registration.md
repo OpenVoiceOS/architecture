@@ -126,20 +126,42 @@ Three consequences of this model:
 ### 3.1 Skills self-identify on every emission
 
 A skill **MUST** set `Message.context["skill_id"]` to its own
-`skill_id` (OVOS-INTENT-3 §3) on (a) every Message it originates
-to the bus, and (b) every Message it modifies in place before
-that Message proceeds. Together: whenever the skill's hands have
-been on a Message, `context["skill_id"]` reflects it. This
-applies to registration messages (§§5–8), to handler emissions
-under dispatch (responses, speech, side-effect emissions on other
-topics), and to any other bus traffic the skill originates or
-modifies — there is no exemption for any topic.
+`skill_id` (OVOS-INTENT-3 §3) on **every Message it places on the
+bus** and on every Message it **modifies in place** before that
+Message proceeds. "Places on the bus" covers every way a skill
+causes a Message to appear on the bus:
+
+- a fresh emission (the skill constructs and emits a new
+  Message — registration messages of §§5–8, ad-hoc skill-defined
+  topics, etc.);
+- a derivation the skill performs and then emits —
+  `Message.forward(...)`, `Message.reply(...)`, or
+  `Message.response(...)` from a prior Message the skill received
+  (OVOS-MSG-1 §5). The most common case is a skill handler under
+  dispatch deriving its `.speak` / `.response` via `.forward`
+  from the dispatch Message: the derivation mechanism is
+  irrelevant to the stamp rule, and the **resulting Message-on-wire
+  MUST carry `context["skill_id"]` set to the skill's id**,
+  overwriting whatever `context["skill_id"]` the upstream
+  dispatch carried if it differs. (The dispatch-stamping rule
+  below means the upstream value will normally already be the
+  skill's own id, so the rule is structurally satisfied for
+  dispatch-derived emissions; it binds explicitly for
+  derivations from non-dispatch sources.)
+
+Modify-in-place — mutating an existing Message's `context`,
+`data`, or carried session before that Message proceeds — also
+binds the stamp obligation.
+
+The combined effect: whenever the skill's hands have been on a
+Message that subsequently appears on the bus, `context["skill_id"]`
+reflects it. There is no exemption for any topic.
 
 **Coexistence with other identity keys.** A Message **MAY** carry
 other component-identity context keys claimed by other
 specifications in addition to `context["skill_id"]` — concretely
 `context["pipeline_id"]` (OVOS-PIPELINE-1 §3.1) and the six
-`<type>_transformer_id` keys (OVOS-TRANSFORM-1 §1.3). The
+`<type>_transformer_ids` keys (OVOS-TRANSFORM-1 §1.3). The
 derivation rules of OVOS-MSG-1 §5 preserve every such key
 inherited from upstream Messages; this specification does not
 require a skill to strip them, and a consumer **MUST NOT** treat
@@ -228,10 +250,10 @@ reserved context keys their owning specifications claim — the
 parallel discipline for pipeline plugins is OVOS-PIPELINE-1 §3.1
 (`context["pipeline_id"]`), and for transformers
 OVOS-TRANSFORM-1 §1.3 (the six per-type
-`<type>_transformer_id` keys: `audio_transformer_id`,
-`utterance_transformer_id`, `metadata_transformer_id`,
-`intent_transformer_id`, `dialog_transformer_id`,
-`tts_transformer_id`). Future component types each claim their
+`<type>_transformer_ids` keys: `audio_transformer_ids`,
+`utterance_transformer_ids`, `metadata_transformer_ids`,
+`intent_transformer_ids`, `dialog_transformer_ids`,
+`tts_transformer_ids`). Future component types each claim their
 own context key. The rule above is **specifically a skill
 discipline**; the same uniform MUST-stamp-on-originate-or-modify
 shape applies across every component type that claims an
