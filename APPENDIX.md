@@ -728,9 +728,8 @@ needs no implementation change:
   `ovos-bus-client.Message.{forward,reply,response}`.
 - The `.response` suffix convention — pervasive across OVOS
   topics today.
-- The `recognizer_loop:utterance` entry point and
-  `complete_intent_failure` no-match topic (PIPELINE-1) — match
-  current topic names verbatim.
+- The `complete_intent_failure` no-match topic (PIPELINE-1) —
+  matches current topic name verbatim.
 - `ovos.utterance.cancelled` and `ovos.utterance.handled`
   (PIPELINE-1) — match current topic names verbatim.
 - Per-utterance first-match-wins iteration (PIPELINE-1) — matches
@@ -832,10 +831,24 @@ needs no implementation change:
   `forward`/`reply` inherit automatically. Loader-side
   interception covers off-dispatch emissions. Drives CONTEXT-1
   §5.2 stored-key computation.
-- **Entry-point topic is not prescribed** (PIPELINE-1 §9.1). The
-  utterance-layer entry-topic name is deferred to a future
-  audio-input ↔ assistant-core wire spec; current deployments
-  use `recognizer_loop:utterance` for compatibility.
+- **Entry-point topic renamed `ovos.utterance.handle`**
+  (PIPELINE-1 §9.1). Current deployments use the Mycroft-era
+  `recognizer_loop:utterance`. That name fails the naming
+  conventions of OVOS-MSG-1 §2.1.2 on three counts: it uses `:`
+  as a segment separator (where `:` is reserved for
+  `<owner_id>:<intent_name>` dispatch topics, §2.1.1); its
+  leading segment names an implementation role (the audio-input
+  "recognizer loop") rather than a stable assistant root; and
+  it does not pair with the past-tense terminal event
+  `ovos.utterance.handled`. The rename to
+  `ovos.utterance.handle` fixes all three: dot-separated
+  hierarchy, stable `ovos.` root, request/terminal pair
+  (`handle` ↔ `handled`) sharing a root verb. Migration cost
+  is real — every audio-input service emits this, every
+  intent-service handler subscribes — touching
+  `ovos-dinkum-listener`, `ovos-simple-listener`, `ovos-audio`,
+  and `ovos-core/intent_services/service.py`. A transitional
+  deployment MAY subscribe to both names during migration.
 - **All introspection topics share the `ovos.<domain>.` prefix.**
   Verb segments vary by domain — INTENT-4 nests under
   `ovos.intent.register.<kind>` / `ovos.intent.list`; PIPELINE-1
@@ -956,7 +969,7 @@ number of legacy names. Implementer migration aid:
 
 | Topic | Status |
 |-------|--------|
-| `recognizer_loop:utterance` | **unchanged** — kept as the entry point. |
+| `recognizer_loop:utterance` | renamed to `ovos.utterance.handle` — see §6.4 above. |
 | `complete_intent_failure` | **unchanged** — kept as the no-match signal. |
 | `ovos.utterance.cancelled` | **unchanged** — kept as the cancellation signal. |
 | `ovos.utterance.handled` | **unchanged** — kept as the universal end-marker. |
