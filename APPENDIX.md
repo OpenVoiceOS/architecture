@@ -125,6 +125,55 @@ not an architectural one, and one OVOS now has tooling for in ovos-localize
 (§8). The grammar itself is a commodity shared by all three; the OVOS bet is the
 engine-agnostic contract and the pipeline.
 
+### 2.5 Comparison with Rasa, ASK / Dialogflow, and Mycroft
+
+Beyond HA and Rhasspy, four more comparators are worth a brief note since the
+specifications make decisions in territory they each occupy:
+
+- **Rasa.** The closest comparator for OVOS-CONTEXT-1. Rasa's "active forms"
+  and slot mappings perform context-aware matching, but they are baked into
+  the policy engine; you cannot run a Rasa NLU pipeline without Rasa policies.
+  CONTEXT-1 separates **gating** (`requires_context` / `excludes_context`,
+  §6 / §6.1) from **match-time capture** (the context-supplied capture rule,
+  §7) from **engine matching hints** (engine-internal use of values, §6), so
+  every intent engine that consumes OVOS-INTENT-3 registrations can gate
+  uniformly without buying into a particular dialog policy. Rasa wins,
+  however, on conversation-level evaluation infrastructure — story-based
+  testing, end-to-end success metrics — for which the OVOS specs have no
+  analogue yet (APPENDIX §7 catalogues this as a known gap).
+- **hassil.** The Home Assistant template-matcher, comparable only to
+  OVOS-INTENT-1 / -2 / -3 (grammar + locale resources + intent concept).
+  hassil has no equivalent of OVOS-MSG-1 (no bus envelope), OVOS-PIPELINE-1
+  (no pipeline notion — HA runs a single matcher), OVOS-TRANSFORM-1 (no
+  per-utterance transformers), or OVOS-CONTEXT-1 (no decaying session state).
+  The grammar layer is broadly equivalent (§2.1 above); everything above the
+  grammar is OVOS-only.
+- **Amazon ASK / Alexa Skills Kit, Google Dialogflow.** Both are closed-
+  domain centrally-trained stacks. Their built-in entity-type systems
+  (`AMAZON.DATE`, `@sys.date-time`) are what OVOS-TRANSFORM-1 §3.4 replicates
+  as an *injectable, deployer-replaceable, engine-agnostic* contract — at the
+  spec level OVOS is strictly more flexible, though OVOS defers the **typed
+  value formats themselves** (date encoding, number representation, duration
+  units) to a future text-normalization spec (APPENDIX §7), while ASK and
+  Dialogflow ship them as built-ins. Neither ASK nor Dialogflow has a
+  `session.pipeline`-equivalent (the assistant picks one matcher per skill);
+  neither has anything like the layer-2 substrate of OVOS-MSG-1 §3.4.
+- **Mycroft (the predecessor).** The merged OVOS specifications are
+  effectively Mycroft plus corrections: single-flip routing (formalized in
+  OVOS-MSG-1 §5), the `<owner_id>:<intent_name>` dispatch shape generalized
+  beyond skills (OVOS-PIPELINE-1 §7), the per-injection-point transformer
+  contracts of OVOS-TRANSFORM-1, the explicit gating semantics of
+  OVOS-CONTEXT-1, the entry-topic rename to `ovos.utterance.handle`
+  (PIPELINE-1 §9.1). Mycroft had `Message.context` and ad-hoc
+  audio / utterance / TTS hooks but no normative contracts. The OVOS spec
+  family is the formalization Mycroft never produced.
+
+The novelty concentration across the family: PIPELINE-1 §5 / §5.5 (preference /
+availability / policy composition), TRANSFORM-1 §3 (all six per-type
+contracts), and CONTEXT-1 §3 / §6 / §7 (key-shape-encoded scope, gating
+decoupled from capture, decaying state). Each of these moves is either novel
+or meaningfully cleaner than what the comparators do.
+
 ---
 
 ## 3. The pipeline-plugin model
@@ -921,6 +970,70 @@ implementers wiring observers:
 The collision is at the human-reading level only; payload shapes
 are distinct and a consumer subscribing to one cannot accidentally
 parse responses from another.
+
+### 6.5.2 Session-field cheat-sheet (informative)
+
+Every spec in the family that claims a `session` field does so
+via the OVOS-SESSION-1 §2.1 registry mechanism. The full set
+spans three specs; this table consolidates them for
+implementer reference. All fields follow the canonical
+SHOULD-omit / `[]`-equivalent-to-omission wire-weight rule of
+OVOS-SESSION-1 §3.4.
+
+| Field | Owner spec | Role | Empty-array semantics |
+|-------|------------|------|------------------------|
+| `session_id` | SESSION-1 §3.1 | identity / channel | n/a (string; `"default"` reserved) |
+| `lang` | SESSION-1 §3.2.1 | preference (user) | n/a (string) |
+| `secondary_langs` | SESSION-1 §3.2.2 | preference (user) | ≡ absent |
+| `output_lang` | SESSION-1 §3.2.3 | preference (renderer) | n/a (string) |
+| `stt_lang` | SESSION-1 §3.2.4 | signal (per-utterance) | n/a (string) |
+| `request_lang` | SESSION-1 §3.2.5 | signal (emitter hint) | n/a (string) |
+| `detected_lang` | SESSION-1 §3.2.6 | signal (lang-detect) | n/a (string) |
+| `site_id` | SESSION-1 §3.3 | opaque group identifier | n/a (string) |
+| `pipeline` | PIPELINE-1 §5.1 | preference (ordering) | ≡ absent |
+| `blacklisted_pipelines` | PIPELINE-1 §5.2 | policy (denylist) | ≡ absent |
+| `blacklisted_skills` | PIPELINE-1 §5.3 | policy (denylist) | ≡ absent |
+| `blacklisted_intents` | PIPELINE-1 §5.4 | policy (denylist) | ≡ absent |
+| `audio_transformers` | TRANSFORM-1 §5.1 | preference (chain) | ≡ absent |
+| `utterance_transformers` | TRANSFORM-1 §5.1 | preference (chain) | ≡ absent |
+| `metadata_transformers` | TRANSFORM-1 §5.1 | preference (chain) | ≡ absent |
+| `intent_transformers` | TRANSFORM-1 §5.1 | preference (chain) | ≡ absent |
+| `dialog_transformers` | TRANSFORM-1 §5.1 | preference (chain) | ≡ absent |
+| `tts_transformers` | TRANSFORM-1 §5.1 | preference (chain) | ≡ absent |
+| `blacklisted_audio_transformers` | TRANSFORM-1 §5.2 | policy (denylist) | ≡ absent |
+| `blacklisted_utterance_transformers` | TRANSFORM-1 §5.2 | policy (denylist) | ≡ absent |
+| `blacklisted_metadata_transformers` | TRANSFORM-1 §5.2 | policy (denylist) | ≡ absent |
+| `blacklisted_intent_transformers` | TRANSFORM-1 §5.2 | policy (denylist) | ≡ absent |
+| `blacklisted_dialog_transformers` | TRANSFORM-1 §5.2 | policy (denylist) | ≡ absent |
+| `blacklisted_tts_transformers` | TRANSFORM-1 §5.2 | policy (denylist) | ≡ absent |
+| `intent_context` | CONTEXT-1 §2 | per-session state | object; absent ≡ empty |
+
+**Role glossary:**
+
+- *Preference* — populated by the session origin to request
+  specific behaviour. Orchestrator narrows the request by
+  availability and policy.
+- *Policy* — populated by deployment / layer-2 substrate to
+  enforce constraints. Overrides preference at the composition
+  stage (PIPELINE-1 §5.5, TRANSFORM-1 §5.3).
+- *Signal* — recorded by a producer or earlier lifecycle stage
+  to communicate information about this specific utterance.
+- *Identity / channel* — names the session itself; not a
+  preference or policy knob.
+
+**Stamp-rule cheat-sheet (component identities, not session
+fields — for reference alongside the table above):**
+
+| Context key | Owner spec | Stamps on | Stamps on .reply / .response | Stamps on .forward |
+|-------------|------------|-----------|-------------------------------|---------------------|
+| `skill_id` | INTENT-4 §3.1 | every origination + modify-in-place | yes (authorial) | no (preserves inherited) |
+| `pipeline_id` | PIPELINE-1 §3.1 | every origination + modify-in-place | yes (authorial) | no (preserves inherited) |
+| `<type>_transformer_ids` (six) | TRANSFORM-1 §1.3 | every origination + modify-in-place | yes (append to list) | no (list rides through) |
+
+All three identity surfaces coexist freely on a single Message
+when the derivation chain crosses component boundaries.
+Attribution consumers apply the eight-level precedence of
+CONTEXT-1 §5.2 to pick a single owner when needed.
 
 ### 6.6 Things the specs do *not* change
 
