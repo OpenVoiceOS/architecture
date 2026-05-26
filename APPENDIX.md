@@ -1123,10 +1123,24 @@ and needs no implementation change:
   prescribed shape uses the structured `(skill_id,
   intent_name, lang)` triple plus `samples|file` and
   `blacklist|blacklist_file`.
-- **Dispatch payload uses polymorphic `owner_id`**
-  (PIPELINE-1 §7.1). Today dispatch carries `skill_id` only.
-  PIPELINE-1's `owner_id` is either a `skill_id` or a
-  `pipeline_id` — same field, polymorphic value.
+- **Dispatch payload uses unified `owner_id`** (PIPELINE-1
+  §7.0, §7.1). Today dispatch carries `skill_id` only.
+  PIPELINE-1 §7.0 collapses handler-owner shapes to two:
+  plain skill (handler reached via its `skill_id`) and
+  pipeline plugin with bundled handlers (the plugin's
+  `pipeline_id == skill_id` — one identifier filling both
+  roles). Conceptually `skill_id` is the voice-app identity
+  (every handler-owner has one); `pipeline_id` is the
+  matching-engine identity (only loaded plugins have one).
+  Plugins-with-handlers MUST NOT register their intents
+  under INTENT-4 — they own the handler directly — and
+  SHOULD publish their intent_names via the per-pipeline
+  passive index (§7.0, §10) for observability. A
+  pure-matcher plugin (Padatious, Adapt, the converse
+  plugin) has only a `pipeline_id` and produces matches
+  whose `owner_id` is some other component's identity. The
+  dispatch payload uniformly carries `owner_id` regardless
+  of shape.
 - **Handler-lifecycle payload includes `owner_id`**
   (PIPELINE-1 §8.2). Today the trio payload is
   `{name: <handler_func_name>}`. Prescribed: `{owner_id,
@@ -1142,18 +1156,33 @@ and needs no implementation change:
   `ovos.intent.list` / `ovos.intent.describe` from the
   passive view. This is a new orchestrator responsibility,
   not a change to existing behaviour.
-- **Plugins are side-effect-free during `match`** (PIPELINE-1
-  §4.2). This is a forward-looking rule rather than a fix
-  for current code. The standard
-  `match_high` / `match_medium` / `match_low` methods in the
-  official plugins are already side-effect-free (they
-  compute and return). Where side effects do happen today,
-  they are orchestrator-side after the match wins (e.g. the
-  `<skill_id>.activate` emit in
-  `ovos-core/intent_services/service.py:365`), or in
-  *other* bus handlers a plugin subscribes to. The spec
-  rule keeps the current discipline normative as alternative
-  plugin types (LLM-backed, agent-backed) are written.
+- **The match contract is the single obligation** (PIPELINE-1
+  §4.2). The plugin's `match` operation has one MUST: return
+  a `Match` (§4.1) or `null`. Bus emissions during `match`
+  are allowed — a plugin that polls other components, calls
+  out to a model server, or runs any matching strategy that
+  requires bus communication is conformant. This matches the
+  actual OVOS converse-plugin pattern (it polls active skills
+  during its match decision) and accommodates LLM-backed and
+  agent-backed plugin shapes that are inherently bus-active.
+  Session mutation during `match` is via the explicit
+  `Match.updated_session` channel — see the next entry — so
+  declined plugins' exploratory mutations never reach the
+  next iteration step.
+- **`Match.updated_session` as the match-phase session channel**
+  (PIPELINE-1 §4.1, §4.2). Promotes the existing ovos-core
+  code pattern
+  `sess = match.updated_session or SessionManager.get(message)`
+  to a normative Match field. The plugin that produces a
+  claiming match composes any session mutations it needs
+  (decrementing a response-mode counter, pre-promoting an
+  active-handler to the head, setting intent_context
+  alongside the match) into a fresh snapshot returned in
+  `Match.updated_session`. The orchestrator uses that
+  snapshot for the dispatch and every downstream stage; a
+  declined-match (plugin returns `null`) drops the snapshot
+  at the plugin boundary. This is what makes match-phase
+  mutation safe under §6.2 first-match-wins iteration.
 - **`ovos.utterance.handled` on every terminal path**
   (PIPELINE-1 §9.5). Current `ovos-workshop`'s
   `_on_event_error` does not emit it on the handler-error
