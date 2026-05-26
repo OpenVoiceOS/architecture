@@ -193,57 +193,26 @@ deregistering on behalf of a skill, a debug harness re-emitting a
 skill's prior registration); a consumer that needs the emitter
 **MUST** read `context.skill_id`, not `data.skill_id`.
 
-#### Orchestrator-side enforcement
+#### Enforcement and other component types
 
-The orchestrator (or any component that loads skills) **MUST**
-enforce the `context["skill_id"] == emitting skill's skill_id`
-invariant **whenever it is in a position to do so**.
+On the dispatch path enforcement is structural — the orchestrator
+stamps `context["skill_id"]` per OVOS-PIPELINE-1 §7.1 and MSG-1
+derivation semantics propagate it to handler-derived Messages. For
+emissions outside the dispatch path, the component that loads
+skills **SHOULD** intercept the emit pathway so handler code
+cannot emit a Message lacking or misstating `context["skill_id"]`.
+A Message whose `context["skill_id"]` disagrees with the
+`<skill_id>` of the dispatch it derives from is malformed; the
+orchestrator **SHOULD** log the drift.
 
-On the dispatch path, enforcement is structural: the dispatch
-stamp described in OVOS-PIPELINE-1 §7.1 pre-populates the value
-correctly, and MSG-1 derivation semantics propagate it to all
-handler-derived Messages without extra work.
-
-For emissions **outside** the dispatch path (a skill emitting on
-its own initiative, from a background worker, before any dispatch),
-the orchestrator **SHOULD** intercept / decorate the skill's emit
-pathway at load time so non-compliant handler code cannot emit a
-Message that lacks or misstates `context["skill_id"]`. This
-places the discipline on the skill-loading infrastructure rather
-than on every skill author.
-
-A Message a skill emits whose `context["skill_id"]` does **not**
-match the `<skill_id>` of the dispatch it derives from (when one
-exists) is malformed; the orchestrator **SHOULD** log the drift.
-
-When enforcement is not possible (a skill emitting on a transport
-the loader cannot intercept), the rule still binds the skill, and
-non-conformant traffic remains diagnosable via the consumer-side
-absence-detection rule below.
-
-#### Other component types
-
-The orchestrator and other infrastructure components are not
-bound by this rule — they do not have a `skill_id`. Other
-component types identify themselves through component-specific
-reserved context keys their owning specifications claim — the
-parallel discipline for pipeline plugins is OVOS-PIPELINE-1 §3.1
-(`context["pipeline_id"]`), and for transformers
-OVOS-TRANSFORM-1 §1.3 (the six per-type
-`<type>_transformer_ids` keys: `audio_transformer_ids`,
-`utterance_transformer_ids`, `metadata_transformer_ids`,
-`intent_transformer_ids`, `dialog_transformer_ids`,
-`tts_transformer_ids`). Future component types each claim their
-own context key. The rule above is **specifically a skill
-discipline**; the same uniform MUST-stamp-on-originate-or-modify
-shape applies across every component type that claims an
-identity key.
-
-`source` (OVOS-MSG-1 §3.2) is **not** an identity surface for any
-component. It is opaque metadata typically populated by the
-originator of an entry-point Message and propagated by the
-derivations of OVOS-MSG-1 §5; this specification does not
-prescribe its value space.
+Other component types claim their own identity context keys —
+pipeline plugins via `context["pipeline_id"]` (OVOS-PIPELINE-1
+§3.1), transformers via the six `<type>_transformer_ids` keys
+(OVOS-TRANSFORM-1 §1.3). The same MUST-stamp-on-originate-or-
+modify discipline applies symmetrically to every component type
+that claims an identity key; `source` (OVOS-MSG-1 §3.2) is opaque
+routing metadata and is **not** an identity surface for any
+component.
 
 #### Consumer-side
 
@@ -341,6 +310,15 @@ registration landed — they query the orchestrator's manifest, which
 the orchestrator maintains regardless of whether any plugin
 emitted a `.response`. A producer wanting acknowledgement queries
 the manifest after registering; it does not wait on `.response`.
+
+**Multiple consuming plugins.** A single registration **MAY** be
+consumed by more than one plugin, each independently free to emit
+its own `.response`. A producer that nonetheless observes the
+`.response` stream **SHOULD** treat any `ok: false` as
+authoritative for *that plugin's* rejection — distinct plugins
+making distinct decisions is the normal case, not a contradiction.
+This specification defines no aggregation rule across plugins; the
+manifest of §10 is the single answer to "did anyone consume this?".
 
 ### 3.4 `error_code` values
 
@@ -518,6 +496,16 @@ malformed-payload rules:
 - Every vocabulary descriptor **MUST** carry exactly one of `samples` or
   `file` (§5.1).
 - Each `samples` array **MUST** be non-empty.
+- A vocabulary descriptor's `samples` (or expanded `file` contents)
+  **MUST** include at least one template that expands to a non-empty
+  sample (OVOS-INTENT-1 §3.6). A descriptor that yields zero
+  non-empty samples is malformed.
+
+A producer **MUST** include all four top-level keys (`required`,
+`optional`, `one_of`, `excluded`); a consumer that nonetheless
+receives a payload with one or more of them missing **SHOULD**
+treat the missing key as an empty array and continue, rather than
+rejecting.
 
 An orchestrator **MUST** reject any registration violating these rules with
 `error_code: "malformed_payload"` (§3.3).
@@ -601,6 +589,7 @@ registration in which:
 - both `blacklist` and `blacklist_file` are present;
 - `samples` is empty;
 - a template is not parsable as OVOS-INTENT-1 §3 grammar;
+- a template expands to zero non-empty samples (OVOS-INTENT-1 §3.6);
 - the slot sets of the templates differ (§6.2).
 
 ---
@@ -838,9 +827,11 @@ Response (`ovos.intent.describe.response`):
 - On success, `{ "ok": true, "method": "keyword"|"template", "definition": {...} }`
   where `definition` is the §5 or §6 payload in inline form — `samples` and
   `blacklist` arrays, never `file` or `blacklist_file` paths. An orchestrator
-  that received only a `file:` form and cannot expand it **MUST** omit `definition`
-  from the response and include `"warning": "definition unavailable — registered
-  via file path"` in its place.
+  that received only a `file:` form and cannot expand it **MUST** omit
+  `definition` from the response; absence of `definition` on an `ok: true`
+  response signals "registered via a `file:` path the manifest cannot
+  resolve." Consumers needing the expanded form re-issue the request against
+  an orchestrator that shares the producer's filesystem (§5.5).
 - On unknown intent, `{ "ok": false, "error_code": "unknown_intent", "error": "no such (skill_id, intent_name, lang) registered" }`.
 
 The orchestrator **MAY** restrict who is permitted to call
