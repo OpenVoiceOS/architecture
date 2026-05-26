@@ -763,8 +763,6 @@ The dispatch Message's `data`:
 
 ```json
 {
-  "skill_id": "music.skill",
-  "intent_name": "play_music",
   "lang": "en-US",
   "utterance": "play the beatles",
   "slots": { "query": "the beatles" }
@@ -773,11 +771,11 @@ The dispatch Message's `data`:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `skill_id` | string | yes | The `Match.skill_id` — the topic's prefix, repeated for the handler's convenience. |
-| `intent_name` | string | yes | The `Match.intent_name` — the topic's suffix. |
 | `lang` | string | conditional | The language the utterance was recognized in. Populated from `Match.lang` when present. When `Match.lang` is absent, the orchestrator falls back to the entry-topic `Message.data.lang` (§9.1) if that field was present. If neither source provides a language, this field **MUST** be omitted. Handlers **MUST** treat this field as optional — its absence means no authoritative content language was determined for this match. |
 | `utterance` | string | yes | The candidate string that won the match. |
 | `slots` | object (string→string) | yes | The slot map (§4.3). MAY be empty. |
+
+`skill_id` and `intent_name` are not repeated in the payload — they are the topic's `<skill_id>:<intent_name>` prefix and suffix. A handler that needs them splits the topic on `:`.
 
 ### 7.2 Subscription discipline
 
@@ -968,8 +966,7 @@ Emitted by the orchestrator after a plugin's `match` returns
 non-`None`, before the dispatch (§7) goes out. Broadcast (no
 `destination`).
 
-Payload mirrors the dispatch payload (§7.1) plus the matching
-plugin's id:
+Payload:
 
 ```json
 {
@@ -984,7 +981,9 @@ plugin's id:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `skill_id`, `intent_name`, `lang`, `utterance`, `slots` | as §7.1 | yes | Same fields as the dispatch payload. |
+| `skill_id` | string | yes | The handler's `skill_id`. |
+| `intent_name` | string | yes | The matched intent name. |
+| `lang`, `utterance`, `slots` | as §7.1 | — | Same semantics as the dispatch payload. |
 | `pipeline_id` | string | yes | The `pipeline_id` of the plugin that produced the match. |
 
 `ovos.intent.matched` is a **notification**, not a dispatch.
