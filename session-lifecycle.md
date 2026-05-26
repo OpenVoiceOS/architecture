@@ -144,10 +144,10 @@ and restart are all transparent at the session layer.
 ### 2.3 The orchestrator owns `session_id == "default"`
 
 The reserved value `session_id == "default"` (SESSION-1 §3.1)
-marks a Message as originating from the local device. The
-orchestrator **MUST** maintain persistent in-process state for
-this single session, keyed under `"default"` — the
-authoritative default-session store.
+means "interact with the device-local session." The orchestrator
+**MUST** maintain persistent in-process state for this single
+session, keyed under `"default"` — the authoritative
+default-session store.
 
 This is the one exception to §2.2. The local device is a
 client of the orchestrator that runs in the same process tree
@@ -293,7 +293,9 @@ SHOULD-project pathway and that the client has merged per §4.
 
 ### 3.2 Assistant processing
 
-The assistant runs the OVOS-PIPELINE-1 §6 utterance lifecycle:
+The assistant runs the OVOS-PIPELINE-1 §6 utterance lifecycle;
+PIPELINE-1 is the authoritative source for the lifecycle detail.
+The following is a summary for SESSION-2 readers:
 
 - transformer chains (audio, utterance, metadata) run before
   pipeline iteration;
@@ -428,7 +430,7 @@ Resumption-safe state is the union of:
 
 Resumption is **field-by-field**: a client that drops or
 replaces individual fields gets the corresponding fall-back
-behaviour at the consumer (SESSION-1 §2.5: omitted fields
+behaviour at the consumer (SESSION-1 §2.1: omitted fields
 resolve to deployment defaults). A client that resumes a
 session minus `intent_context` enters with a fresh declarative
 state but retains the rest.
@@ -488,11 +490,14 @@ orchestrator operation:
   §4.2, in-handler mutations) propagate into the store
   through the standard derivation chain.
 
-The merge semantics for inbound default-session Messages are
-"last-write-wins per field": an inbound field value replaces
-the stored value for that field. Omitted inbound fields leave
-the stored field unchanged. This is symmetric with §4's
-permissive client-side merge.
+The merge semantics for inbound default-session Messages follow
+SESSION-1 §2.1's omission rule: **omitted inbound fields leave
+the stored field unchanged** (the stored value is the
+orchestrator's last authoritative value for that field); a
+**present inbound field replaces the stored value** for that
+field. This is the natural complement to the stateless-named-
+session rule: the default-session store fills the role the
+client plays for named sessions.
 
 ### 6.2 Restart semantics
 
@@ -536,10 +541,10 @@ windows actually survive a several-day gap.
 ### 6.4 Default-session sync to clients
 
 The orchestrator **MAY** emit the default-session state as a
-diagnostic on a deployer-defined topic (the existing
-`ovos.session.sync` / `ovos.session.update_default` pattern in
-current ovos-core is one such mechanism). This is informative;
-no spec-level consumer is defined.
+diagnostic on a deployer-defined topic, so that interested
+observers can track default-session evolution without processing
+every response Message. No normative topic name or consumer is
+defined here; this is deployment policy.
 
 ---
 
@@ -570,7 +575,7 @@ An orchestrator that claims conformance to this specification
   the §2.6 boundaries dictate mutation;
 - emit the universal end-marker `ovos.utterance.handled`
   carrying the final round session (PIPELINE-1 §9), as the
-  client-side convergence point of §4.4.
+  client-side convergence point of §4.3.
 
 An orchestrator **MUST NOT** require any client to declare
 session-start / session-end / session-id-allocation events
@@ -647,25 +652,8 @@ default-session store *is* that state for the local device.
 
 ## 8. Non-goals
 
-This specification deliberately does not:
-
-- define a **session-store protocol** for client-side
-  persistence — every client picks its own;
-- define **session authentication or authorization** — layer-2
-  on top of MSG-1 §3.4;
-- define **cross-client session sharing or coordination** —
-  two clients holding the same `session_id` race; out of scope;
-- define **session migration between orchestrators** — handled
-  implicitly by §2.2 statelessness; any orchestrator can serve
-  any named session because none holds state for it;
-- define **lifecycle observability events** (`ovos.session.start`
-  / `.end`, etc.) — deferred to a future spec if needed; not
-  required for correctness;
-- define **per-field encryption or selective field exposure** —
-  the session is one JSON object and is propagated as a whole;
-- define **default-session persistence across orchestrator
-  restart** — §6.2 makes restart-loss explicit; deployer
-  policy if desired;
-- replace **OVOS-SESSION-1** — that spec owns the wire shape
-  and the field registry; this spec owns the lifecycle that
-  rides on top.
+See §1 for the full list of non-goals. This section adds one
+clarification: **default-session persistence across orchestrator
+restart** is not defined here. §6.2 makes restart-loss
+explicit and intentional; persistence is deployer policy if
+desired.
