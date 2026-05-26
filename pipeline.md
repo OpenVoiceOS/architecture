@@ -360,12 +360,20 @@ if match is not None:
 ```
 
 A plugin that mutates the inbound session object **in place**
-without populating `updated_session` is non-conformant — the
-in-place mutation may or may not be visible to the orchestrator
-depending on object identity, and the field is the spec's only
-guaranteed-visible channel. Plugins that need to mutate session
-state **MUST** do so via a fresh snapshot returned in
-`updated_session`, not via in-place mutation.
+during `match` without populating `updated_session` is
+non-conformant — the in-place mutation may or may not be visible
+to the orchestrator depending on object identity, and the field
+is the only guaranteed-visible match-phase channel. Plugins that
+need to mutate session state from `match` **MUST** do so via a
+fresh snapshot returned in `updated_session`, not via in-place
+mutation.
+
+This rule applies only to `match`-phase mutations. Session
+mutation from **handlers** (under §7 dispatch), from
+**transformers** (OVOS-TRANSFORM-1 §3), and from the **direct
+session-mutation pathway** of OVOS-MSG-1 (which CONTEXT-1 §5.3
+and CONVERSE-1 §3.2 build on) is governed by those specs and is
+unaffected by §4.2.
 
 The §6 flow diagram reflects this: `session = match.updated_session
 or session` is applied immediately after a non-null match,
@@ -657,27 +665,29 @@ ovos.utterance.handle                    ← entry (§9.1)
    ├─ for pipeline_id in effective pipeline:
    │     plugin = loaded_plugins[pipeline_id]     # skip if not loaded
    │     match = plugin.match(utterance, lang, session)
-   │     if match is not None:
-   │         orchestrator-backstop denylist check (§5.3/§5.4)
-   │         if filtered:  continue
+   │     if match is None:
+   │         continue   # any plugin-side updated_session is discarded
    │
-   │         session = match.updated_session or session   # §4.1, §4.2
+   │     orchestrator-backstop denylist check (§5.3/§5.4)
+   │     if filtered:  continue
    │
-   │         ┌── post-match-pre-dispatch window ──────────────┐
-   │         │ engine-side context promotion (CONTEXT-1 §5.3) │
-   │         │ intent-transformer chain runs (TRANSFORM-1     │
-   │         │   §3.4) — may modify Match.captures, MUST NOT  │
-   │         │   change owner_id / intent_name                │
-   │         │ post-decay turns_remaining-- (CONTEXT-1 §4)    │
-   │         └────────────────────────────────────────────────┘
+   │     session = match.updated_session or session   # §4.1, §4.2
    │
-   │         ovos.intent.matched                  (§9.2)
-   │         dispatch on <match.owner_id>:<match.intent_name>  (§7)
-   │         (handler runs; emits lifecycle trio §8)
-   │         dialog-transformer chain runs        ← TRANSFORM-1 §3.5
-   │         (TTS rendering; tts-transformer chain — §3.6)
-   │         ovos.utterance.handled               (§9.5)
-   │         break
+   │     ┌── post-match-pre-dispatch window ──────────────┐
+   │     │ engine-side context promotion (CONTEXT-1 §5.3) │
+   │     │ intent-transformer chain runs (TRANSFORM-1     │
+   │     │   §3.4) — may modify Match.captures, MUST NOT  │
+   │     │   change owner_id / intent_name                │
+   │     │ post-decay turns_remaining-- (CONTEXT-1 §4)    │
+   │     └────────────────────────────────────────────────┘
+   │
+   │     ovos.intent.matched                  (§9.2)
+   │     dispatch on <match.owner_id>:<match.intent_name>  (§7)
+   │     (handler runs; emits lifecycle trio §8)
+   │     dialog-transformer chain runs        ← TRANSFORM-1 §3.5
+   │     (TTS rendering; tts-transformer chain — §3.6)
+   │     ovos.utterance.handled               (§9.5)
+   │     break
    │
    └─ if no plugin matched (or all matches filtered):
          complete_intent_failure                  (§9.3)
