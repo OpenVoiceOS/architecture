@@ -111,31 +111,31 @@ specifications that define topics, not a feature of the envelope.
 
 #### 2.1.1 Identifiers used as topic components
 
-A specification that defines a topic constructed from named
-identifiers — for example a per-intent dispatch topic shaped
-`<skill_id>:<intent_name>` or a per-component introspection topic
-shaped `<component_type>.<component_id>.list` — relies on those
-identifiers being unambiguously delimitable inside the topic string.
+Some specifications define topics whose `type` string is assembled from
+named identifiers at runtime — for example `<skill_id>:<intent_name>`
+or `<component_type>.<component_id>`. For such a topic to be
+unambiguously parseable, the identifiers it uses as components **MUST
+NOT** contain the separator character(s) the topic uses structurally:
 
-To make that possible without per-spec restatement, this
-specification fixes one shared constraint on every such identifier:
-an identifier used as a structural component of a topic name **MUST
-NOT** contain `:`, `.`, or whitespace. The forbidden characters are
-exactly the characters this specification gives structural meaning
-to inside `type` (the dot- and colon-separated segmenting
-convention above and §3 routing-key shapes that other specs build
-on).
+- a topic shaped `<A>:<B>` requires A and B to not contain `:`;
+- a topic shaped `<A>.<B>` requires A and B to not contain `.`;
+- a topic shaped `<A>.<B>:<C>` requires A and B to not contain `.`
+  and B and C to not contain `:`.
 
-This is a normative constraint on identifiers any spec mints for
-use in `type`: `skill_id`, `pipeline_id`, `transformer_id`,
-`intent_name`, `component_id`, and any future identifier of the
-same kind. A specification that defines such an identifier
-**MUST** require this constraint of its values. A consumer that
-parses a topic into components **MAY** rely on `:` and `.` being
-unambiguous structural separators.
+Each specification declares only what its own separator requires.
+No separator character is globally forbidden in all identifiers;
+identifiers used in topics that do not use that character as a
+structural separator may contain it freely.
 
-This specification does not enumerate component identifiers; the
-constraint binds whatever specs define them.
+**Recommended identifier form.** When defining a new identifier
+intended for use as a topic component, prefer values that contain only
+ASCII letters, digits, `_`, and `-`. This avoids accidental collision
+with any separator a current or future topic shape may choose.
+
+**Colon convention.** The `:` character is reserved for use by formal
+specifications as a structural separator in topic shapes. Informally
+defined or application-specific topics **SHOULD** avoid `:` in their
+topic name so the convention remains unambiguous.
 
 ### 2.2 `data`
 
