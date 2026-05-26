@@ -103,6 +103,14 @@ contract of §4 live in the orchestrator process that implements
 the utterance lifecycle (the utterance-handling service in the
 split shape above).
 
+The orchestrator is **stateless for named sessions** and holds
+persistent state only for the reserved `session_id == "default"`
+(OVOS-SESSION-1 §3.1). The full state-ownership model is owned by
+OVOS-SESSION-2; consumers of this spec MAY take it as a
+working assumption that each inbound utterance brings its own
+session and the orchestrator does not maintain cross-utterance
+state for named sessions.
+
 A **pipeline plugin** is a third-party component identified by an
 opaque `pipeline_id` — an arbitrary, deployment-unique string. The
 orchestrator loads some number of plugins at startup; how it
