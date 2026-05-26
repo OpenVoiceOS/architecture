@@ -829,18 +829,6 @@ the reserved name is not registrable. The normal skill path
 same `<skill_id>:<intent_name>` dispatch shape; no dispatch
 mechanics change.
 
-### 7.4 In-process equivalence
-
-When the handler (skill or plugin) runs in the
-same process as the orchestrator, the orchestrator **MAY** invoke
-the handler directly without serializing the dispatch Message
-over a transport — provided every external observer sees the
-same `<skill_id>:<intent_name>` dispatch and the same
-handler-lifecycle trio (§8) it would have seen for an
-out-of-process handler. This uniformity is what makes a
-deployment portable across in-process and out-of-process handler
-arrangements.
-
 ---
 
 ## 8. Handler-lifecycle messages
