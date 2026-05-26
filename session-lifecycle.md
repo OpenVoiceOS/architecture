@@ -42,10 +42,10 @@ It builds on four companion specifications:
   `ovos.utterance.handled`;
 - the *Intent Context Specification* (OVOS-CONTEXT-1) and the
   *Active Handlers and Interactive Response Specification*
-  (OVOS-CONVERSE-1) — consumers of this spec's projection
-  mandate (§2.4); they hold session-keyed state and therefore
-  fall under the rule that all such state lives in
-  session-resident fields.
+  (OVOS-CONVERSE-1) — both elect the §2.4 SHOULD-project
+  pathway for their cross-utterance state (intent-context
+  entries, active-handler list, response-mode wait window
+  respectively), making it resumption-safe by construction.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 **MAY**, and **RECOMMENDED** are used as in RFC 2119.
@@ -57,9 +57,10 @@ The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 This specification defines:
 
 - the **state-ownership model** (§2) — who holds session state,
-  what is permitted to mutate it, and what the projection
-  mandate requires of components that maintain cross-utterance
-  state;
+  what is permitted to mutate it, and when components SHOULD
+  project their cross-utterance state into session-resident
+  fields vs hold it internally with best-effort resumption
+  semantics;
 - the **per-utterance round** (§3) — the flow of a single
   utterance from client emission to assistant response;
 - the **client-side merge rules** (§4) — how a client tracks
@@ -157,31 +158,66 @@ of `SessionManager.default_session` (see APPENDIX §5).
 
 Behaviour rules for the default-session store are in §6.
 
-### 2.4 The projection mandate
+### 2.4 Project state into session when practical; plugin-internal state is permitted
 
 A component (a pipeline plugin, a transformer, any other
 participant) that holds `session_id`-keyed state **across**
-utterances **MUST** project that state into a session-resident
-field it owns (claimed under SESSION-1 §2.1). The projection
-flows through the pipeline plugin's `Match.updated_session`
-channel (PIPELINE-1 §4.2): the component writes its state into
-the field on every match it produces, the orchestrator carries
-the updated session forward, and the next utterance arrives
-with the state already populated for the component to read.
+utterances **SHOULD** project that state into a session-resident
+field it owns (claimed under SESSION-1 §2.1) when projection is
+practical. Projection flows through the pipeline plugin's
+`Match.updated_session` channel (PIPELINE-1 §4.2) or through
+in-place mutation at transformer / handler boundaries (§2.6).
+Projected state is **resumption-safe by construction** — it
+travels with the session, survives orchestrator restart, and
+moves transparently across multi-orchestrator deployments.
 
-The projection mandate is what makes resumption (§5) work
-uniformly across all components. A component that holds
-authoritative state outside the session carrier is, by
-definition, not resumption-safe — its state evaporates on
-orchestrator restart and is invisible to other orchestrators
-in a multi-orchestrator deployment.
+A component **MAY** instead hold authoritative cross-utterance
+state internally when projection is impractical. Realistic
+examples:
 
-Transient **in-utterance** caches are permitted (a plugin may
-build helper structures for its match call, a transformer may
-batch context lookups), but cross-utterance state **MUST** be
-projected. The distinction is lifecycle-scoped: anything that
-needs to outlive the current `ovos.utterance.handled`
-(PIPELINE-1 §9) must be in `session`.
+- a **language-model plugin** holding a multi-turn conversation
+  transcript that is too large to ride on every session-carrying
+  Message;
+- a **media pipeline plugin** holding playback positions, queued
+  playlists, or user-favourite catalogues backed by external
+  service APIs;
+- a **personalization component** holding learned preferences,
+  trained classifiers, or any state tied to local model
+  artefacts;
+- any plugin whose state is intrinsically tied to external
+  resources (sockets, processes, files, accounts) that cannot
+  be serialised into a JSON session field meaningfully.
+
+A component that takes this path:
+
+- **owns its state lifecycle in full** — persistence (or not),
+  expiry, eviction, multi-orchestrator coordination if the
+  deployment has multiple orchestrators, and any privacy or
+  access-control concerns the state raises;
+- offers **best-effort resumption with no normative guarantee**.
+  A user resuming "unpause the music" months later may or may
+  not get a useful reaction — the plugin may have evicted the
+  playback state, the underlying media process may no longer
+  exist, the user's playlist may have changed, or the plugin
+  may have persisted the state and handle the resume cleanly.
+  The spec does not bind the outcome of any plugin-internal
+  resumption attempt;
+- MUST NOT expect other components or clients to know its
+  state exists or to compensate for its absence.
+
+The CONVERSE-1 converse plugin (§5 there) is one example of a
+plugin that chooses to project all its cross-utterance state —
+the response-mode wait window is small, simple, and naturally
+session-coupled, so the SHOULD-project path is the obvious fit.
+LLM, media, and personalization plugins typically pick the
+plugin-internal path. Both are conformant; the choice is per
+plugin.
+
+Transient **in-utterance** caches (helper structures built
+during a single `match` call, batched lookups within a
+transformer chain) are always permitted regardless of projection
+choice — they are utterance-scoped, discarded at
+end-of-utterance, never cross-utterance state.
 
 ### 2.5 Clients own their named sessions
 
@@ -252,8 +288,8 @@ The Message carries the client's current local session in
 The session the client emits is its **authoritative local
 state** at emission time. It includes every session-resident
 field the client has accumulated from prior rounds, including
-fields populated by components under the §2.4 projection
-mandate that the client has merged per §4.
+fields populated by components that elected the §2.4
+SHOULD-project pathway and that the client has merged per §4.
 
 ### 3.2 Assistant processing
 
@@ -386,9 +422,9 @@ Resumption-safe state is the union of:
   signals, `pipeline`, `intent_context`, `active_handlers`,
   `response_mode`, the transformer chains, the blacklists,
   `site_id`, and any future-claimed field);
-- the projected state of every component bound by §2.4 — by
-  construction, since the projection mandate requires
-  cross-utterance state to live in session-resident fields.
+- the projected state of every component that elected the
+  SHOULD-project pathway of §2.4 — resumption-safe by
+  construction since it lives in session-resident fields.
 
 Resumption is **field-by-field**: a client that drops or
 replaces individual fields gets the corresponding fall-back
@@ -397,17 +433,35 @@ resolve to deployment defaults). A client that resumes a
 session minus `intent_context` enters with a fresh declarative
 state but retains the rest.
 
-### 5.3 What is not resumption-safe
+### 5.3 Plugin-internal state — best-effort resumption
 
-Anything not session-resident is not resumption-safe. This is
-exactly the space §2.4 forbids components from holding:
-authoritative cross-utterance state outside session is a
-conformance violation. A conformant deployment has nothing
-non-resumption-safe by construction.
+State held internally by a component per §2.4's MAY-internal
+pathway is governed by the holding component's own design. The
+spec defines no protocol for plugin-internal state; the
+plugin chooses what to persist, what to evict, and what
+"resume" means for its own state. A client cannot expect
+parity across components:
 
-A transient in-utterance cache (§2.4) is, by definition,
-gone at end-of-utterance and therefore trivially absent from
-any future round; resumption neither preserves nor needs it.
+- a chat-history-holding LLM plugin may resume a months-old
+  conversation seamlessly because it persisted the transcript;
+- the same client trying to resume "unpause the music" may find
+  the media plugin's playback state long gone, because the
+  plugin evicted it after a deployer-configured TTL or because
+  the underlying media process restarted;
+- a personalization component may retain learned preferences
+  forever, may drop them on restart, or may rebuild them on
+  demand — entirely up to the plugin.
+
+This is not a defect of the spec; it is the cost of allowing
+plugins to hold state too large or too coupled to external
+resources to project into session. Plugins that want resumption
+parity with the projection pathway can adopt projection (§2.4);
+plugins that prefer internal state accept best-effort
+resumption.
+
+A transient in-utterance cache (§2.4) is, by definition, gone
+at end-of-utterance and therefore trivially absent from any
+future round; resumption neither preserves nor needs it.
 
 ---
 
@@ -528,17 +582,24 @@ send; the orchestrator processes what arrives.
 A component (pipeline plugin, transformer, dispatched handler,
 introspection observer) **MUST**:
 
-- project any `session_id`-keyed state it holds across
-  utterances into a session-resident field it claims under
-  SESSION-1 §2.1 (the §2.4 mandate);
-- write that state into the field via the appropriate
+- treat transient in-utterance caches as utterance-scoped,
+  discarding them at end-of-utterance.
+
+A component that holds `session_id`-keyed state across
+utterances **SHOULD**:
+
+- project that state into a session-resident field it claims
+  under SESSION-1 §2.1 (per §2.4), via the appropriate
   in-utterance pathway — `Match.updated_session` for pipeline
   plugins per PIPELINE-1 §4.2, direct mutation for
   transformers and handlers per §2.6;
-- treat transient in-utterance caches as utterance-scoped,
-  discarding them at end-of-utterance;
-- read its state from `session` on every inbound Message,
+- on every inbound Message, read its state from `session`
   rather than from a cross-utterance internal store.
+
+A component **MAY** instead hold cross-utterance state
+internally per §2.4 when projection is impractical, in which
+case it MUST take full responsibility for state lifecycle and
+accept best-effort resumption (§5.3).
 
 A component **MUST NOT** rely on bus events (the asynchronous
 kind that fire outside the utterance lifecycle) to mutate
