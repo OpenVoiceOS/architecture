@@ -8,22 +8,25 @@ the assistant is done with it — and the **pipeline plugin**
 abstraction the **orchestrator** runs to decide what to do with each
 utterance.
 
-It is the orchestrator-side companion to OVOS-INTENT-3 and
-OVOS-INTENT-4. Those specifications define what an intent *is* and
-how a skill puts an intent on the bus; this one defines what the
-orchestrator does with utterances and the contract every pipeline
-plugin conforms to.
+This is the **foundational bus specification for voice assistant
+input/output**: it defines the natural-language entry point
+(`ovos.utterance.handle`, §9.1), the pipeline plugin abstraction
+the orchestrator iterates, and the natural-language exit point
+(`ovos.utterance.speak`, §9.6). Intent registration and skill
+dispatch are an optional layer built on top of this mechanism.
 
-It builds on three companion specifications:
+It builds on two companion specifications:
 
 - the *Bus Message Specification* (OVOS-MSG-1) — the envelope,
   routing keys, session carrier, and derivations every Message
   defined here travels in;
 - the *Intent Definition Specification* (OVOS-INTENT-3) — defines
-  the *orchestrator* and the intent / handler model;
-- the *Intent and Entity Registration Bus Contract* (OVOS-INTENT-4)
-  — the wire format pipeline plugins consume to learn what intents
-  to match (when they choose to).
+  the *orchestrator* and the intent / handler model.
+
+See also: OVOS-INTENT-4 (*Intent and Entity Registration Bus
+Contract*) — the wire format pipeline plugins MAY consume to learn
+what intents skills have registered. Consumption is plugin-
+discretionary; this specification does not require it.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and
 **MAY** are used as in RFC 2119.
