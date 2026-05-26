@@ -51,73 +51,42 @@ and the orchestrator-provided introspection interface:
 
 It does **not** define:
 
-- the intent concept itself — see OVOS-INTENT-3;
+- the intent concept itself (OVOS-INTENT-3) or the handler reference,
+  which never crosses the bus (§9);
 - how plugins *implement* registration storage, matching, or
   consumption — black box (OVOS-PIPELINE-1);
-- the **handler reference** itself (§9): the binding between a
-  registered intent and the code that runs it is local to the skill
-  and never crosses the bus;
+- the **utterance lifecycle**, **dispatch**, **handler-lifecycle
+  trio**, **match-result notification**, or
+  `ovos.intent.unmatched` — all owned by OVOS-PIPELINE-1;
 - **session lifecycle** — `session` is carried opaquely per
   OVOS-MSG-1;
 - **language fallback** — when no registration matches the utterance
-  language exactly. Fallback policy is out of scope, expected in a
-  future specification together with text normalization
-  (OVOS-INTENT-1 §5.3 and the planned text-normalization spec);
-- the **utterance lifecycle**, **match-result notification**,
-  **dispatch**, **handler-lifecycle trio**, or the
-  **intent-layer failure signal** (`ovos.intent.unmatched`) — all
-  formalized by OVOS-PIPELINE-1, the spec that owns the
-  orchestrator's contract;
-- the mapping from any predecessor topic names to the topics
-  defined here — implementation history, documented in
-  [APPENDIX.md](APPENDIX.md).
+  language exactly. Deferred to a future spec.
 
 ---
 
 ## 2. Architectural model — registrations are broadcast
 
-Registration messages defined here are **broadcast** on the bus,
-like every other Message. There is no central party that owns,
-validates, or routes them. Whether any loaded pipeline plugin
-(OVOS-PIPELINE-1) chooses to consume a given registration is a
-plugin concern, out of scope for this specification.
-
-Because registrations are broadcast and consumption is plugin-
-discretionary, a producer **MUST NOT** rely on any specific
-plugin acknowledging a registration. A skill that emits
-`ovos.intent.register.template` (§6) and no loaded plugin
-consumes it: the registration is silently dropped. The skill's
-intent will not match utterances. There is no error event; this
-is the deployment's responsibility to debug (typically by
-checking which plugins are loaded against the kinds of
-registrations the skill emits).
+Registration messages defined here are **broadcast** on the bus.
+There is no central party that owns, validates, or routes them;
+whether any loaded pipeline plugin (OVOS-PIPELINE-1) consumes a
+given registration is a plugin concern, out of scope here. A
+registration no plugin consumes is silently dropped — the skill's
+intent will not match, and the deployment is responsible for
+diagnosing why (typically: wrong plugin loaded for the
+registration method).
 
 The **orchestrator** (OVOS-INTENT-3 §6.1) maintains the manifest
-(§10) — a passive index built from observed registration
-broadcasts — and serves introspection queries from it. The
-manifest is observability-only: it does **not** gate matching,
-does **not** influence what any plugin consumes, and does **not**
-prevent a skill from re-registering or de-registering at any
-time.
+(§10): a passive index built from observed registrations,
+observability-only. It does not gate matching, influence
+consumption, or block re-registration. Plugins are observably
+pluggable — adding or removing one is a deployment concern; bus
+traffic and the manifest are unaffected.
 
-Per OVOS-PIPELINE-1 §2, the orchestrator MAY be split across
-cooperating processes; each maintains its own slice of the
-manifest built from broadcasts it observed and responds
-independently to §10 queries.
-
-Two consequences of this model:
-
-- **Plugins are observably pluggable.** Adding, removing, or replacing
-  a plugin is a deployment concern; the bus traffic for registrations
-  and the orchestrator's index are unaffected.
-- **The plugin pipeline is what enforces "at most one match per
-  utterance."** This specification does not enforce it; OVOS-PIPELINE-1
-  §5 does (first-match-wins iteration).
-
-Registrations are **fire-and-forget**: there is no `.response` reply,
-no acknowledgement, no error event. A producer that needs to verify
-that a registration landed queries the manifest of §9 — manifest
-presence is the only signal this specification defines.
+Registrations are **fire-and-forget**: there is no `.response`
+reply, no acknowledgement, no error event. A producer that needs
+to verify a registration landed queries the manifest (§10);
+manifest presence is the only signal this specification defines.
 
 ---
 
@@ -139,56 +108,35 @@ handler derives from it via the OVOS-MSG-1 §5 derivation
 semantics inherit that value automatically. No extra stamp step
 is needed on the dispatch path.
 
-The combined effect: whenever the skill's hands have been on a
-Message that subsequently appears on the bus, `context["skill_id"]`
-reflects it. There is no exemption for any topic.
-
 `Message.context["skill_id"]` is the **authoritative attribution
-key** for skill-originated bus traffic. It lets observers attribute
-any Message to its originating skill without parsing topic names or
-`data` payloads — which is infeasible for skill emissions on
-non-`<skill_id>:<intent_name>`-shaped topics (e.g. `speak`, custom
-skill-defined topics).
+key** for skill-originated bus traffic — observers MUST NOT infer
+the originating skill from topic names or `data` fields. A Message
+arriving without `context["skill_id"]` is either not
+skill-originated or is from a non-conformant skill; the
+orchestrator **SHOULD** log the absence but **MUST NOT** reject at
+this layer (per-topic rejection is the responsibility of that
+topic's owning spec).
 
 #### Enforcement and other component types
 
 On the dispatch path enforcement is structural — the orchestrator
 stamps `context["skill_id"]` per OVOS-PIPELINE-1 §7.1 and MSG-1
-derivation semantics propagate it to handler-derived Messages. For
+derivation propagates it to handler-derived Messages. For
 emissions outside the dispatch path, the component that loads
-skills **SHOULD** intercept the emit pathway so handler code
-cannot emit a Message lacking or misstating `context["skill_id"]`.
-A Message whose `context["skill_id"]` disagrees with the
-`<skill_id>` of the dispatch it derives from is malformed; the
-orchestrator **SHOULD** log the drift.
+skills **SHOULD** intercept the emit pathway so non-conformant
+handler code cannot escape. A Message whose `context["skill_id"]`
+disagrees with the `<skill_id>` of the dispatch it derives from
+is malformed; the orchestrator **SHOULD** log the drift.
 
-Other component types claim their own identity context keys —
-pipeline plugins via `context["pipeline_id"]` (OVOS-PIPELINE-1
-§3.1), transformers via the six `<type>_transformer_ids` keys
-(OVOS-TRANSFORM-1 §1.3) — and the same stamp-on-originate-or-modify
-discipline applies symmetrically. These keys coexist: a Message
-**MAY** carry several of them at once (each names a different
-component in the chain that produced it), a skill **MUST NOT** strip
-keys it did not set, and a consumer **MUST NOT** treat the presence
-of additional identity keys as malformed. For single-owner
-attribution see the precedence rule of OVOS-CONTEXT-1 §5.2.
-`source` (OVOS-MSG-1 §3.2) is opaque routing metadata and is **not**
-an identity surface for any component.
-
-#### Consumer-side
-
-A consumer **MUST NOT** infer the originating skill from `data`
-fields whose presence is not normatively required, or from the
-topic name. The presence of `context["skill_id"]` is the only
-authoritative attribution surface for skill-originated Messages.
-
-A Message that arrives with no `context["skill_id"]` is either not
-skill-originated, or is from a non-conformant skill that escaped
-loader-side enforcement; the orchestrator **SHOULD** log this for
-diagnostics but **MUST NOT** reject the Message at this layer
-(rejection on a per-topic basis is the responsibility of that
-topic's owning spec — e.g. CONTEXT-1 §5.2 rejects context-mutation
-events that lack the field).
+Other component types claim their own identity keys —
+`context["pipeline_id"]` (OVOS-PIPELINE-1 §3.1), the six
+`<type>_transformer_ids` keys (OVOS-TRANSFORM-1 §1.3) — with the
+same stamp-on-originate-or-modify discipline. These keys coexist:
+a Message MAY carry several at once, a skill **MUST NOT** strip
+keys it did not set, and a consumer **MUST NOT** treat their
+presence as malformed. For single-owner attribution see
+OVOS-CONTEXT-1 §5.2. `source` (OVOS-MSG-1 §3.2) is opaque routing
+metadata, not an identity surface.
 
 ### 3.2 Identity carried by every registration message
 
@@ -202,7 +150,7 @@ For an **intent**:
 |-------|------|----------|--------|
 | `skill_id` | string | yes | INTENT-3 §3 — assistant-unique. |
 | `intent_name` | string | yes | INTENT-3 §3 — unique within the skill. |
-| `lang` | string | yes | BCP-47 (INTENT-2 §2), compared case-insensitively per OVOS-SESSION-1 §3.2. An intent is defined per language (INTENT-3 §3). This is `data.lang` — the language of the resource being registered, distinct from `session.lang` which is the user's preferred language (OVOS-SESSION-1 §3.2). |
+| `lang` | string | yes | BCP-47 (INTENT-2 §2), case-insensitive (SESSION-1 §3.2). The language of the resource being registered — distinct from `session.lang`. |
 
 The triple `(skill_id, intent_name, lang)` is the **registration key**
 (INTENT-3 §6.1). Registering an intent whose key matches an existing
@@ -211,22 +159,13 @@ registration **replaces** the previous one (§8.1).
 For an **entity**, `intent_name` is replaced by `entity_name` (same
 uniqueness rule: unique within the skill).
 
-Other normative specifications **MAY** reserve specific
-`intent_name` values for orchestrator-internal dispatch semantics
-(see OVOS-PIPELINE-1 §7.3 for the reservation mechanism). Skills
-and pipelines **MUST NOT** rely on registrations under reserved
-names; a consuming pipeline plugin **MUST NOT** index a
-registration whose `intent_name` is reserved, so the reserved-name
-registration will never produce a match.
-
-The orchestrator's manifest (§10) **MAY** still index the
-broadcast for diagnostic visibility — surfacing a reserved-name
-registration in `ovos.intent.list` lets tooling spot the mistake.
-Matching is the enforcement party, not the manifest.
-
-Reservations currently in force are listed in OVOS-PIPELINE-1 §7.3.
-Plugins consulting the registry **MUST** read it from there, not
-from any informative copy.
+Other specifications **MAY** reserve specific `intent_name`
+values; the authoritative registry is OVOS-PIPELINE-1 §7.3. A
+consuming plugin **MUST NOT** index a registration whose
+`intent_name` is reserved, so it will never produce a match. The
+manifest (§10) **MAY** still index the broadcast for diagnostic
+visibility — surfacing the registration in `ovos.intent.list` lets
+tooling spot the mistake.
 
 ---
 
@@ -252,11 +191,8 @@ introspection index of §10.
 | `ovos.intent.list` | observer → orchestrator | Query registered intents (introspection; served by the orchestrator). | §10 |
 | `ovos.intent.describe` | observer → orchestrator | Query one registered intent (introspection; served by the orchestrator). | §10 |
 
-The orchestrator-level match notification, dispatch, and
-handler-lifecycle topics that some readers may expect to see here are
-defined in OVOS-PIPELINE-1 (§§7–9 there: §7 dispatch,
-§8 handler-lifecycle trio, §9 utterance-layer events), not in
-this spec.
+Match notification, dispatch, and handler-lifecycle topics live in
+OVOS-PIPELINE-1 §§7–9, not here.
 
 ---
 
@@ -365,18 +301,14 @@ diagnostics is implementation choice.
 A `.blacklist` is **not** used with keyword intents. The `excluded` role is
 the keyword-intent suppression mechanism (INTENT-3 §4.2, §5.4).
 
-### 5.5 File form is single-orchestrator only
+### 5.5 File form is single-host only
 
-A `file:` reference is a filesystem path that **MUST** be resolvable by the
-orchestrator. In a deployment where producer and orchestrator share a filesystem (typical
-single-machine installs), file form is fully equivalent to inline. In
-distributed deployments — separate containers, separate hosts, or any case
-where the producer's filesystem is not visible to the orchestrator — producers
-**MUST** use the inline form (`samples`). A consuming plugin that cannot
-resolve a `file:` path treats the registration as malformed and does not
-index it.
-
-The same rule applies to every `file:` field in §6 and §7.
+A `file:` reference is a filesystem path the consuming plugin **MUST**
+be able to resolve. When producer and plugin share a filesystem,
+file form is equivalent to inline; otherwise producers **MUST** use
+the inline form. A plugin that cannot resolve a `file:` path treats
+the registration as malformed and does not index it. The same rule
+applies to every `file:` field in §6 and §7.
 
 ---
 
@@ -493,14 +425,11 @@ both or neither of `samples` / `file` is present.
 
 ### 8.1 Replacement is implicit
 
-Registering an intent whose `(skill_id, intent_name, lang)` triple matches
-an existing registration **replaces** it — the previous definition is
-discarded and wholly superseded by the new one (INTENT-3 §6.1). Replacement
-does **not** require a prior deregister message and **MUST** preserve any
-enabled/disabled state from §8.5; a producer that wants to reset that state
-deregisters first (§8.2) and then re-registers.
-
-The same rule applies to entities, keyed on `(skill_id, entity_name, lang)`.
+Registering an intent whose `(skill_id, intent_name, lang)` triple
+matches an existing registration **replaces** it (INTENT-3 §6.1) —
+no prior deregister needed. Replacement preserves enabled/disabled
+state (§8.5); a producer that wants to reset that state deregisters
+first. Same rule for entities keyed on `(skill_id, entity_name, lang)`.
 
 ### 8.2 `ovos.intent.deregister`
 
@@ -566,62 +495,36 @@ state unless the producer deregisters first.
 
 ## 9. The handler reference is not on the bus
 
-Per INTENT-3 §6.1, the **handler reference** — the actual code object that
-runs when the intent matches — is **not** part of any registration message
-and **never** crosses the bus. It is held locally by the skill process.
-
-This specification puts only the intent **definition** (§§5–7) on
-the bus. The dispatch message that triggers the handler, the
-match-result notification, and the handler-lifecycle messages are
-all defined in OVOS-PIPELINE-1.
-
-Together the registration payloads and the PIPELINE-1 dispatch
-contract let a skill in a different process from the orchestrator
-host its handlers across the bus, without ever serializing the
-handler itself. This is the key contract that lets local and remote
-skills look the same from outside.
+Per INTENT-3 §6.1, the **handler reference** — the code object that
+runs when the intent matches — never crosses the bus; it is held
+locally by the skill process. This specification puts only the
+intent *definition* (§§5–7) on the wire; the dispatch Message that
+invokes the handler is defined in OVOS-PIPELINE-1. Together they
+let a skill in a different process from the orchestrator host its
+handlers across the bus without serializing them — the contract
+that makes local and remote skills indistinguishable from outside.
 
 ---
 
 ## 10. Introspection — the orchestrator-owned manifest
 
-Registration topics of §5–§8 are load-time **announcements**:
-when a skill loads, it emits one `ovos.intent.register.*` per
-intent it owns. A consumer that subscribed before the skill
-loaded receives those announcements in real time. A consumer that
-started later — a monitoring tool started mid-session, a pipeline
-plugin loaded after the skill, a new orchestrator process joining
-a split deployment (OVOS-PIPELINE-1 §2) — has missed them; the
-bus is asynchronous with no catch-up channel for missed
-broadcasts.
-
-The introspection surface this specification defines is the
-**orchestrator-owned manifest** of intents observed on the bus.
-**Skills have no introspection obligation** under this
-specification — they emit their registrations once at load and
-move on. The orchestrator that observes those registrations
-maintains the read-side manifest and answers queries against it.
-
-For per-pipeline-plugin detail — *which* intents are currently
-loaded inside a particular pipeline plugin's matcher, as opposed
-to *what skills have declared on the bus* — see OVOS-PIPELINE-1
-§10 (per-`pipeline_id` introspection). The two surfaces are
-distinct: the orchestrator's manifest is observability of
-declared intents; PIPELINE-1 §10 is observability of compiled
-plugin state. A consumer wanting both queries both.
-
-When the orchestrator is split across cooperating processes
-(OVOS-PIPELINE-1 §2), each process answers from its own
-observed-broadcast slice. The composition of all per-process
-responses is the orchestrator's full manifest.
+Registration broadcasts of §5–§8 are load-time announcements; a
+consumer that subscribed after the skill loaded has missed them
+(the bus is async with no catch-up channel). The
+**orchestrator-owned manifest** is this specification's answer —
+the orchestrator indexes every registration it observes and serves
+queries against it. Skills have no introspection obligation; they
+emit and move on.
 
 **Pull-query is the source of truth.** A consumer that needs
 accurate state **MUST** issue `ovos.intent.list` /
-`ovos.intent.describe` and **MUST NOT** assume that any prior
-`ovos.intent.register.*` broadcast reached it. Registration
-broadcasts are convenience for already-subscribed observers; they
-are not delivery-guaranteed and a consumer that started after a
-skill loaded missed them.
+`ovos.intent.describe` and **MUST NOT** rely on having heard the
+original broadcast. For *compiled-plugin state* — which intents a
+particular matcher actually has loaded — query OVOS-PIPELINE-1 §10
+instead; the surfaces are distinct (declared vs compiled).
+
+Under a split orchestrator (OVOS-PIPELINE-1 §2), each process
+answers from its own slice; consumers aggregate.
 
 Two read-only topics:
 
@@ -667,18 +570,14 @@ Returns the full definition of one intent. Request payload:
 Response (`ovos.intent.describe.response`):
 
 - On success, `{ "ok": true, "method": "keyword"|"template", "definition": {...} }`
-  where `definition` is the §5 or §6 payload in inline form — `samples` and
-  `blacklist` arrays, never `file` or `blacklist_file` paths. An orchestrator
-  that received only a `file:` form and cannot expand it **MUST** omit
-  `definition` from the response; absence of `definition` on an `ok: true`
-  response signals "registered via a `file:` path the manifest cannot
-  resolve." Consumers needing the expanded form re-issue the request against
-  an orchestrator that shares the producer's filesystem (§5.5).
-- On unknown intent, `{ "ok": false, "error": "no such (skill_id, intent_name, lang) registered" }`.
+  where `definition` is the §5 or §6 payload in inline form (always
+  `samples` / `blacklist`, never `file` paths). If the registration
+  arrived via `file:` and the orchestrator cannot expand it,
+  `definition` is omitted — absence on `ok: true` is the signal.
+- On unknown intent, `{ "ok": false, "error": "..." }`.
 
-The orchestrator **MAY** restrict who is permitted to call
-introspection topics; authorization is not defined by this
-specification.
+The orchestrator **MAY** restrict access to introspection topics;
+authorization is out of scope.
 
 ---
 
@@ -701,27 +600,19 @@ specification.
 - conform its underlying templates, vocabularies, and entities to
   OVOS-INTENT-1 and OVOS-INTENT-2.
 
-A skill **SHOULD NOT** assume any specific plugin will consume its
-registration. Producers responsible for delivery confirmation
-**SHOULD** query the manifest (§10); registrations are fire-and-
-forget and emit no acknowledgement.
+A skill **SHOULD** query the manifest (§10) to confirm a
+registration landed; there is no acknowledgement.
 
-A skill carries **no introspection obligation** under this
-specification. The orchestrator owns the manifest (see below).
+### A **pipeline plugin** (consumer) **MAY**:
 
-### A **pipeline plugin** (consumer of registration messages) **MAY**:
-
-- subscribe to any subset of the registration topics defined here and
-  consume what fits its matching strategy. A plugin that consumes
-  `ovos.intent.register.template` only is conformant; a plugin that
-  consumes none of them and matches utterances by its own internal
-  rules (e.g. an LLM persona) is also conformant.
+- subscribe to any subset of the registration topics and consume
+  what fits its matching strategy — a plugin that consumes none
+  and matches by internal rules (e.g. an LLM persona) is also
+  conformant.
 
 A plugin **MUST NOT** index a malformed registration (§§5.3, 5.5,
-6.2, 6.3, 7.2) and **MUST NOT** index a registration whose
-`intent_name` is reserved (§3.3). The plugin's matching behaviour,
-lifecycle, and bus emissions are out of scope for this
-specification — see OVOS-PIPELINE-1.
+6.2, 6.3, 7.2) or one whose `intent_name` is reserved (§3.2).
+Matching behaviour beyond that is OVOS-PIPELINE-1's concern.
 
 ### The **orchestrator** **MUST**:
 
@@ -738,21 +629,8 @@ specification — see OVOS-PIPELINE-1.
   The orchestrator is a passive listener for the manifest, not a
   routing party.
 
-When the orchestrator is split across cooperating processes
-(OVOS-PIPELINE-1 §2), each process maintains its own slice of the
-manifest built from broadcasts it observed and responds
-independently to §10 queries; consumers aggregate the slices.
-
-For per-pipeline-plugin detail (which intents a particular
-plugin's matcher has compiled), consumers query
-OVOS-PIPELINE-1 §10 directly against the responsible
-`pipeline_id`. The orchestrator's manifest under this
-specification is the declared-intents view; PIPELINE-1 §10 is the
-compiled-state view.
-
 The orchestrator's other responsibilities — matching, dispatch,
-handler lifecycle observation, utterance lifecycle — are defined
-by OVOS-PIPELINE-1.
+handler lifecycle, utterance lifecycle — live in OVOS-PIPELINE-1.
 
 ---
 
