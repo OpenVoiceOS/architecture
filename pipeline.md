@@ -159,24 +159,18 @@ multiple matching modes (for example, a strict mode and a
 permissive mode). The orchestrator treats each `pipeline_id` as a
 distinct stage.
 
-### 3.1 Identity stamping
+### 3.1 Pipeline attribution
 
-Two identity fields travel in `Message.context` through the pipeline:
+When the orchestrator selects a match it **MUST** stamp
+`Message.context["pipeline_id"]` with the `pipeline_id` of the
+plugin that produced it. This makes the match attributable to its
+engine; downstream consumers (e.g. OVOS-CONTEXT-1 §5.2) read this
+field without inspecting topics or payloads.
 
-- **`context["pipeline_id"]`** — set by the orchestrator to the
-  `pipeline_id` of the plugin currently executing `match`. The
-  orchestrator **MUST** stamp this field before each `match` call
-  so that any Message the plugin emits during matching is
-  attributable to it. Downstream consumers (e.g. OVOS-CONTEXT-1
-  §5.2) read this field to attribute plugin-emitted events.
-- **`context["skill_id"]`** — set by the orchestrator to
-  `Match.owner_id` on every dispatch (§7.1). Every Message a
-  handler emits during its execution carries this value, satisfying
-  OVOS-INTENT-4 §3.1 by construction.
-
-The orchestrator **SHOULD** enforce both fields at load time so
-non-compliant plugin or skill code cannot emit a Message with a
-missing or incorrect identity key.
+Handler identity (`context["skill_id"]`) is governed by
+OVOS-INTENT-4 §3.1 and applies to pipeline plugins with bundled
+handlers identically to plain skills — the dispatch shape is fully
+polymorphic (§7.0).
 
 ---
 
