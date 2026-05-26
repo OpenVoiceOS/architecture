@@ -48,7 +48,7 @@ The slot-bearing roles map onto the data path of a voice interaction:
   their named slots are filled by the caller before the text is spoken.
 
 `.entity`, `.voc`, and `.blacklist` share the slot-free format; they are how a
-developer encodes a set of natural-language phrasings for OVOS to use, and
+developer encodes a set of natural-language phrasings for the assistant to use, and
 differ only in *which component consumes them* (§4.3).
 
 This specification covers the **folder layout**, the **common parsing rules**,
@@ -237,7 +237,7 @@ with the expanded phrase set:
 | Extension | Role | Consumed by | Pairing |
 |-----------|------|-------------|---------|
 | `.entity` | Example values that can fill a `{slot}` | Intent engine, as a slot value set (OVOS-INTENT-1 §5.4) | Base name = the `{slot}` name it supplies |
-| `.voc` | A named set of localized phrasings | Keyword intent engines (e.g. Adapt); skill helpers such as `voc_match`; inline `<name>` references in templates (OVOS-INTENT-1 §3.7) | Base name = the vocabulary name |
+| `.voc` | A named set of localized phrasings | Keyword intent engines; skill runtime helpers; inline `<name>` references in templates (OVOS-INTENT-1 §3.7) | Base name = the vocabulary name |
 | `.blacklist` | Words whose presence suppresses an intent | Intent engine, as match suppression | Base name = the `.intent` it suppresses |
 
 How an `.entity` or `.voc` phrase set is *used* — slot constraint, keyword
