@@ -1113,6 +1113,25 @@ and needs no implementation change:
 | PIPELINE-1 | `mycroft.skill.handler.start` / `.complete` / `.error` | `ovos.intent.handler.start` / `.complete` / `.error` | Renamed into the `ovos.intent.*` namespace for uniformity. Breaks every existing handler-lifecycle observer; the migration cost is real. |
 | PIPELINE-1 | `recognizer_loop:utterance` | `ovos.utterance.handle` | See §5.4 entry. Migration touches `ovos-dinkum-listener`, `ovos-simple-listener`, `ovos-audio`, and `ovos-core/intent_services/service.py`. |
 
+### 5.2.1 Topics to remove from ovos-core
+
+The following topics exist in current ovos-core but are **not
+defined by any spec** and should be removed or replaced:
+
+- **`ovos.session.sync` / `ovos.session.update_default`** —
+  emitted by `SessionManager` to broadcast the current default
+  session to interested components. SESSION-2 §6.4 acknowledges
+  that an orchestrator MAY emit default-session state on a
+  deployer-defined topic but assigns no normative name. These
+  ad-hoc topics should be retired: any component that needs the
+  default-session state can subscribe to `ovos.utterance.handled`
+  (PIPELINE-1 §9.5) and read the session it carries, or listen
+  to any other assistant-emitted Message on the default session.
+  A named sync topic adds an implicit state-broadcast contract
+  that the specs deliberately avoid; clients are expected to
+  track session from Message flow, not from dedicated sync
+  broadcasts.
+
 ### 5.3 Prescriptive shape changes
 
 - **Keyword intent registration is atomic** (INTENT-4 §5).
