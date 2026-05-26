@@ -51,7 +51,7 @@ This specification defines:
   `ovos.intent.handler.start` / `.complete` / `.error`;
 - the **utterance-layer bus events** (§9) —
   the utterance entry topic `ovos.utterance.handle` (§9.1),
-  `ovos.intent.matched`, `complete_intent_failure`,
+  `ovos.intent.matched`, `ovos.intent.unmatched`,
   `ovos.utterance.handled`, and the natural-language response topic
   `ovos.utterance.speak` (§9.6);
 - **conformance** (§11).
@@ -377,7 +377,7 @@ session (OVOS-SESSION-1 §3.1). The default-session pipeline is owned
 and maintained by the orchestrator and represents what the
 deployment runs when no preference is expressed. If the default
 session itself has no `pipeline` configured, the utterance proceeds
-to no-match (`complete_intent_failure`, §9.3).
+to no-match (`ovos.intent.unmatched`, §9.3).
 
 Different sessions may carry different `pipeline`. This is how a
 session origin expresses different preferences for different
@@ -518,7 +518,7 @@ The intended separation of concerns is sharp:
 
 If every requested `pipeline_id` is dropped by availability or
 policy, the effective pipeline is empty and the utterance proceeds
-directly to no-match (`complete_intent_failure`, §9.3). The
+directly to no-match (`ovos.intent.unmatched`, §9.3). The
 orchestrator **MUST NOT** silently fall back to the default-session
 pipeline in this case — falling back would let a policy-rejected
 preference pull in a different ordering the origin never asked for
@@ -608,7 +608,7 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     break
    │
    └─ if no plugin matched (or all matches filtered):
-         complete_intent_failure                  (§9.3)
+         ovos.intent.unmatched                  (§9.3)
          ovos.utterance.handled                   (§9.5)
 ```
 
@@ -646,7 +646,7 @@ For each utterance, the orchestrator **MUST**:
   (OVOS-TRANSFORM-1 §3.2, §3.3) before pipeline iteration begins;
 - if the utterance-transformer chain returns an **empty
   utterance list**, skip pipeline iteration entirely and proceed
-  directly to `complete_intent_failure` (§9.3) — `match()` is
+  directly to `ovos.intent.unmatched` (§9.3) — `match()` is
   contractually defined over a non-empty list (§4) and the
   orchestrator **MUST NOT** invoke any plugin with an empty
   list. (If the empty list arrived together with cancellation
@@ -656,7 +656,7 @@ For each utterance, the orchestrator **MUST**:
 - for each `pipeline_id`, call `match` on the corresponding loaded
   plugin (skipping unknown identifiers, §5);
 - stop at the **first plugin** that returns a non-`None` `Match`;
-- if no plugin returns a `Match`, emit `complete_intent_failure`
+- if no plugin returns a `Match`, emit `ovos.intent.unmatched`
   (§9.3).
 
 A plugin that raises an exception during `match` is treated as if
@@ -699,7 +699,7 @@ followed by the universal end-marker `ovos.utterance.handled`:
 | Outcome | Sequence of utterance-layer events |
 |---------|------------------------------------|
 | Matched by a plugin | `ovos.intent.matched` → dispatch + (handler trio §8) → `ovos.utterance.speak` ×0..N → `ovos.utterance.handled` |
-| No plugin matched | `complete_intent_failure` → `ovos.utterance.handled` |
+| No plugin matched | `ovos.intent.unmatched` → `ovos.utterance.handled` |
 | Cancelled by a transformer | `ovos.utterance.cancelled` → `ovos.utterance.handled` (see OVOS-TRANSFORM-1 §8.2) |
 
 If a dispatched handler emits `ovos.intent.handler.error` (§8)
@@ -1001,7 +1001,7 @@ Consumers **MUST NOT** treat receipt as permission or instruction
 to run a handler — handler invocation happens via the dispatch
 topic (§7).
 
-### 9.3 `complete_intent_failure`
+### 9.3 `ovos.intent.unmatched`
 
 Emitted by the orchestrator when pipeline iteration completed
 with no plugin claiming the utterance. Broadcast.
@@ -1025,7 +1025,7 @@ This message **MUST** be followed immediately by
 `ovos.utterance.handled` (§9.5).
 
 This is the **intent-layer failure** signal. It is distinct from
-a handler-layer error (§8): `complete_intent_failure` means "no
+a handler-layer error (§8): `ovos.intent.unmatched` means "no
 plugin claimed"; `ovos.intent.handler.error` means "a handler
 ran and raised."
 
@@ -1228,7 +1228,7 @@ from the hosting process.
 - iterate `session.pipeline` in order (§6.2) and stop at
   the first plugin returning a non-`None` `Match`;
 - skip unknown `pipeline_id`s without failing the utterance (§5);
-- emit `complete_intent_failure` when no plugin claimed (§9.3);
+- emit `ovos.intent.unmatched` when no plugin claimed (§9.3);
 - emit `ovos.intent.matched` (§9.2) on every successful claim,
   before the dispatch;
 - dispatch on `<match.skill_id>:<match.intent_name>` per §7;
