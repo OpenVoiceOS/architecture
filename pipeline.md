@@ -1,6 +1,6 @@
 # Utterance Lifecycle and Pipeline Specification
 
-**Spec ID:** OVOS-PIPELINE-1 · **Version:** 2 · **Status:** Draft
+**Spec ID:** OVOS-PIPELINE-1 · **Version:** 3 · **Status:** Draft
 
 This document defines the **utterance lifecycle** — the path an
 utterance takes from the moment it enters the assistant to the moment
@@ -846,9 +846,12 @@ Other normative specifications **MAY** reserve specific
 `intent_name` values for matches produced by a particular
 pipeline plugin role. A reserved intent_name is one that:
 
-- skills and pipelines **MUST NOT** register under OVOS-INTENT-4
-  (the orchestrator MUST reject registrations bearing a reserved
-  name, per OVOS-INTENT-4 §3.5);
+- skills and pipelines **MUST NOT** register under OVOS-INTENT-4;
+  a consuming pipeline plugin that observes such a registration
+  **MUST NOT** index it and **MUST** log per OVOS-INTENT-4 §5.3.
+  The orchestrator's INTENT-4 manifest still indexes the broadcast
+  with `reserved: true` (OVOS-INTENT-4 §3.2 / §10.1) so tooling
+  can surface the misregistration;
 - a pipeline plugin **MAY** emit as the `intent_name` of a
   returned `Match` to signal "this match was produced by the
   role that reserves the name"; the dispatch then proceeds

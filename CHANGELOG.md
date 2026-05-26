@@ -76,3 +76,45 @@ tool does not recognize the token and cannot expand the template.
   authentication, authorization, retry, delivery and ordering
   guarantees, session lifecycle, and the internal shape of `session`
   beyond `session_id` and `lang` are explicitly out of scope.
+
+## OVOS-PIPELINE-1 — Utterance Lifecycle and Pipeline
+
+### 3
+
+- §7.3 — realign the reserved-intent_names rejection contract with
+  OVOS-INTENT-4 §3.2: enforcement is the consuming pipeline plugin's
+  (MUST NOT index, MUST log per INTENT-4 §5.3), not the orchestrator's;
+  the orchestrator's INTENT-4 manifest still indexes the broadcast with
+  `reserved: true` so tooling can surface the misregistration. Removes
+  the stale `OVOS-INTENT-4 §3.5` cross-reference (the section was
+  consolidated into INTENT-4 §3.2) and the stale `error_code` mechanism
+  (INTENT-4 is fire-and-forget — no `.response`).
+
+### 2
+
+- Pre-merge polish pass.
+
+### 1
+
+- Initial draft.
+
+## OVOS-INTENT-4 — Intent and Entity Registration Bus Contract
+
+### 1
+
+- Initial draft. Bus contract for declaring intents and entities, the
+  wire companion to OVOS-INTENT-3. Defines registration topics
+  (`ovos.intent.register.keyword` / `.template`, `ovos.entity.register`),
+  deregistration / enable / disable, and orchestrator-owned manifest
+  introspection (`ovos.intent.list` / `.describe`). Atomic keyword
+  registration with inline `required` / `optional` / `one_of` /
+  `excluded` vocabulary descriptors. Structured identity via the
+  `(skill_id, intent_name, lang)` triple plus a `method` axis for
+  manifest indexing — a single intent MAY be registered under both
+  keyword and template methods as two training-data representations.
+  Fire-and-forget broadcast model: no `.response` acknowledgements;
+  manifest presence is the only success signal. Consuming plugins MUST
+  log malformed-payload rejections at WARN with full identifiers and
+  the rejecting topic. File paths never cross the bus — INTENT-2 locale
+  files are a producer-side authoring convenience expanded inline by
+  the skill loader before emission.

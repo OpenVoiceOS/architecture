@@ -155,7 +155,10 @@ pipeline plugins consume different methods; a match from either
 dispatches to the same `<skill_id>:<intent_name>` topic. The wire
 contract makes no claim about which representation should "win" when
 both produce a match — that is a pipeline policy concern
-(OVOS-PIPELINE-1).
+(OVOS-PIPELINE-1). Producers **MAY** ship divergent suppression
+vocabularies between the two methods (different `excluded` for
+keyword vs different `blacklist` for template); each plugin honours
+only its own method's suppression.
 
 For an **entity**, `intent_name` is replaced by `entity_name` (same
 uniqueness rule: unique within the skill). Entity registrations have
@@ -286,9 +289,13 @@ malformed.
 
 A consuming plugin **MUST NOT** index a registration that violates
 these rules. The rejecting plugin **MUST** log the rejection at
-WARN with `skill_id`, `intent_name`, `lang`, and a one-line reason
-— this is the only debugging signal a producer receives, since the
-bus is fire-and-forget (§2).
+WARN, including `skill_id`, `intent_name`, `lang`, the rejecting
+topic, and a one-line reason — this is the only debugging signal a
+producer receives, since the bus is fire-and-forget (§2). The
+topic is part of the actionable signal because the same
+`(skill_id, intent_name, lang)` may be valid as keyword and
+malformed as template (or vice versa, §3.2). Structured logging is
+**RECOMMENDED**.
 
 ### 5.4 No `.blacklist`
 
@@ -463,7 +470,9 @@ without modifying skill code. Both topics share the same payload as
 If `lang` is omitted, every language for that `(skill_id, intent_name)`
 is affected. Like deregistration, enable/disable target the triple and
 apply to **all methods** of the intent — there is no per-method
-enable/disable.
+enable/disable. A producer that wants to retain only one method
+deregisters the triple (§8.2, removes both methods) and re-registers
+just the desired one.
 
 Enabling an already-enabled intent, or disabling an already-disabled
 intent, is a no-op. Re-registration (§8.1) preserves enabled/disabled
@@ -560,7 +569,12 @@ Response (`ovos.intent.describe.response`):
   where each `definition` is the §5 or §6 payload as it was broadcast.
   The array carries one entry when `method` was specified or only one
   method was registered, two entries when both methods exist and no
-  filter was given.
+  filter was given. When two entries are returned, the orchestrator
+  **MUST** emit them in the order `keyword`, `template` so consumers
+  can rely on positional access. If the intent_name is reserved
+  (§3.2), the response **MUST** include `"reserved": true` at the
+  top level so a `.describe` consumer can diagnose the
+  misregistration without round-tripping through `.list`.
 - On unknown intent, `{ "ok": false, "error": "..." }`.
 
 The orchestrator **MAY** restrict access to introspection topics;
