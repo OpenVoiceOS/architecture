@@ -157,12 +157,11 @@ not interpret the `pipeline_id` string beyond using it as a key.
 Constraints on `pipeline_id` strings:
 
 - Non-empty.
-- Bound by OVOS-MSG-1 §2.1.1 (identifiers used as topic
-  components): no `:`, no `.`, no whitespace, ASCII letters /
-  digits / `_` / `-` only. The constraint is necessary because
-  `pipeline_id` may appear as the owner in the dispatch topic shape
-  `<owner_id>:<intent_name>` (§7) and per-pipeline introspection
-  topics (§10) build on the same identifier.
+- Bound by OVOS-MSG-1 §2.1.1: because `pipeline_id` appears as a
+  component in colon-separated topic shapes (`<owner_id>:<intent_name>`
+  in §7, per-pipeline introspection topics in §10), it **MUST NOT**
+  contain `:`. The recommended form is ASCII letters / digits / `_` /
+  `-` only.
 - Unique within a deployment's loaded-plugin set.
 
 A plugin **MAY** appear in a session's pipeline more than once
@@ -800,9 +799,8 @@ on the topic:
 ```
 
 where `<owner_id>` is `Match.owner_id` and `<intent_name>` is
-`Match.intent_name`. Both segments are bound by OVOS-MSG-1
-§2.1.1 (no `:`, no `.`, no whitespace), so the single `:` split
-is unambiguous.
+`Match.intent_name`. Both segments are bound by OVOS-MSG-1 §2.1.1 — neither may
+contain `:` — so the single `:` split is unambiguous.
 
 ### 7.0 Identifier polymorphism — `<owner_id>` is one identifier
 
