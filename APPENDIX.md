@@ -19,6 +19,54 @@ code moves and specifications must not.
 
 ## 1. About the OVOS specifications
 
+### 1.0 The voice operating system concept
+
+The term *voice operating system* is precise, not marketing. The
+distinction matters because OVOS is routinely conflated with two
+things it is not:
+
+**It is not a voice assistant product.** A voice assistant is a
+closed, vertically-integrated product — a single vendor controls
+the NLU, the dialogue policy, the skill ecosystem, and the output
+layer. It answers questions. A voice operating system is a
+*platform*: it defines contracts that arbitrary third-party
+components implement independently, and the platform's job is to
+arbitrate between them. The analogy to a general-purpose OS is
+direct. The pipeline is a scheduler: it has a priority order, a
+first-match-wins dispatch policy, and a circuit-breaker for failing
+components. The bus is IPC: broadcast delivery, no central
+authority, no guaranteed ordering beyond the single-flip routing
+model. The session carrier is shared memory: it propagates opaquely
+through every message and every component reads and writes its
+owned slice. The handler-lifecycle trio is process supervision: the
+orchestrator wraps every handler invocation with start/complete/error
+events regardless of what the handler does. Pipeline plugins and
+transformer plugins are loadable modules: swapped, replaced, and
+composed at deployment time with no changes to the ABI.
+
+**It is not an LLM wrapper.** A language model fits the voice OS
+model as a first-class plugin — and in multiple roles. As a
+*pipeline plugin*, it implements `match(utterances, lang, session)
+→ Match`, returning a match immediately and deferring generation to
+its handler (PIPELINE-1 §4.4). As an *utterance transformer*, it
+paraphrases, normalizes, or expands the inbound candidate list
+before matching (TRANSFORM-1 §3.2). As a *dialog transformer*, it
+rewrites the handler's natural-language response before delivery
+(TRANSFORM-1 §3.5). As a *metadata transformer*, it enriches the
+utterance with detected intent signals before the pipeline sees it
+(TRANSFORM-1 §3.3). In each role, the model is one implementation
+of a defined plugin contract — swappable, composable, and neutral
+to the platform. Whether any LLM is loaded at all, and in which
+roles and at what priority, is a deployment decision. An
+architecture organized around a single model call is not a voice OS;
+it is one possible single-plugin deployment of one.
+
+The consequence of the OS framing: a skill written against the
+intent stack runs on any conformant orchestrator, under any pipeline
+configuration, with any combination of NLU backends, in any language
+the deployment supports. The platform's only invariant is the ABI —
+the wire contracts these specifications define.
+
 ### 1.1 Formalization of an existing system
 
 The OVOS stack — the engines (padatious, Adapt), the skill

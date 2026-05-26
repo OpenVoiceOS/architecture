@@ -1,12 +1,42 @@
 # OVOS Formal Specifications
 
-Formal, implementation-agnostic specifications for the OpenVoiceOS
-voice assistant ecosystem.
+Formal, implementation-agnostic specifications for a **voice
+operating system** — a platform that provides a stable application
+binary interface for voice-interactive applications.
 
-This repository is the **source of truth** for how OVOS components
+This repository is the **source of truth** for how components
 talk to each other and what their data shapes mean. The specs are
 written generically so they can be implemented by any tool, in any
-language, and adopted by voice assistants beyond OVOS.
+language, and adopted beyond their origin project.
+
+### What a voice operating system is
+
+A voice OS is not a voice assistant. A voice assistant is a product
+that answers questions. A voice OS is a **platform**: it defines the
+boundary between user input and computation, arbitrates which
+application handles each utterance, manages conversation state across
+interactions, and provides a stable ABI that arbitrary third-party
+applications run against without knowing anything about each other.
+
+The analogy to a general-purpose OS is direct:
+
+| OS concept | Voice OS equivalent |
+|---|---|
+| Process scheduler | Pipeline plugin ordering (PIPELINE-1 §5–6) |
+| IPC / message passing | The bus and MSG-1 envelope |
+| Shared memory | Session carrier (SESSION-1, SESSION-2) |
+| Process supervision | Handler-lifecycle trio (PIPELINE-1 §8) |
+| Loadable kernel modules | Pipeline plugins, transformer plugins |
+| System call ABI | The `match(utterances, lang, session) → Match` contract |
+
+The consequence is that OVOS is not a chatbot, not an LLM wrapper,
+and not a monolithic product. It is a **runtime**: swap the
+scheduler (pipeline ordering), the NLU engines (pipeline plugins),
+the dialogue policy (converse / context), the output layer (TTS,
+display), or any combination — the ABI stays stable and the rest
+keeps working. A skill written against the intent stack runs on any
+conformant orchestrator, under any pipeline configuration, in any
+language OVOS supports.
 
 > ⚠️ **Draft.** Specs in this repository are at **Draft** status.
 > Implementations are being brought into conformance progressively;
