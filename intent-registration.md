@@ -1,6 +1,6 @@
 # Intent and Entity Registration Bus Contract
 
-**Spec ID:** OVOS-INTENT-4 · **Version:** 3 · **Status:** Draft
+**Spec ID:** OVOS-INTENT-4 · **Version:** 4 · **Status:** Draft
 
 This document defines the **bus messages** a skill uses to declare its
 intents and entities. It is the wire format for intent registration —
@@ -109,15 +109,17 @@ semantics inherit that value automatically. No extra stamp step
 is needed on the dispatch path.
 
 `Message.context["skill_id"]` is the **authoritative attribution
-key** for skill-originated bus traffic — observers MUST NOT infer
-the originating skill from topic names or `data` fields. A Message
-arriving without `context["skill_id"]` is either not
+key** for skill-originated bus traffic — observers **MUST NOT**
+infer the originating skill from topic names or `data` fields. A
+Message arriving without `context["skill_id"]` is either not
 skill-originated or is from a non-conformant skill; the
-orchestrator **SHOULD** log the absence but **MUST NOT** reject at
-this layer (per-topic rejection is the responsibility of that
-topic's owning spec).
+orchestrator **MUST** log the absence at WARN with the topic
+involved, but **MUST NOT** reject at this layer (per-topic
+rejection is the responsibility of that topic's owning spec).
+`source` (OVOS-MSG-1 §3.2) is opaque routing metadata, not an
+identity surface.
 
-#### Enforcement and other component types
+#### Enforcement
 
 On the dispatch path enforcement is structural — the orchestrator
 stamps `context["skill_id"]` per OVOS-PIPELINE-1 §7.1 and MSG-1
@@ -126,17 +128,11 @@ emissions outside the dispatch path, the component that loads
 skills **SHOULD** intercept the emit pathway so non-conformant
 handler code cannot escape. A Message whose `context["skill_id"]`
 disagrees with the `<skill_id>` of the dispatch it derives from
-is malformed; the orchestrator **SHOULD** log the drift.
+is malformed; the orchestrator **MUST** log the drift at WARN.
 
-Other component types claim their own identity keys —
-`context["pipeline_id"]` (OVOS-PIPELINE-1 §3.1), the six
-`<type>_transformer_ids` keys (OVOS-TRANSFORM-1 §1.3) — with the
-same stamp-on-originate-or-modify discipline. These keys coexist:
-a Message MAY carry several at once, a skill **MUST NOT** strip
-keys it did not set, and a consumer **MUST NOT** treat their
-presence as malformed. For single-owner attribution see
-OVOS-CONTEXT-1 §5.2. `source` (OVOS-MSG-1 §3.2) is opaque routing
-metadata, not an identity surface.
+Other component types claim parallel identity keys with the same
+discipline; see OVOS-CONTEXT-1 §5.2 for the single-owner
+attribution precedence when several appear on one Message.
 
 ### 3.2 Identity carried by every registration message
 
@@ -154,7 +150,9 @@ For an **intent**:
 
 The triple `(skill_id, intent_name, lang)` is the **registration key**
 (INTENT-3 §6.1). Registering an intent whose key matches an existing
-registration **replaces** the previous one (§8.1).
+registration **replaces** the previous one (§8.1); replacement is
+per-key, so other languages of the same `(skill_id, intent_name)`
+pair are unaffected.
 
 For an **entity**, `intent_name` is replaced by `entity_name` (same
 uniqueness rule: unique within the skill).
@@ -163,9 +161,9 @@ Other specifications **MAY** reserve specific `intent_name`
 values; the authoritative registry is OVOS-PIPELINE-1 §7.3. A
 consuming plugin **MUST NOT** index a registration whose
 `intent_name` is reserved, so it will never produce a match. The
-manifest (§10) **MAY** still index the broadcast for diagnostic
-visibility — surfacing the registration in `ovos.intent.list` lets
-tooling spot the mistake.
+manifest (§10) **MUST** still index the broadcast and flag the
+entry with `reserved: true` in `ovos.intent.list` (§10.1) so
+tooling can surface the mistake.
 
 ---
 
@@ -286,15 +284,14 @@ malformed-payload rules:
   non-empty samples is malformed.
 
 A producer **MUST** include all four top-level keys (`required`,
-`optional`, `one_of`, `excluded`); a consumer that nonetheless
-receives a payload with one or more of them missing **SHOULD**
-treat the missing key as an empty array and continue, rather than
-rejecting.
+`optional`, `one_of`, `excluded`); a payload missing any of them is
+malformed.
 
 A consuming plugin **MUST NOT** index a registration that violates
-these rules; the malformed registration will not produce a match.
-Whether the plugin or the manifest logs the rejection for
-diagnostics is implementation choice.
+these rules. The rejecting plugin **MUST** log the rejection at
+WARN with `skill_id`, `intent_name`, `lang`, and a one-line reason
+— this is the only debugging signal a producer receives, since the
+bus is fire-and-forget (§2).
 
 ### 5.4 No `.blacklist`
 
@@ -306,9 +303,12 @@ the keyword-intent suppression mechanism (INTENT-3 §4.2, §5.4).
 A `file:` reference is a filesystem path the consuming plugin **MUST**
 be able to resolve. When producer and plugin share a filesystem,
 file form is equivalent to inline; otherwise producers **MUST** use
-the inline form. A plugin that cannot resolve a `file:` path treats
-the registration as malformed and does not index it. The same rule
-applies to every `file:` field in §6 and §7.
+the inline form. Producers **SHOULD** prefer inline unconditionally —
+it is portable across deployment shapes and removes one class of
+silent malformed-payload failure. A plugin that cannot resolve a
+`file:` path treats the registration as malformed and does not
+index it (and logs per §5.3). The same rule applies to every
+`file:` field in §6 and §7.
 
 ---
 
@@ -373,6 +373,10 @@ A consuming plugin **MUST NOT** index a template registration in which:
 - a template expands to zero non-empty samples (OVOS-INTENT-1 §3.6);
 - the slot sets of the templates differ (§6.2).
 
+The §5.3 WARN-log rule applies: the rejecting plugin **MUST** log
+the rejection with `skill_id`, `intent_name`, `lang`, and a
+one-line reason.
+
 ---
 
 ## 7. Entity registration
@@ -416,8 +420,11 @@ Field reference:
 
 ### 7.2 Malformed payloads
 
-A consuming plugin **MUST NOT** index an entity registration in which
-both or neither of `samples` / `file` is present.
+A consuming plugin **MUST NOT** index an entity registration in
+which both or neither of `samples` / `file` is present. The §5.3
+WARN-log rule applies: the rejecting plugin **MUST** log the
+rejection with `skill_id`, `entity_name`, `lang`, and a one-line
+reason.
 
 ---
 
@@ -472,13 +479,21 @@ matching record simply has nothing to remove. This makes the
 shutdown sequence — where every plugin the skill ever talked to
 receives every deregistration — naturally idempotent.
 
+Races between a deregistration and an in-flight match (a match
+emitted before the deregister was processed, dispatched after) are
+the responsibility of the utterance lifecycle owner — see
+OVOS-PIPELINE-1.
+
 ### 8.5 `ovos.intent.enable` and `ovos.intent.disable`
 
 A registered intent is, by default, **enabled** — eligible for matching. A
 skill **MAY** temporarily **disable** an intent without removing it; the
 orchestrator retains the definition in the manifest but marks it disabled,
-and plugins exclude it from match candidacy until it is re-enabled. Both topics share the same
-payload as `ovos.intent.deregister` (§8.2), and `lang` semantics:
+and plugins exclude it from match candidacy until it is re-enabled. The
+bus-level surface (rather than skill-side gating) lets *external* tooling —
+admin UIs, A/B experiments, conflict resolution — suppress an intent
+without modifying skill code. Both topics share the same payload as
+`ovos.intent.deregister` (§8.2), and `lang` semantics:
 
 ```json
 { "skill_id": "music.skill", "intent_name": "play_music", "lang": "en-US" }
@@ -557,7 +572,11 @@ Response (`ovos.intent.list.response`):
 ```
 
 Each entry carries `skill_id`, `intent_name`, `lang`, a `method` of
-`"keyword"` or `"template"` (INTENT-3 §2), and an `enabled` boolean (§8.5).
+`"keyword"` or `"template"` (INTENT-3 §2), an `enabled` boolean (§8.5),
+and — when the `intent_name` is reserved (§3.2) — a `reserved: true`
+flag. A reserved-flagged entry exists in the manifest but will never
+produce a match; tooling **SHOULD** surface it as a misregistration.
+`reserved` is absent (equivalent to `false`) on normal entries.
 
 ### 10.2 `ovos.intent.describe`
 
@@ -573,7 +592,10 @@ Response (`ovos.intent.describe.response`):
   where `definition` is the §5 or §6 payload in inline form (always
   `samples` / `blacklist`, never `file` paths). If the registration
   arrived via `file:` and the orchestrator cannot expand it,
-  `definition` is omitted — absence on `ok: true` is the signal.
+  `definition` is omitted — absence on `ok: true` means "registered
+  but introspection-opaque." Consumers needing the definition in
+  that case **SHOULD** fall back to per-plugin introspection
+  (OVOS-PIPELINE-1 §10).
 - On unknown intent, `{ "ok": false, "error": "..." }`.
 
 The orchestrator **MAY** restrict access to introspection topics;
@@ -611,8 +633,11 @@ registration landed; there is no acknowledgement.
   conformant.
 
 A plugin **MUST NOT** index a malformed registration (§§5.3, 5.5,
-6.2, 6.3, 7.2) or one whose `intent_name` is reserved (§3.2).
-Matching behaviour beyond that is OVOS-PIPELINE-1's concern.
+6.2, 6.3, 7.2) or one whose `intent_name` is reserved (§3.2), and
+**MUST** log every such rejection at WARN with `skill_id`,
+`intent_name`/`entity_name`, `lang`, and a one-line reason —
+fire-and-forget means this log is the producer's only debugging
+signal. Matching behaviour beyond that is OVOS-PIPELINE-1's concern.
 
 ### The **orchestrator** **MUST**:
 
@@ -620,11 +645,15 @@ Matching behaviour beyond that is OVOS-PIPELINE-1's concern.
   **manifest** — a passive index built from observed broadcasts;
 - serve `ovos.intent.list` and `ovos.intent.describe` queries
   against the manifest, returning the shape of §10.1 / §10.2;
+- flag manifest entries whose `intent_name` is reserved (§3.2)
+  with `reserved: true` in `ovos.intent.list` responses;
 - treat a re-registration with the same key as replacement of the
-  prior manifest entry (§8.1);
+  prior manifest entry (§8.1) — replacement is per-key and does
+  not affect other languages of the same `(skill_id, intent_name)`;
 - honour `ovos.intent.enable` / `ovos.intent.disable` in the
   manifest (§8.5) — the `enabled` field of §10.1 reflects the
   latest state;
+- log absent or mismatched `context["skill_id"]` at WARN (§3.1);
 - **NOT** validate, reject, route, or gate any registration message.
   The orchestrator is a passive listener for the manifest, not a
   routing party.
