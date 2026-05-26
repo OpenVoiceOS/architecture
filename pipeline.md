@@ -159,66 +159,24 @@ multiple matching modes (for example, a strict mode and a
 permissive mode). The orchestrator treats each `pipeline_id` as a
 distinct stage.
 
-### 3.1 Plugin self-identification on emission
+### 3.1 Identity stamping
 
-A pipeline plugin **MUST** set `Message.context["pipeline_id"]` on
-**every Message it emits to the bus**, to its own `pipeline_id`.
-This is the plugin-side analogue of the skill rule in
-OVOS-INTENT-4 §3.1: it makes plugin-originated traffic
-attributable to its emitter without parsing topic names or `data`
-payloads.
+Two identity fields travel in `Message.context` through the pipeline:
 
-The rule binds independent of the topic. It applies to bus events
-a plugin emits on its own initiative (background telemetry,
-diagnostics, plugin-defined topics), and — crucially for downstream
-specs — to events on shared topics owned by other specifications.
-For example, OVOS-CONTEXT-1 §5.2 reads `context["pipeline_id"]` to
-attribute a plugin-emitted `ovos.context.set` to its owning
-plugin; without this rule that attribution has no wire-level
-source.
+- **`context["pipeline_id"]`** — set by the orchestrator to the
+  `pipeline_id` of the plugin currently executing `match`. The
+  orchestrator **MUST** stamp this field before each `match` call
+  so that any Message the plugin emits during matching is
+  attributable to it. Downstream consumers (e.g. OVOS-CONTEXT-1
+  §5.2) read this field to attribute plugin-emitted events.
+- **`context["skill_id"]`** — set by the orchestrator to
+  `Match.owner_id` on every dispatch (§7.1). Every Message a
+  handler emits during its execution carries this value, satisfying
+  OVOS-INTENT-4 §3.1 by construction.
 
-**Stamp rule.** A plugin **MUST** set
-`Message.context["pipeline_id"]` to its own identity on every
-Message it **originates** — constructs and emits fresh. When the
-plugin emits a derived Message via `Message.forward`,
-`Message.reply`, or `Message.response` (OVOS-MSG-1 §5), these are
-**routing-metadata** derivations that adjust addressing but are
-not new originations; the plugin **MUST NOT** overwrite the
-inherited `context["pipeline_id"]` in any of these cases —
-preserving upstream attribution is the point of the derivation.
-Only a fresh construction is an origination that requires stamping.
-
-**Coexistence with other identity keys.** MSG-1 derivation rules
-preserve inherited context keys — `context["skill_id"]` from an
-upstream dispatch and any `<type>_transformer_ids` from transformer
-stages are not stripped when a plugin stamps its own
-`context["pipeline_id"]`. Each key names a different component in
-the chain; when a single owner is needed, consumers apply the
-lifecycle-position precedence of OVOS-CONTEXT-1 §5.2.
-
-`Message.context["pipeline_id"]` is **self-attribution** — who
-emitted. A `data.pipeline_id` field on a topic's payload is a
-**subject** — the plugin a query or description concerns. A
-consumer reading attribution reads `context`; a consumer reading a
-subject reads `data`.
-
-#### Orchestrator-side enforcement
-
-The orchestrator (or any component that loads pipeline plugins)
-**SHOULD** intercept / decorate the plugin's emit pathway at load
-time so non-compliant plugin code cannot emit a Message that lacks
-or misstates `context["pipeline_id"]`. This places the discipline
-on the plugin-loading infrastructure rather than on every plugin
-author, mirroring the skill-loader enforcement of OVOS-INTENT-4
-§3.1.
-
-A consumer that needs to attribute a plugin-emitted Message
-**MUST** read `context["pipeline_id"]` — it **MUST NOT** infer the
-plugin from `source`, `data` fields, or topic name. A Message
-without `context["pipeline_id"]` arriving on a topic that requires
-plugin attribution (per the topic's owning spec) is malformed at
-that topic's layer; the topic's spec defines the rejection
-behaviour.
+The orchestrator **SHOULD** enforce both fields at load time so
+non-compliant plugin or skill code cannot emit a Message with a
+missing or incorrect identity key.
 
 ---
 
