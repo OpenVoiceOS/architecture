@@ -178,18 +178,14 @@ Inputs:
   language. A plugin is free to consider all candidates, only the
   first, or any subset; the orchestrator does not prescribe how
   candidates are weighted.
-- `lang` — the **optional** BCP-47 content-language tag of the
-  utterance, sourced by the orchestrator from `Message.data.lang`
-  of the entry-topic Message (§9.1). **Present only when the
-  producer authoritatively knew the content language; absent
-  otherwise.** The orchestrator **MUST NOT** synthesize a value
-  when `Message.data.lang` is absent — in particular, it
-  **MUST NOT** fall back to `session.lang` or to any per-utterance
-  language signal of OVOS-SESSION-1 §3.2. A plugin that needs a
-  language and receives `lang: None` **MAY** consult `session`
-  for OVOS-SESSION-1 §3.2 signals or apply its own resolution
-  policy — the choice is the plugin's. A plugin that does not
-  need the language ignores the parameter.
+- `lang` — the **optional** BCP-47 content-language hint sourced
+  from `Message.data.lang` of the entry-topic (§9.1). Present only
+  when the producer authoritatively knew the content language;
+  absent otherwise. The orchestrator **MUST NOT** synthesize a
+  value. The plugin uses this as input to its own language
+  resolution — consulting `session` (OVOS-SESSION-1 §3.2) or
+  applying any other policy — and **MUST** declare the resolved
+  language in `Match.lang`.
 - `session` — the session carrier from `context.session` of the
   utterance Message (OVOS-MSG-1 §4, OVOS-SESSION-1).
 
@@ -202,7 +198,7 @@ fields below.
 |-------|------|----------|---------|
 | `skill_id` | string | yes | The `skill_id` of the handler to invoke. For a pipeline plugin that matches itself, this equals its `pipeline_id` (§7.0). |
 | `intent_name` | string | yes | An opaque non-empty string that, together with `skill_id`, names the handler to invoke. For skill-owned matches this is the intent name the skill registered. For plugin-owned matches this is whatever label the plugin chose for this response. |
-| `lang` | string | no | The BCP-47 language tag the match was performed against. A plugin that determined the language itself (multilingual matcher, hard-coded engine) **MUST** set this. A plugin that matched in the language the entry-topic declared **MAY** omit it and rely on the orchestrator's fallback to the entry-topic `lang` (§7.1). If neither the plugin nor the entry-topic provides a language, the orchestrator treats the match as declined (§7.1). |
+| `lang` | string | yes | The BCP-47 language tag the match was performed against. The plugin **MUST** set this — it is the plugin's explicit responsibility to declare what language its match is in. A plugin that received a `lang` parameter and matched in that language returns it here; a plugin that determined the language by other means (multilingual matcher, hard-coded engine, content-language detection) sets it to whatever language the match was performed in. |
 | `slots` | object (string→string) | yes | The slot map (§4.3). MAY be empty. |
 | `utterance` | string | yes | The specific candidate string from the input list that won the match. A plugin that does not track which candidate won **MUST** populate this with the first element of the input list as a fallback; the orchestrator forwards this value verbatim as `data.utterance` in the dispatch payload (§7.1) and **MUST NOT** substitute another value. |
 | `updated_session` | object | no | A replacement `session` snapshot the plugin produced during `match` (§4.2). When present, the orchestrator MUST use this snapshot — in place of the inbound utterance's session — for the dispatch and every downstream stage. When absent, the inbound session is carried unchanged. This is the **only** mechanism by which a plugin's match-phase session mutations reach downstream consumers; in-place mutations of the inbound session object are not visible past the plugin boundary. |
@@ -771,7 +767,7 @@ The dispatch Message's `data`:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `lang` | string | yes | The content language of the match. The orchestrator **MUST** populate this from `Match.lang` when present, falling back to the entry-topic `Message.data.lang` (§9.1). A plugin that returns a `Match` without a `lang` and whose entry-topic carried no `lang` is a pipeline configuration error — the orchestrator **MUST NOT** dispatch; it **MUST** treat the match as if the plugin declined and continue iteration. |
+| `lang` | string | yes | The content language of the match, taken directly from `Match.lang`. A `Match` with no `lang` is malformed; the orchestrator **MUST** treat it as if the plugin declined and continue iteration. |
 | `utterance` | string | yes | The candidate string that won the match. |
 | `slots` | object (string→string) | yes | The slot map (§4.3). MAY be empty. |
 
