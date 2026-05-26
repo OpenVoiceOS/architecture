@@ -701,6 +701,61 @@ instead of `.complete`, the orchestrator still emits
 terminates with `ovos.utterance.handled`" invariant holds across
 all paths.
 
+### 6.5 Long-running handlers and nested utterance lifecycles
+
+Handlers are long-running by design. A handler **MAY** block
+for an unbounded duration — for example, to run a voice game,
+a multi-step interaction, or any flow that asks the user one or
+more follow-up questions. This is not a timeout condition and
+**MUST NOT** be treated as one.
+
+When a handler asks the user a question and waits for the reply
+(the `get_response` pattern defined by OVOS-CONVERSE-1 §5), the
+following happens on the bus:
+
+```
+ovos.utterance.handle          (original utterance)
+  ovos.intent.handler.start    (outer handler)
+  ovos.utterance.speak         (handler's question to the user)
+  [outer handler blocks]
+    ovos.utterance.handle      (user's reply)
+      ovos.intent.matched
+      ovos.intent.handler.start    (inner :response dispatch)
+      ovos.intent.handler.complete
+    ovos.utterance.handled     (user's reply — inner lifecycle ends)
+  [outer handler unblocks, continues]
+  ovos.intent.handler.complete (outer handler)
+ovos.utterance.handled         (original utterance — outer lifecycle ends)
+```
+
+The inner utterance is a complete, independent lifecycle:
+it enters on `ovos.utterance.handle`, is matched and dispatched
+by the converse plugin on `<skill_id>:response`
+(OVOS-CONVERSE-1 §5), and terminates with its own
+`ovos.utterance.handled`. The outer lifecycle's
+`ovos.utterance.handled` does not fire until the outer handler
+returns, which may be after arbitrarily many inner lifecycles.
+
+**The "exactly one `ovos.utterance.handled` per
+`ovos.utterance.handle`" invariant (§6.4) applies independently
+to each entry message.** It says nothing about ordering between
+concurrent or nested lifecycles; interleaved handler trios and
+end-markers are conformant and expected.
+
+**The orchestrator MUST remain able to accept and process new
+`ovos.utterance.handle` messages while a handler is running.**
+An orchestrator that blocks the utterance-entry subscription for
+the duration of a handler invocation will deadlock the first time
+any handler calls `get_response`. Concurrent utterance processing
+is a structural requirement, not an optimisation.
+
+The session is the correlation key for nested lifecycles: the
+inner utterance carries the same `session_id` with
+`session.response_mode` populated (OVOS-CONVERSE-1 §5), which
+is what the converse plugin reads to route the reply to the
+waiting handler. No additional correlation field is defined by
+this specification.
+
 ---
 
 ## 7. Dispatch
