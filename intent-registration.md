@@ -1,6 +1,6 @@
 # Intent and Entity Registration Bus Contract
 
-**Spec ID:** OVOS-INTENT-4 · **Version:** 2 · **Status:** Draft
+**Spec ID:** OVOS-INTENT-4 · **Version:** 3 · **Status:** Draft
 
 This document defines the **bus messages** a skill uses to declare its
 intents and entities. It is the wire format for intent registration —
@@ -105,23 +105,23 @@ cooperating processes; each maintains its own slice of the
 manifest built from broadcasts it observed and responds
 independently to §10 queries.
 
-Three consequences of this model:
+Two consequences of this model:
 
 - **Plugins are observably pluggable.** Adding, removing, or replacing
   a plugin is a deployment concern; the bus traffic for registrations
   and the orchestrator's index are unaffected.
-- **There is no method-rejection handshake.** Registrations that no
-  plugin claims have no error code, no negative response, no signal at
-  all. Plugins that *do* claim a registration **MAY** respond with the
-  error codes of §3.4 if the payload is malformed or otherwise
-  unservable, but only the consuming plugin can do so.
 - **The plugin pipeline is what enforces "at most one match per
   utterance."** This specification does not enforce it; OVOS-PIPELINE-1
   §5 does (first-match-wins iteration).
 
+Registrations are **fire-and-forget**: there is no `.response` reply,
+no acknowledgement, no error event. A producer that needs to verify
+that a registration landed queries the manifest of §9 — manifest
+presence is the only signal this specification defines.
+
 ---
 
-## 3. Identity, responses, and error codes
+## 3. Identity
 
 ### 3.1 Skills self-identify on every emission
 
@@ -164,34 +164,6 @@ originating skill without parsing topic names or `data` payloads —
 which would otherwise be infeasible for skill emissions on
 non-`<skill_id>:<intent_name>`-shaped topics (e.g. `speak`,
 `enclosure.eyes.color`, custom skill-defined topics).
-
-#### `context["skill_id"]` vs `data["skill_id"]`
-
-The two are **different fields with different semantics**, and
-**MUST NOT** be conflated:
-
-- **`Message.context["skill_id"]`** — the **emitter**. Identifies
-  the skill that produced this Message. Set by the emitting skill
-  on every Message it emits, per the rule above. Read by observers
-  for attribution.
-- **`Message.data["skill_id"]`** — the **subject** of the topic.
-  Whenever a topic's payload schema (defined by some other spec)
-  carries `skill_id` as a payload value, that value identifies the
-  skill the topic is *about* — a search filter, a target of an
-  operation, an intent registration's owning skill — not the
-  emitter. Examples: `ovos.skill.deregister` carries
-  `data.skill_id` for the skill *being deregistered* (which may be
-  emitted by the skill itself or by another component on its
-  behalf); `ovos.intent.list` carries an optional
-  `data.skill_id` filter.
-
-A consumer reading `data.skill_id` is reading a payload value
-whose meaning is fixed by the topic's owning spec. A consumer
-reading `context.skill_id` is reading the emitter. The two
-**MAY** differ on a single Message (a tool component
-deregistering on behalf of a skill, a debug harness re-emitting a
-skill's prior registration); a consumer that needs the emitter
-**MUST** read `context.skill_id`, not `data.skill_id`.
 
 #### Enforcement and other component types
 
@@ -250,135 +222,22 @@ registration **replaces** the previous one (§8.1).
 For an **entity**, `intent_name` is replaced by `entity_name` (same
 uniqueness rule: unique within the skill).
 
-When `data` and `context` (e.g. OVOS-MSG-1 keys) both carry an identity
-field, `data` is **authoritative** for this specification — `context`
-metadata is opaque to the registration semantics.
-
-### 3.3 Responses are optional
-
-Registration topics defined here **MAY** have a `.response` reply
-(OVOS-MSG-1 §5.3). When emitted, a response is correlated to its
-request by topic and `session` (OVOS-MSG-1 §5.4) — no per-message
-identifier is used.
-
-Responses, when present, take this shape:
-
-Success:
-
-```json
-{ "ok": true }
-```
-
-Rejection:
-
-```json
-{ "ok": false, "error_code": "malformed_payload", "error": "free-form human-readable detail" }
-```
-
-A plugin that chose to consume a particular registration:
-
-- **MUST** emit `ok: false` with a normative `error_code` (§3.4)
-  on rejection. Silent rejection is non-conformant — the producer
-  cannot distinguish "rejected by this plugin" from "no plugin
-  consumed it", and rejection always has a structured reason worth
-  surfacing.
-- **SHOULD** emit `ok: true` on success. Silent success is
-  permitted (a plugin that doesn't bother is non-optimal but
-  conformant); consumers building tooling on success-confirmation
-  must use the introspection topics (§10), not absence of
-  response.
-
-A plugin that did **not** consume a registration emits nothing.
-
-The asymmetry is deliberate: rejection carries information a
-producer needs to act on (correct the malformed payload, retry,
-abandon); success carries no actionable information beyond
-"it happened", which §10 introspection answers more reliably than
-per-emission acknowledgement.
-
-Producers (skills) **MUST NOT** require any response and **MUST
-NOT** block waiting for one. A registration that produces no
-`.response` may have been silently dropped (no plugin consumed it),
-may have been accepted by a plugin that doesn't bother to confirm,
-or may have been accepted by multiple plugins that each respond
-differently. The bus is async; the producer is responsible for its
-own observability and bookkeeping.
-
-The introspection topics of §10 (`ovos.intent.list` /
-`ovos.intent.describe`) are the supported way to verify a
-registration landed — they query the orchestrator's manifest, which
-the orchestrator maintains regardless of whether any plugin
-emitted a `.response`. A producer wanting acknowledgement queries
-the manifest after registering; it does not wait on `.response`.
-
-**Multiple consuming plugins.** A single registration **MAY** be
-consumed by more than one plugin, each independently free to emit
-its own `.response`. A producer that nonetheless observes the
-`.response` stream **SHOULD** treat any `ok: false` as
-authoritative for *that plugin's* rejection — distinct plugins
-making distinct decisions is the normal case, not a contradiction.
-This specification defines no aggregation rule across plugins; the
-manifest of §10 is the single answer to "did anyone consume this?".
-
-### 3.4 `error_code` values
-
-The `error_code` enum is normative; new codes **MUST** be added by a
-future version of this specification, not invented per-deployment.
-These codes are **plugin-emitted** on `.response` rejections (§3.3);
-no party in this specification synthesizes them on a producer's
-behalf.
-
-| `error_code` | Meaning |
-|--------------|---------|
-| `malformed_payload` | The Message's `data` violates the shape required by the topic (§§5–8). The plugin received the message and judged the shape invalid. |
-| `reserved_name` | The registration payload names an `intent_name` that another normative specification has reserved for orchestrator-internal dispatch semantics (see §3.5). |
-| `unknown_intent` | A deregister, enable, or disable request references an `(skill_id, intent_name, lang)` triple that the responding plugin has no record of. |
-| `unknown_entity` | Analogous to `unknown_intent`, for entities. |
-| `unknown_skill` | A `skill_id`-only request references a skill the responding plugin has no record of. |
-
-A plugin that emits an `unknown_*` rejection is reporting *its own*
-state; another plugin that did consume the original registration
-might have a different view. Producers should not interpret an
-`unknown_*` rejection as "no plugin owns this" — only as "this
-particular plugin doesn't."
-
-**Idempotent deregistration.** A plugin that receives a deregister,
-enable, or disable request for an entity it has no record of
-**SHOULD** respond with the corresponding `unknown_*` error code,
-but **MAY** alternatively treat the operation as a no-op success
-(`{ "ok": true }`) when the request would be idempotent — most
-commonly during a skill's shutdown sequence, where deregistering an
-already-cleared intent is the intended terminal state. Producers
-that want idempotent removal **MAY** ignore `unknown_intent` /
-`unknown_entity` / `unknown_skill` codes specifically and treat
-them as the operation having already completed.
-
-### 3.5 Reserved intent_names
-
 Other normative specifications **MAY** reserve specific
 `intent_name` values for orchestrator-internal dispatch semantics
-(see OVOS-PIPELINE-1 §7.3 for the reservation mechanism and its
-dispatch-suppression rule). A consuming plugin that receives a
-registration payload naming a reserved `intent_name` **MUST**
-reject it with `error_code: "reserved_name"`. Skills and pipelines
-**MUST NOT** rely on registrations under reserved names.
+(see OVOS-PIPELINE-1 §7.3 for the reservation mechanism). Skills
+and pipelines **MUST NOT** rely on registrations under reserved
+names; a consuming pipeline plugin **MUST NOT** index a
+registration whose `intent_name` is reserved, so the reserved-name
+registration will never produce a match.
 
-The orchestrator **MAY** additionally log or surface a warning for
-reserved-name registrations it observes in its passive manifest, but
-is **not** the enforcement party — enforcement belongs to any plugin
-that would be affected by the conflict.
+The orchestrator's manifest (§10) **MAY** still index the
+broadcast for diagnostic visibility — surfacing a reserved-name
+registration in `ovos.intent.list` lets tooling spot the mistake.
+Matching is the enforcement party, not the manifest.
 
-Reservations currently in force:
-
-| Reserved intent_name | Reserving spec |
-|----------------------|----------------|
-| `converse` | OVOS-CONVERSE-1 §4.3 |
-| `response` | OVOS-CONVERSE-1 §5.2 |
-
-This list is maintained by OVOS-PIPELINE-1 §7.3 — the registry
-of reserved names — not by this specification. Plugins consulting
-the list **MUST** read it from the authoritative spec, not from
-this informative copy.
+Reservations currently in force are listed in OVOS-PIPELINE-1 §7.3.
+Plugins consulting the registry **MUST** read it from there, not
+from any informative copy.
 
 ---
 
@@ -507,8 +366,10 @@ receives a payload with one or more of them missing **SHOULD**
 treat the missing key as an empty array and continue, rather than
 rejecting.
 
-An orchestrator **MUST** reject any registration violating these rules with
-`error_code: "malformed_payload"` (§3.3).
+A consuming plugin **MUST NOT** index a registration that violates
+these rules; the malformed registration will not produce a match.
+Whether the plugin or the manifest logs the rejection for
+diagnostics is implementation choice.
 
 ### 5.4 No `.blacklist`
 
@@ -522,9 +383,9 @@ orchestrator. In a deployment where producer and orchestrator share a filesystem
 single-machine installs), file form is fully equivalent to inline. In
 distributed deployments — separate containers, separate hosts, or any case
 where the producer's filesystem is not visible to the orchestrator — producers
-**MUST** use the inline form (`samples`). An orchestrator that cannot resolve a
-`file:` path **MUST** reject the registration with
-`error_code: "malformed_payload"`.
+**MUST** use the inline form (`samples`). A consuming plugin that cannot
+resolve a `file:` path treats the registration as malformed and does not
+index it.
 
 The same rule applies to every `file:` field in §6 and §7.
 
@@ -577,13 +438,12 @@ Field reference:
 ### 6.2 Slot-consistency
 
 Every template in `samples` (or in the file) **MUST** declare the same set of
-named slots — the slot-consistency rule of INTENT-1 §5.5. An orchestrator **MUST**
-reject a registration that violates it with `error_code: "malformed_payload"`.
+named slots — the slot-consistency rule of INTENT-1 §5.5. A consuming plugin
+**MUST NOT** index a registration that violates the slot-consistency rule.
 
 ### 6.3 Malformed payloads
 
-An orchestrator **MUST** reject (with `error_code: "malformed_payload"`) a template
-registration in which:
+A consuming plugin **MUST NOT** index a template registration in which:
 
 - both `samples` and `file` are present, or neither is;
 - both `blacklist` and `blacklist_file` are present;
@@ -635,9 +495,8 @@ Field reference:
 
 ### 7.2 Malformed payloads
 
-An orchestrator **MUST** reject an entity registration with
-`error_code: "malformed_payload"` if both or neither of `samples`/`file` is
-present.
+A consuming plugin **MUST NOT** index an entity registration in which
+both or neither of `samples` / `file` is present.
 
 ---
 
@@ -689,16 +548,11 @@ This is the message an orchestrator emits, or that a skill sends to the orchestr
 skill is unloaded (INTENT-3 §6.1).
 
 Deregistering an intent, entity, or skill that is not currently
-registered **SHOULD** be rejected with `error_code:
-"unknown_intent"`, `"unknown_entity"`, or `"unknown_skill"`
-respectively — surfacing the discrepancy keeps bugs visible. A
-plugin **MAY** alternatively treat the request as a no-op success
-(`{ "ok": true }`) when idempotent removal is the deliberate
-choice, per the §3.4 idempotent-deregistration carve-out (most
-commonly during a skill's shutdown sequence, where every plugin
-the skill ever talked to receives the deregistration whether or
-not it consumed the matching registration). The two responses
-are equally conformant; the choice is the plugin's.
+registered is a **no-op**: registrations are fire-and-forget, every
+plugin processes the message independently, and any plugin without a
+matching record simply has nothing to remove. This makes the
+shutdown sequence — where every plugin the skill ever talked to
+receives every deregistration — naturally idempotent.
 
 ### 8.5 `ovos.intent.enable` and `ovos.intent.disable`
 
@@ -716,9 +570,8 @@ If `lang` is omitted, every language for that `(skill_id, intent_name)` is
 affected.
 
 Enabling an already-enabled intent, or disabling an already-disabled
-intent, is **not** an error — the orchestrator **MAY** respond `{ "ok": true }`.
-Re-registration (§8.1) preserves enabled/disabled state unless the producer
-deregisters first.
+intent, is a no-op. Re-registration (§8.1) preserves enabled/disabled
+state unless the producer deregisters first.
 
 ---
 
@@ -832,7 +685,7 @@ Response (`ovos.intent.describe.response`):
   response signals "registered via a `file:` path the manifest cannot
   resolve." Consumers needing the expanded form re-issue the request against
   an orchestrator that shares the producer's filesystem (§5.5).
-- On unknown intent, `{ "ok": false, "error_code": "unknown_intent", "error": "no such (skill_id, intent_name, lang) registered" }`.
+- On unknown intent, `{ "ok": false, "error": "no such (skill_id, intent_name, lang) registered" }`.
 
 The orchestrator **MAY** restrict who is permitted to call
 introspection topics; authorization is not defined by this
@@ -861,11 +714,11 @@ specification.
 
 A skill **SHOULD NOT** assume any specific plugin will consume its
 registration. Producers responsible for delivery confirmation
-**SHOULD** query (§10) rather than wait for `.response` events.
+**SHOULD** query the manifest (§10); registrations are fire-and-
+forget and emit no acknowledgement.
 
 A skill carries **no introspection obligation** under this
-specification — it has no §10 query-response responsibility. The
-orchestrator owns the manifest (see below).
+specification. The orchestrator owns the manifest (see below).
 
 ### A **pipeline plugin** (consumer of registration messages) **MAY**:
 
@@ -874,17 +727,12 @@ orchestrator owns the manifest (see below).
   `ovos.intent.register.template` only is conformant; a plugin that
   consumes none of them and matches utterances by its own internal
   rules (e.g. an LLM persona) is also conformant.
-- emit `.response` messages per §3.3 to confirm or reject what it
-  consumed. Such responses, when emitted, **MUST** use the error
-  codes of §3.4.
 
-A plugin **MUST NOT** synthesize a `.response` for a registration it
-did not actually consume — `.response` is the consumer's
-acknowledgement, not a routing decision.
-
-The plugin's matching behaviour, lifecycle, and bus emissions
-beyond `.response` are out of scope for this specification — see
-OVOS-PIPELINE-1.
+A plugin **MUST NOT** index a malformed registration (§§5.3, 5.5,
+6.2, 6.3, 7.2) and **MUST NOT** index a registration whose
+`intent_name` is reserved (§3.3). The plugin's matching behaviour,
+lifecycle, and bus emissions are out of scope for this
+specification — see OVOS-PIPELINE-1.
 
 ### The **orchestrator** **MUST**:
 
@@ -897,9 +745,8 @@ OVOS-PIPELINE-1.
 - honour `ovos.intent.enable` / `ovos.intent.disable` in the
   manifest (§8.5) — the `enabled` field of §10.1 reflects the
   latest state;
-- **NOT** validate, reject, route, gate, or synthesize
-  `.response` messages for any registration message. The
-  orchestrator is a passive listener for the manifest, not a
+- **NOT** validate, reject, route, or gate any registration message.
+  The orchestrator is a passive listener for the manifest, not a
   routing party.
 
 When the orchestrator is split across cooperating processes
