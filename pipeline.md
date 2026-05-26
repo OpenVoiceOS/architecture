@@ -119,21 +119,6 @@ discovers and instantiates them is a deployment concern. Each
 plugin exposes one operation to the orchestrator (§4) and is
 otherwise a black box.
 
-From the orchestrator's perspective, "plugin" and "skill" are
-indistinguishable as handler owners. Both are black-box third-party
-components. The only difference is where the handler lives:
-
-- a skill's handler is reached via a `<skill_id>:<intent_name>`
-  dispatch topic — the skill registered the intent (OVOS-INTENT-4)
-  and owns the handler;
-- a plugin's bundled handler is reached via a
-  `<pipeline_id>:<intent_name>` dispatch topic — the plugin matched
-  the utterance and owns the handler itself.
-
-From outside either case, the assistant responded. The user does
-not know or care which component answered.
-
-
 ---
 
 ## 3. Pipeline plugins
@@ -736,48 +721,23 @@ where `<owner_id>` is `Match.owner_id` and `<intent_name>` is
 `Match.intent_name`. Both segments are bound by OVOS-MSG-1 §2.1.1 — neither may
 contain `:` — so the single `:` split is unambiguous.
 
-### 7.0 Identifier polymorphism — `<owner_id>` is one identifier
+### 7.0 `<owner_id>` is a `skill_id`
 
-`<owner_id>` names the **handler-owner** of the matched intent.
-It is a single identifier string used identically on the
-dispatch topic regardless of whether the handler-owner is a
-plain skill or a pipeline plugin that owns its own handlers.
+`Match.owner_id` is the `skill_id` of the component that will
+handle the dispatch. The orchestrator does not distinguish between
+a skill whose intents were registered via OVOS-INTENT-4 and a
+pipeline plugin that matched itself — both are handler-owners
+reached by the same `<owner_id>:<intent_name>` topic, and the
+dispatched handler has the same obligations as any skill
+(OVOS-INTENT-4 §3.1).
 
-Conceptually, `skill_id` is the **voice-application identity** —
-the identity of whatever component the dispatch lands on.
-`pipeline_id` is the **matching-engine identity** — the identity
-of a component loaded as a pipeline plugin under §3.
-
-The spec recognises two handler-owner shapes:
-
-| Shape | How matches are produced | Identifier roles |
-|-------|--------------------------|------------------|
-| **Plain skill** | Some pipeline plugin (matching engine) consumes the skill's OVOS-INTENT-4 registrations and returns a `Match` whose `owner_id` is the skill's `skill_id`. | `skill_id` only; `pipeline_id` does not apply. |
-| **Pipeline plugin with bundled handlers** (fallback, common-query, persona, OCP, …) | The plugin's own `match` returns a `Match` whose `owner_id` is the plugin's own identity, on an `intent_name` the plugin defines for itself. | `pipeline_id == skill_id` — both names refer to the same identifier. The plugin **MUST NOT** register its bundled-handler intents under OVOS-INTENT-4 (they are not skill registrations and would create a circular dependency through whichever matcher consumes the registry). |
-
-The examples in the second row are plugins whose own `match`
-emits matches addressed back to itself. A different shape — a
-**pure-matcher** pipeline plugin — is also a pipeline plugin per §3
-but is **not a handler-owner**: its `match` returns matches whose
-`owner_id` is some *other* component's identity (for example, a
-template or keyword engine that matches against skill-registered
-intents, or a converse engine routing to reserved intent_names per
-§7.3). Pure-matcher plugins have only a `pipeline_id`; they have no
-`skill_id` and they own no dispatch-handler subscription. §7.0's
-table only enumerates handler-owner shapes (the targets of
-dispatch); pure-matcher plugins live alongside both rows.
-
-The pipeline-plugin-with-handlers case is normative: **if a
-pipeline plugin emits matches whose `owner_id` equals its own
-`pipeline_id`, that identifier is also its `skill_id`** for the
-purposes of OVOS-INTENT-3, OVOS-INTENT-4, and every other spec
-that addresses skills by id. They are the same identifier under
-two roles, not two identifiers that happen to coincide.
-
-From the dispatch path's perspective the two shapes are
-indistinguishable. `<owner_id>:<intent_name>` carries no
-information about which shape `<owner_id>` is; the orchestrator
-applies §7.1 stamping uniformly.
+A pipeline plugin that returns matches where `owner_id` equals its
+own `pipeline_id` is simply a component whose `skill_id` and
+`pipeline_id` happen to be the same identifier. It skips the
+OVOS-INTENT-4 registration step because it consumes no external
+intent registry — its `match` implementation decides directly
+whether to claim the utterance. There is no architectural
+difference; the dispatch path is identical.
 
 ### 7.1 Routing and payload
 
@@ -790,21 +750,14 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
   `source` is the orchestrator;
 - **`context["skill_id"]` stamping.** The orchestrator **MUST**
   stamp `context["skill_id"] = <owner_id>` on every dispatch.
-  `skill_id` is the voice-application identity (§7.0) — every
-  dispatched handler owns one, whether it is a plain skill or a
-  pipeline plugin with bundled handlers (in which case
-  `skill_id == pipeline_id`). MSG-1 derivation semantics carry
-  this value forward into every Message the handler emits,
-  satisfying OVOS-INTENT-4 §3.1 by construction.
-- **`context["pipeline_id"]` stamping.** When the dispatched
-  `<owner_id>` corresponds to a loaded pipeline plugin (the
-  pipeline-plugin-with-bundled-handlers case of §7.0), the
-  orchestrator **MUST** additionally stamp
-  `context["pipeline_id"] = <owner_id>`. For such a handler
-  `context["skill_id"]` and `context["pipeline_id"]` carry the
-  same identifier. For a plain skill (not loaded as a pipeline
-  plugin), the orchestrator **MUST NOT** stamp
-  `context["pipeline_id"]`.
+  MSG-1 derivation semantics carry this value forward into every
+  Message the handler emits, satisfying OVOS-INTENT-4 §3.1 by
+  construction.
+- **`context["pipeline_id"]` stamping.** The orchestrator **MUST**
+  stamp `context["pipeline_id"]` on every dispatch with the
+  `pipeline_id` of the plugin that produced the match (§3.1). When
+  the match is self-addressed (`owner_id == pipeline_id`, §7.0),
+  both context keys carry the same identifier.
 
 The dispatch Message's `data`:
 
