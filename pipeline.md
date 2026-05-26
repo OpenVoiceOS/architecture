@@ -161,16 +161,13 @@ distinct stage.
 
 ### 3.1 Pipeline attribution
 
-When the orchestrator selects a match it **MUST** stamp
-`Message.context["pipeline_id"]` with the `pipeline_id` of the
-plugin that produced it. This makes the match attributable to its
-engine; downstream consumers (e.g. OVOS-CONTEXT-1 §5.2) read this
-field without inspecting topics or payloads.
-
-Handler identity (`context["skill_id"]`) is governed by
-OVOS-INTENT-4 §3.1 and applies to pipeline plugins with bundled
-handlers identically to plain skills — the dispatch shape is fully
-polymorphic (§7.0).
+The orchestrator stamps `context["pipeline_id"]` on the dispatch
+Message (§7.1) — this is the first point at which the matching
+plugin's identity appears on the wire. From there it propagates
+through all Messages the handler emits via MSG-1 derivation
+semantics, making every downstream Message attributable to the
+plugin that produced the match without any further action by the
+plugin or the handler.
 
 ---
 
