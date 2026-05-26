@@ -308,9 +308,8 @@ timed-out call is discarded (there is no `Match` to carry an
 `updated_session`; the inbound session is unchanged). No bus event is
 emitted for the timeout at this stage.
 
-The timeout bound, the recovery policy, and whether a timed-out plugin
-triggers the §6.2 circuit-breaker are deployer-configurable. This
-specification fixes only that the discipline **SHOULD** exist.
+The timeout bound and whether it counts toward the §6.2 circuit-breaker
+are deployer-configurable.
 
 **Latency discipline.** In voice-assistant deployments, match-phase
 latency directly determines response latency — the pipeline is
@@ -674,23 +673,11 @@ it returned `None`. The orchestrator **MUST** continue to the next
 plugin and **SHOULD** log the exception. A single plugin's bug
 does not fail the whole utterance.
 
-**Repeated-exception circuit-breaker.** Persistent plugin failure
-is a deployment concern, not an utterance-level concern, but a
-defective plugin that raises on every invocation degrades every
-utterance until the deployment intervenes. An orchestrator
-**SHOULD** track per-plugin exception rates within a session (or
-across a configurable window) and **SHOULD** drop a plugin from
-the session's effective pipeline (§5.5) after a deployer-tunable
-threshold of consecutive exceptions — typically three. A dropped
-plugin behaves as if absent for the remainder of the session;
-recovery is a deployment concern (process restart, plugin reload).
-The threshold, the recovery policy, and whether the drop is
-per-session or process-wide are deployer-configurable; this
-specification fixes only that the discipline **SHOULD** exist.
-The orchestrator **MAY** broadcast an `ovos.pipeline.dropped`
-diagnostic event (payload `{pipeline_id, reason, exception_count}`)
-to make the drop observable; this event is informative and
-**MUST NOT** be relied upon for normative control flow.
+**Repeated-exception circuit-breaker.** An orchestrator **SHOULD**
+drop a plugin from the effective pipeline after a deployer-tunable
+consecutive-exception threshold. A dropped plugin behaves as if
+absent; recovery is a deployment concern. The threshold and scope
+(per-session or process-wide) are deployer-configurable.
 
 ### 6.3 Plugins do not see each other's matches
 
