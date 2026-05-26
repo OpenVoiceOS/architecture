@@ -126,41 +126,18 @@ Three consequences of this model:
 ### 3.1 Skills self-identify on every emission
 
 A skill **MUST** set `Message.context["skill_id"]` to its own
-`skill_id` (OVOS-INTENT-3 §3) on every Message it places on the
-bus by **authorial action** and on every Message it **modifies in
-place** before that Message proceeds. Authorial action covers the
-cases where the skill is asserting itself as the originator of a
-new Message-on-wire:
+`skill_id` (OVOS-INTENT-3 §3) on every Message it originates or
+mutates before placing it on the bus. This covers fresh emissions
+(registration messages of §§5–8, ad-hoc skill-defined topics,
+etc.) and any Message whose `context`, `data`, or session the
+skill modifies before emission.
 
-- a fresh emission (the skill constructs and emits a new
-  Message — registration messages of §§5–8, ad-hoc skill-defined
-  topics, etc.);
-- `Message.reply(...)` or `Message.response(...)` (OVOS-MSG-1 §5)
-  derived from a prior Message — these derivations swap routing
-  keys and create a new authorial step. The resulting
-  Message-on-wire **MUST** carry `context["skill_id"]` set to
-  the skill's id, overwriting any differing
-  `context["skill_id"]` carried by the source Message.
-
-A skill handler running under dispatch normally derives its
-`.speak` / `.response` via `.forward` from the dispatch Message;
-the dispatch-stamping rule below means the upstream value is
-already the skill's own id, so propagation alone keeps the
-attribution correct without an extra stamp step.
-
-**Pure-forward propagation is exempt.** `Message.forward(...)`
-(OVOS-MSG-1 §5.1) preserves `context` unchanged by design, and
-the deriving skill is not asserting authorship of the forwarded
-Message-on-wire. A skill that `.forward`s a Message **MUST NOT**
-overwrite an inherited `context["skill_id"]` with its own —
-preserving upstream attribution is the point of the forward
-derivation. If the skill wants to claim authorship of the
-resulting Message (rather than propagate someone else's), it
-**SHOULD** use `.reply` or `.response`, or emit fresh.
-
-Modify-in-place — mutating an existing Message's `context`,
-`data`, or carried session before that Message proceeds — also
-binds the stamp obligation.
+For a skill handler running under dispatch, conformance is
+structural: the orchestrator stamps `context["skill_id"]` on the
+dispatch Message (OVOS-PIPELINE-1 §7.1), and all Messages the
+handler derives from it via the OVOS-MSG-1 §5 derivation
+semantics inherit that value automatically. No extra stamp step
+is needed on the dispatch path.
 
 The combined effect: whenever the skill's hands have been on a
 Message that subsequently appears on the bus, `context["skill_id"]`
@@ -222,16 +199,10 @@ The orchestrator (or any component that loads skills) **MUST**
 enforce the `context["skill_id"] == emitting skill's skill_id`
 invariant **whenever it is in a position to do so**.
 
-The cleanest enforcement path is structural: when the orchestrator
-dispatches a matched intent on the `<skill_id>:<intent_name>`
-topic (OVOS-PIPELINE-1 §7.1), it stamps
-`Message.context["skill_id"]` from the dispatch topic's
-`<skill_id>` prefix. The skill handler derives its outbound
-Messages from the dispatch via `forward` / `reply` (OVOS-MSG-1
-§5), inheriting `context["skill_id"]` automatically. For
-emissions on the dispatch path, conformance is structural — a
-skill emitting via the standard derivations carries the correct
-`skill_id` without any extra work.
+On the dispatch path, enforcement is structural: the dispatch
+stamp described in OVOS-PIPELINE-1 §7.1 pre-populates the value
+correctly, and MSG-1 derivation semantics propagate it to all
+handler-derived Messages without extra work.
 
 For emissions **outside** the dispatch path (a skill emitting on
 its own initiative, from a background worker, before any dispatch),
