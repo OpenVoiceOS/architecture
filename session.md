@@ -40,7 +40,8 @@ It does **not** define:
 - the **semantics** of any field — owned by the citing
   specification;
 - session **lifecycle** — when a session begins or ends, how it
-  expires, how it is created, how it is resumed;
+  expires, how it is created, how it is resumed (owned by
+  OVOS-SESSION-2);
 - a session **store** — central indexing, persistence, sharing
   between processes;
 - **authentication, authorization, encryption, multi-tenant
@@ -625,11 +626,12 @@ A consumer **SHOULD**:
 
 The following are explicitly **outside** this specification and
 **MUST NOT** be inferred from it: session lifecycle (creation,
-expiration, end-of-session events), a session-store protocol,
-central session indexing, session authentication and authorization,
-session-resumption semantics, per-field encryption, multi-tenant
-session isolation guarantees beyond the opaque `session_id` keying,
-and any field not claimed under §2.1 by a normative specification.
+expiration, end-of-session events) and session-resumption
+semantics (both owned by OVOS-SESSION-2); session-store
+protocols, central session indexing, session authentication and
+authorization, per-field encryption, multi-tenant session
+isolation guarantees beyond the opaque `session_id` keying, and
+any field not claimed under §2.1 by a normative specification.
 
 ---
 
