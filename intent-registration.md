@@ -380,10 +380,15 @@ them as the operation having already completed.
 Other normative specifications **MAY** reserve specific
 `intent_name` values for orchestrator-internal dispatch semantics
 (see OVOS-PIPELINE-1 §7.3 for the reservation mechanism and its
-dispatch-suppression rule). A registration payload that names a
-reserved `intent_name` **MUST** be rejected by the orchestrator
-with `error_code: "reserved_name"`; skills and pipelines
+dispatch-suppression rule). A consuming plugin that receives a
+registration payload naming a reserved `intent_name` **MUST**
+reject it with `error_code: "reserved_name"`. Skills and pipelines
 **MUST NOT** rely on registrations under reserved names.
+
+The orchestrator **MAY** additionally log or surface a warning for
+reserved-name registrations it observes in its passive manifest, but
+is **not** the enforcement party — enforcement belongs to any plugin
+that would be affected by the conflict.
 
 Reservations currently in force:
 
@@ -690,7 +695,7 @@ registered under that `skill_id`. Payload:
 { "skill_id": "music.skill" }
 ```
 
-This is the message a orchestrator emits, or that a skill sends to the orchestrator, when a
+This is the message an orchestrator emits, or that a skill sends to the orchestrator, when a
 skill is unloaded (INTENT-3 §6.1).
 
 Deregistering an intent, entity, or skill that is not currently
@@ -709,8 +714,8 @@ are equally conformant; the choice is the plugin's.
 
 A registered intent is, by default, **enabled** — eligible for matching. A
 skill **MAY** temporarily **disable** an intent without removing it; the
-orchestrator retains the definition and handler binding but excludes the intent
-from match candidacy until it is re-enabled. Both topics share the same
+orchestrator retains the definition in the manifest but marks it disabled,
+and plugins exclude it from match candidacy until it is re-enabled. Both topics share the same
 payload as `ovos.intent.deregister` (§8.2), and `lang` semantics:
 
 ```json
@@ -830,8 +835,11 @@ Returns the full definition of one intent. Request payload:
 Response (`ovos.intent.describe.response`):
 
 - On success, `{ "ok": true, "method": "keyword"|"template", "definition": {...} }`
-  where `definition` is the §5 or §6 payload (file forms expanded to inline
-  where possible).
+  where `definition` is the §5 or §6 payload in inline form — `samples` and
+  `blacklist` arrays, never `file` or `blacklist_file` paths. An orchestrator
+  that received only a `file:` form and cannot expand it **MUST** omit `definition`
+  from the response and include `"warning": "definition unavailable — registered
+  via file path"` in its place.
 - On unknown intent, `{ "ok": false, "error_code": "unknown_intent", "error": "no such (skill_id, intent_name, lang) registered" }`.
 
 The orchestrator **MAY** restrict who is permitted to call
