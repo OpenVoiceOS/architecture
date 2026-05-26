@@ -594,7 +594,9 @@ A producer **MUST NOT**:
   `blacklisted_intents`, `blacklisted_pipelines`, `site_id`) with a
   value that matches the deployment default merely as a form of
   explicit confirmation. Omit the field and let the orchestrator's
-  default apply (§2.5, §3.4).
+  default apply (§2.5, §3.4). (The §3.4 wire-weight rule states
+  this as **SHOULD NOT**; producers that cannot determine the
+  deployment default are non-optimal but conformant.)
 
 ### A **consumer** of session-carrying Messages **MUST**:
 
