@@ -139,14 +139,27 @@ For an **intent**:
 | `intent_name` | string | yes | INTENT-3 §3 — unique within the skill. |
 | `lang` | string | yes | BCP-47 (INTENT-2 §2), case-insensitive (SESSION-1 §3.2). The language of the resource being registered — distinct from `session.lang`. |
 
-The triple `(skill_id, intent_name, lang)` is the **registration key**
-(INTENT-3 §6.1). Registering an intent whose key matches an existing
-registration **replaces** the previous one (§8.1); replacement is
-per-key, so other languages of the same `(skill_id, intent_name)`
-pair are unaffected.
+The triple `(skill_id, intent_name, lang)` identifies an **intent**
+(INTENT-3 §6.1). For manifest indexing and replacement (§8.1), the
+**registration key** is the quadruple
+`(skill_id, intent_name, lang, method)` — `method` being `keyword`
+(§5) or `template` (§6). Registering a quadruple that matches an
+existing entry **replaces** that entry only; the other-method
+registration for the same triple is untouched. Replacement is also
+per-language: other languages of the same `(skill_id, intent_name)`
+are unaffected.
+
+A single intent **MAY** be registered under both methods — they are
+two training-data representations of the same handler. Different
+pipeline plugins consume different methods; a match from either
+dispatches to the same `<skill_id>:<intent_name>` topic. The wire
+contract makes no claim about which representation should "win" when
+both produce a match — that is a pipeline policy concern
+(OVOS-PIPELINE-1).
 
 For an **entity**, `intent_name` is replaced by `entity_name` (same
-uniqueness rule: unique within the skill).
+uniqueness rule: unique within the skill). Entity registrations have
+no `method` axis.
 
 Other specifications **MAY** reserve specific `intent_name`
 values; the authoritative registry is OVOS-PIPELINE-1 §7.3. A
@@ -390,7 +403,12 @@ Removes one intent. Payload:
 ```
 
 If `lang` is **omitted**, every language registered for that
-`(skill_id, intent_name)` pair is removed.
+`(skill_id, intent_name)` pair is removed. Deregistration targets
+the `(skill_id, intent_name, lang)` triple and removes **all
+methods** under it — both the keyword and template registrations
+of the same intent (§3.2), if both exist. There is no per-method
+deregistration; a skill that wants to remove only one method
+re-registers the other.
 
 ### 8.3 `ovos.entity.deregister`
 
@@ -442,8 +460,10 @@ without modifying skill code. Both topics share the same payload as
 { "skill_id": "music.skill", "intent_name": "play_music", "lang": "en-US" }
 ```
 
-If `lang` is omitted, every language for that `(skill_id, intent_name)` is
-affected.
+If `lang` is omitted, every language for that `(skill_id, intent_name)`
+is affected. Like deregistration, enable/disable target the triple and
+apply to **all methods** of the intent — there is no per-method
+enable/disable.
 
 Enabling an already-enabled intent, or disabling an already-disabled
 intent, is a no-op. Re-registration (§8.1) preserves enabled/disabled
@@ -495,7 +515,9 @@ Lists registered intents. Request payload:
 ```
 
 Both fields are **optional filters**: omitting `skill_id` returns every
-skill's intents; omitting `lang` returns every language.
+skill's intents; omitting `lang` returns every language. An intent
+registered under both methods (§3.2) appears as two entries
+distinguished by `method`.
 
 Response (`ovos.intent.list.response`):
 
@@ -526,13 +548,19 @@ produce a match; tooling **SHOULD** surface it as a misregistration.
 Returns the full definition of one intent. Request payload:
 
 ```json
-{ "skill_id": "music.skill", "intent_name": "play_music", "lang": "en-US" }
+{ "skill_id": "music.skill", "intent_name": "play_music", "lang": "en-US", "method": "template" }
 ```
+
+`method` is an **optional filter**: `"keyword"` or `"template"`. When
+omitted, the response returns every registered method for the triple.
 
 Response (`ovos.intent.describe.response`):
 
-- On success, `{ "ok": true, "method": "keyword"|"template", "definition": {...} }`
-  where `definition` is the §5 or §6 payload as it was broadcast.
+- On success, `{ "ok": true, "definitions": [ { "method": "...", "definition": {...} }, ... ] }`
+  where each `definition` is the §5 or §6 payload as it was broadcast.
+  The array carries one entry when `method` was specified or only one
+  method was registered, two entries when both methods exist and no
+  filter was given.
 - On unknown intent, `{ "ok": false, "error": "..." }`.
 
 The orchestrator **MAY** restrict access to introspection topics;
@@ -545,8 +573,9 @@ authorization is out of scope.
 ### A **skill** (producer of registration messages) **MUST**:
 
 - emit each registration through the topic that matches its
-  definition method (§5 for keyword, §6 for template), never both for
-  a single intent (INTENT-3 §2);
+  definition method (§5 for keyword, §6 for template); a single
+  intent **MAY** be registered under both methods if the skill has
+  training data of both kinds (§3.2);
 - include the identity fields of §3.2 in every registration's `data`;
 - set `Message.context["skill_id"]` to its own `skill_id` on every
   Message it emits, per §3.1;
@@ -584,8 +613,9 @@ signal. Matching behaviour beyond that is OVOS-PIPELINE-1's concern.
 - flag manifest entries whose `intent_name` is reserved (§3.2)
   with `reserved: true` in `ovos.intent.list` responses;
 - treat a re-registration with the same key as replacement of the
-  prior manifest entry (§8.1) — replacement is per-key and does
-  not affect other languages of the same `(skill_id, intent_name)`;
+  prior manifest entry (§8.1); the key is the quadruple
+  `(skill_id, intent_name, lang, method)`, so other languages and
+  the other-method entry for the same intent are unaffected;
 - honour `ovos.intent.enable` / `ovos.intent.disable` in the
   manifest (§8.5) — the `enabled` field of §10.1 reflects the
   latest state;
