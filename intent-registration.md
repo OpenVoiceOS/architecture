@@ -1,6 +1,6 @@
 # Intent and Entity Registration Bus Contract
 
-**Spec ID:** OVOS-INTENT-4 · **Version:** 5 · **Status:** Draft
+**Spec ID:** OVOS-INTENT-4 · **Version:** 1 · **Status:** Draft
 
 This document defines the **bus messages** a skill uses to declare its
 intents and entities. It is the wire format for intent registration —
@@ -18,8 +18,7 @@ It builds on three companion specifications:
 
 - the *Bus Message Specification* (OVOS-MSG-1) — the envelope every
   message defined here travels in, the `destination` routing key, the
-  `session` carrier (with its reserved `session_id == "default"` and
-  its `lang`), and the `forward` / `reply` / `response` derivations;
+  `session` carrier, and the `forward` / `reply` / `response` derivations;
 - the *Intent Definition Specification* (OVOS-INTENT-3) — the intent
   concept, identity model, the two definition methods, and the match
   result that this spec carries on the bus;
@@ -113,12 +112,7 @@ is needed on the dispatch path.
 key** for skill-originated bus traffic — observers **MUST NOT**
 infer the originating skill from topic names or `data` fields. A
 Message arriving without `context["skill_id"]` is either not
-skill-originated or is from a non-conformant skill; the
-orchestrator **MUST** log the absence at WARN with the topic
-involved, but **MUST NOT** reject at this layer (per-topic
-rejection is the responsibility of that topic's owning spec).
-`source` (OVOS-MSG-1 §3.2) is opaque routing metadata, not an
-identity surface.
+skill-originated or is from a non-conformant skill.
 
 #### Enforcement
 
@@ -130,10 +124,6 @@ skills **SHOULD** intercept the emit pathway so non-conformant
 handler code cannot escape. A Message whose `context["skill_id"]`
 disagrees with the `<skill_id>` of the dispatch it derives from
 is malformed; the orchestrator **MUST** log the drift at WARN.
-
-Other component types claim parallel identity keys with the same
-discipline; see OVOS-CONTEXT-1 §5.2 for the single-owner
-attribution precedence when several appear on one Message.
 
 ### 3.2 Identity carried by every registration message
 
@@ -599,7 +589,6 @@ signal. Matching behaviour beyond that is OVOS-PIPELINE-1's concern.
 - honour `ovos.intent.enable` / `ovos.intent.disable` in the
   manifest (§8.5) — the `enabled` field of §10.1 reflects the
   latest state;
-- log absent or mismatched `context["skill_id"]` at WARN (§3.1);
 - **NOT** validate, reject, route, or gate any registration message.
   The orchestrator is a passive listener for the manifest, not a
   routing party.
