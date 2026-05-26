@@ -143,27 +143,12 @@ The combined effect: whenever the skill's hands have been on a
 Message that subsequently appears on the bus, `context["skill_id"]`
 reflects it. There is no exemption for any topic.
 
-**Coexistence with other identity keys.** A Message **MAY** carry
-other component-identity context keys claimed by other
-specifications in addition to `context["skill_id"]` — concretely
-`context["pipeline_id"]` (OVOS-PIPELINE-1 §3.1) and the six
-`<type>_transformer_ids` keys (OVOS-TRANSFORM-1 §1.3). The
-derivation rules of OVOS-MSG-1 §5 preserve every such key
-inherited from upstream Messages; this specification does not
-require a skill to strip them, and a consumer **MUST NOT** treat
-the presence of additional identity keys as malformed. Each key
-names a different component in the chain that produced the
-Message. Attribution consumers needing a single owner apply the
-precedence rule of OVOS-CONTEXT-1 §5.2.
-
 `Message.context["skill_id"]` is the **authoritative attribution
-key** for skill-originated bus traffic. It lets observers
-(loggers, audit, analytics, telemetry, debug tooling, the
-orchestrator's manifest of §10) attribute any Message to its
-originating skill without parsing topic names or `data` payloads —
-which would otherwise be infeasible for skill emissions on
-non-`<skill_id>:<intent_name>`-shaped topics (e.g. `speak`,
-`enclosure.eyes.color`, custom skill-defined topics).
+key** for skill-originated bus traffic. It lets observers attribute
+any Message to its originating skill without parsing topic names or
+`data` payloads — which is infeasible for skill emissions on
+non-`<skill_id>:<intent_name>`-shaped topics (e.g. `speak`, custom
+skill-defined topics).
 
 #### Enforcement and other component types
 
@@ -180,11 +165,15 @@ orchestrator **SHOULD** log the drift.
 Other component types claim their own identity context keys —
 pipeline plugins via `context["pipeline_id"]` (OVOS-PIPELINE-1
 §3.1), transformers via the six `<type>_transformer_ids` keys
-(OVOS-TRANSFORM-1 §1.3). The same MUST-stamp-on-originate-or-
-modify discipline applies symmetrically to every component type
-that claims an identity key; `source` (OVOS-MSG-1 §3.2) is opaque
-routing metadata and is **not** an identity surface for any
-component.
+(OVOS-TRANSFORM-1 §1.3) — and the same stamp-on-originate-or-modify
+discipline applies symmetrically. These keys coexist: a Message
+**MAY** carry several of them at once (each names a different
+component in the chain that produced it), a skill **MUST NOT** strip
+keys it did not set, and a consumer **MUST NOT** treat the presence
+of additional identity keys as malformed. For single-owner
+attribution see the precedence rule of OVOS-CONTEXT-1 §5.2.
+`source` (OVOS-MSG-1 §3.2) is opaque routing metadata and is **not**
+an identity surface for any component.
 
 #### Consumer-side
 
