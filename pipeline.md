@@ -88,9 +88,8 @@ It does **not** define:
 
 The **orchestrator** (OVOS-INTENT-3 §6.1) is the logical role that
 consumes the utterance-layer entry topic `ovos.utterance.handle`
-(§9.1), iterates plugins per session, emits
-dispatch and terminal events, and guarantees the universal
-end-marker `ovos.utterance.handled`.
+(§9.1), iterates plugins per session, emits dispatch and terminal events,
+and guarantees the universal end-marker `ovos.utterance.handled`.
 The orchestrator is distinct from the **messagebus** (the transport
 layer) and from any individual plugin.
 
@@ -269,7 +268,6 @@ mutation from **handlers** (under §7 dispatch), from
 session-mutation pathway** of OVOS-MSG-1 (which CONTEXT-1 §5.3
 and CONVERSE-1 §3.2 build on) is governed by those specs and is
 unaffected by §4.2.
-
 
 ### 4.3 The slot map
 
@@ -628,7 +626,7 @@ specification's iteration loop. The **audio-transformer chain**
 the entry topic is emitted and is therefore not visible here. The
 **utterance** and **metadata** transformer chains run after entry
 and before iteration, against the candidate utterance list. The
-**post-match-pre-dispatch window** (highlighted) is where
+**post-match-pre-dispatch window** is where
 CONTEXT-1 §5.3 sanctions engine-side `session.intent_context`
 mutation and where TRANSFORM-1 §3.4 inserts the intent-transformer
 chain over the chosen `Match`. **`ovos.utterance.handled` is emitted at handler completion** —
@@ -980,7 +978,6 @@ that wants to feed an utterance into the assistant — a listener,
 a chat bridge, a CLI, a test harness, a remote-peer client.
 Receiving on this topic kicks off the lifecycle of §6.
 
-
 Payload shape:
 
 ```json
@@ -1094,7 +1091,6 @@ A deployment with no audio output (a text-only chat bridge, a test
 harness) receives the same `ovos.utterance.speak` Message as an
 audio-capable deployment.
 
-
 **Payload:**
 
 ```json
@@ -1159,8 +1155,7 @@ loaded plugin emits one query per `pipeline_id` it cares about and
 aggregates the responses itself.
 
 The `pipeline_id` in the topic is the same identifier carried by
-`session.pipeline` (§5) and by `Match.skill_id` when the plugin
-owns its own handler (§7); a consumer that has already observed
+`session.pipeline` (§5) and by `context["pipeline_id"]` on any observed dispatch (§3.1); a consumer that has already observed
 a `pipeline_id` from any of these sources can query it directly.
 
 ### 10.2 Response payload
@@ -1262,14 +1257,16 @@ from the hosting process.
 - emit the handler-lifecycle trio (§8) wrapping every handler
   invocation: `start` before the call, then exactly one of
   `complete` (on normal return) or `error` (on exception or
-  timeout, §8.3) after.
+  timeout, §8.3) after;
+- remain able to accept and process new `ovos.utterance.handle`
+  messages while a handler is running (§6.5).
 
 ### A **pipeline plugin** **MUST**:
 
 - expose a `match(utterances, lang, session) → Match | None` operation
   (§4);
-- when claiming, return a `Match` with `skill_id` and
-  `intent_name` per §4 — never a partial or speculative claim;
+- when claiming, return a `Match` with `skill_id`, `intent_name`,
+  and `lang` per §4 — never a partial or speculative claim;
 - bear a `pipeline_id` distinct from any other loaded plugin's
   id (§3);
 - **respond** to every `ovos.pipeline.<own_pipeline_id>.intents.list`
