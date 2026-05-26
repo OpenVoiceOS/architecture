@@ -164,12 +164,12 @@ plugin or the handler.
 A plugin exposes one operation to the orchestrator:
 
 ```
-match(utterance, lang, session) → Match | None
+match(utterances, lang, session) → Match | None
 ```
 
 Inputs:
 
-- `utterance` — a **non-empty list of candidate strings**. The
+- `utterances` — a **non-empty list of candidate strings**. The
   list typically originates from the entry topic (§9.1) and may
   have been modified by the utterance-transformer
   chain (OVOS-TRANSFORM-1 §3.2) before reaching the plugin. A
@@ -203,7 +203,7 @@ fields below.
 | `skill_id` | string | yes | The `skill_id` of the handler to invoke. For a pipeline plugin that matches itself, this equals its `pipeline_id` (§7.0). |
 | `intent_name` | string | yes | An opaque non-empty string that, together with `skill_id`, names the handler to invoke. For skill-owned matches this is the intent name the skill registered. For plugin-owned matches this is whatever label the plugin chose for this response. |
 | `lang` | string | no | The BCP-47 language tag the match was performed against. When the plugin received a non-`None` `lang` parameter (§4), this is typically that value (the plugin matched in the language the caller declared). A plugin that determined the language by other means (a multilingual matcher, a content-language-detecting matcher, a hard-coded engine) **MAY** set `lang` to whatever value reflects the language of the match. Absent when the plugin does not commit to a language — for example, a fallback plugin matching on language-independent rules. Downstream stages (intent-transformer chain per OVOS-TRANSFORM-1 §3.4, handlers under dispatch) treat `Match.lang` as authoritative for the match's language. |
-| `captures` | object (string→string) | yes | The capture map (§4.3). MAY be empty. |
+| `slots` | object (string→string) | yes | The slot map (§4.3). MAY be empty. |
 | `utterance` | string | yes | The specific candidate string from the input list that won the match. A plugin that does not track which candidate won **MUST** populate this with the first element of the input list as a fallback; the orchestrator forwards this value verbatim as `data.utterance` in the dispatch payload (§7.1) and **MUST NOT** substitute another value. |
 | `updated_session` | object | no | A replacement `session` snapshot the plugin produced during `match` (§4.2). When present, the orchestrator MUST use this snapshot — in place of the inbound utterance's session — for the dispatch and every downstream stage. When absent, the inbound session is carried unchanged. This is the **only** mechanism by which a plugin's match-phase session mutations reach downstream consumers; in-place mutations of the inbound session object are not visible past the plugin boundary. |
 
@@ -274,25 +274,21 @@ session-mutation pathway** of OVOS-MSG-1 (which CONTEXT-1 §5.3
 and CONVERSE-1 §3.2 build on) is governed by those specs and is
 unaffected by §4.2.
 
-The §6 flow diagram reflects this: `session = match.updated_session
-or session` is applied immediately after a non-null match,
-before the post-match-pre-dispatch window where intent
-transformers and CONTEXT-1's decay tick run.
 
-### 4.3 The capture map
+### 4.3 The slot map
 
-`Match.captures` is a `{string: string}` mapping (the same shape
+`Match.slots` is a `{string: string}` mapping (the same shape
 OVOS-INTENT-3 §7 defines for template / keyword intent slots).
 
 For skill-owned matches against intents the plugin previously
-consumed from OVOS-INTENT-4 registrations, the capture map keys
+consumed from OVOS-INTENT-4 registrations, the slot map keys
 are the slot names (template intents) or vocabulary names (keyword
 intents) of the matched intent.
 
-For plugin-owned matches, the capture map is whatever the plugin
+For plugin-owned matches, the slot map is whatever the plugin
 chooses to surface. It **MAY** be empty.
 
-The orchestrator does not interpret the capture map; it forwards
+The orchestrator does not interpret the slot map; it forwards
 it to the dispatched handler.
 
 ### 4.4 Match-phase timeout and latency discipline
@@ -599,7 +595,7 @@ ovos.utterance.handle                    ← entry (§9.1)
    │
    ├─ for pipeline_id in effective pipeline:
    │     plugin = loaded_plugins[pipeline_id]     # skip if not loaded
-   │     match = plugin.match(utterance, lang, session)
+   │     match = plugin.match(utterances, lang, session)
    │     if match is None:
    │         continue   # any plugin-side updated_session is discarded
    │
@@ -611,7 +607,7 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     ┌── post-match-pre-dispatch window ──────────────┐
    │     │ engine-side context promotion (CONTEXT-1 §5.3) │
    │     │ intent-transformer chain runs (TRANSFORM-1     │
-   │     │   §3.4) — may modify Match.captures, MUST NOT  │
+   │     │   §3.4) — may modify Match.slots, MUST NOT  │
    │     │   change skill_id / intent_name                 │
    │     │ post-decay turns_remaining-- (CONTEXT-1 §4)    │
    │     └────────────────────────────────────────────────┘
@@ -788,7 +784,7 @@ The dispatch Message's `data`:
   "intent_name": "play_music",
   "lang": "en-US",
   "utterance": "play the beatles",
-  "captures": { "query": "the beatles" }
+  "slots": { "query": "the beatles" }
 }
 ```
 
@@ -798,7 +794,7 @@ The dispatch Message's `data`:
 | `intent_name` | string | yes | The `Match.intent_name` — the topic's suffix. |
 | `lang` | string | conditional | The language the utterance was recognized in. Populated from `Match.lang` when present. When `Match.lang` is absent, the orchestrator falls back to the entry-topic `Message.data.lang` (§9.1) if that field was present. If neither source provides a language, this field **MUST** be omitted. Handlers **MUST** treat this field as optional — its absence means no authoritative content language was determined for this match. |
 | `utterance` | string | yes | The candidate string that won the match. |
-| `captures` | object (string→string) | yes | The capture map (§4.3). MAY be empty. |
+| `slots` | object (string→string) | yes | The slot map (§4.3). MAY be empty. |
 
 ### 7.2 Subscription discipline
 
@@ -964,12 +960,6 @@ that wants to feed an utterance into the assistant — a listener,
 a chat bridge, a CLI, a test harness, a remote-peer client.
 Receiving on this topic kicks off the lifecycle of §6.
 
-The topic name follows the naming conventions of OVOS-MSG-1 §2.1:
-imperative-mood verb (`handle` — a request for the assistant to
-handle this utterance), dot-separated hierarchy, no `:` (which is
-reserved for component-pair dispatch topics), and pairs with the
-past-tense terminal event `ovos.utterance.handled` (§9.5) by
-shared root verb.
 
 Payload shape:
 
@@ -1004,14 +994,14 @@ plugin's id:
   "intent_name": "play_music",
   "lang": "en-US",
   "utterance": "play the beatles",
-  "captures": { "query": "the beatles" },
+  "slots": { "query": "the beatles" },
   "pipeline_id": "template-high"
 }
 ```
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `skill_id`, `intent_name`, `lang`, `utterance`, `captures` | as §7.1 | yes | Same fields as the dispatch payload. |
+| `skill_id`, `intent_name`, `lang`, `utterance`, `slots` | as §7.1 | yes | Same fields as the dispatch payload. |
 | `pipeline_id` | string | yes | The `pipeline_id` of the plugin that produced the match. |
 
 `ovos.intent.matched` is a **notification**, not a dispatch.
@@ -1083,10 +1073,6 @@ A deployment with no audio output (a text-only chat bridge, a test
 harness) receives the same `ovos.utterance.speak` Message as an
 audio-capable deployment.
 
-The topic name follows the naming conventions of OVOS-MSG-1 §2.1:
-imperative-mood verb (`speak` — a request for the assistant to speak
-this response), dot-separated hierarchy, same `ovos.utterance.*`
-namespace as the entry topic.
 
 **Payload:**
 
@@ -1259,7 +1245,7 @@ from the hosting process.
 
 ### A **pipeline plugin** **MUST**:
 
-- expose a `match(utterance, lang, session) → Match | None` operation
+- expose a `match(utterances, lang, session) → Match | None` operation
   (§4);
 - when claiming, return a `Match` with `skill_id` and
   `intent_name` per §4 — never a partial or speculative claim;
