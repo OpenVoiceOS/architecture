@@ -68,8 +68,9 @@ The specifications are built bottom-up in three stacks:
   transformer chains. OVOS-SESSION-2 defines the session
   lifecycle and state-ownership model (stateless orchestrator
   for named sessions, orchestrator-owned default session,
-  projection mandate forcing all cross-utterance state into
-  session-resident fields). The orchestrator stack sits on top
+  SHOULD-project pathway for cross-utterance state with
+  MAY-internal as the alternative for state too large or
+  externally coupled to project). The orchestrator stack sits on top
   of the bus stack (uses MSG-1's envelope and routing,
   SESSION-1's session carrier with SESSION-2's lifecycle) and
   around the intent stack (intent registrations are one kind
