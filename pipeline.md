@@ -133,18 +133,6 @@ components. The only difference is where the handler lives:
 From outside either case, the assistant responded. The user does
 not know or care which component answered.
 
-Plugins are diverse by design. A deployment may load plugins that
-consume OVOS-INTENT-4 registrations and match against keyword or
-template intents, plugins that consume no registrations and match
-by their own internal rules (such as language-model-backed
-personas), plugins that always claim with a fallback response, or
-anything else. The contract is just `match`.
-
-A deployment running skills that emit OVOS-INTENT-4 keyword or
-template intent registrations **SHOULD** load at least one plugin
-that consumes those registrations; otherwise those intents will
-never match. Whether to load such a plugin is a deployment choice,
-not a spec-level requirement.
 
 ---
 
@@ -191,62 +179,28 @@ source.
 
 **Stamp rule.** A plugin **MUST** set
 `Message.context["pipeline_id"]` to its own identity on every
-Message it places on the bus by **authorial action** and on every
-Message it **modifies in place** before that Message proceeds.
-Authorial action covers the cases where the plugin is asserting
-itself as the originator of a new Message-on-wire:
+Message it **originates** — constructs and emits fresh. When the
+plugin emits a derived Message via `Message.forward`,
+`Message.reply`, or `Message.response` (OVOS-MSG-1 §5), these are
+**routing-metadata** derivations that adjust addressing but are
+not new originations; the plugin **MUST NOT** overwrite the
+inherited `context["pipeline_id"]` in any of these cases —
+preserving upstream attribution is the point of the derivation.
+Only a fresh construction is an origination that requires stamping.
 
-- a fresh emission (the plugin constructs and emits a new
-  Message);
-- `Message.reply(...)` or `Message.response(...)` (OVOS-MSG-1 §5)
-  derived from a prior Message — these derivations swap routing
-  keys and create a new authorial step. The resulting
-  Message-on-wire **MUST** carry `context["pipeline_id"]` set to
-  the plugin's id, overwriting whatever inherited
-  `context["pipeline_id"]` value may have been there from an
-  upstream plugin in a multi-plugin chain.
+**Coexistence with other identity keys.** MSG-1 derivation rules
+preserve inherited context keys — `context["skill_id"]` from an
+upstream dispatch and any `<type>_transformer_ids` from transformer
+stages are not stripped when a plugin stamps its own
+`context["pipeline_id"]`. Each key names a different component in
+the chain; when a single owner is needed, consumers apply the
+lifecycle-position precedence of OVOS-CONTEXT-1 §5.2.
 
-**Pure-forward propagation is exempt.** `Message.forward(...)`
-(OVOS-MSG-1 §5.1) is propagation semantics — it preserves
-`context` unchanged by design, and the deriving plugin is not
-asserting authorship of the forwarded Message-on-wire. A plugin
-that `.forward`s a Message **MUST NOT** overwrite an inherited
-`context["pipeline_id"]` with its own — preserving upstream
-attribution is the point of the forward derivation. If a plugin
-wants to claim authorship of the resulting Message, it
-**SHOULD** use `.reply` or `.response`, or emit fresh.
-
-Modify-in-place covers the case where the plugin mutates an
-existing Message (its `context`, its `data`, the session it
-carries — for example, a CONTEXT-1 §5.3 direct mutation) without
-itself causing a fresh emission; the next emitter still propagates
-the modified Message, and `context["pipeline_id"]` must reflect
-the plugin that mutated.
-
-The combined effect: whenever the plugin's hands have been on a
-Message that subsequently appears on the bus, `context["pipeline_id"]`
-reflects it.
-
-**Coexistence with other identity keys.** When a plugin emits via
-`Message.forward` / `.reply` / `.response` (OVOS-MSG-1 §5) from a
-prior Message that already carries `context["skill_id"]` from an
-upstream dispatch (or any of the six `<type>_transformer_ids` keys
-of OVOS-TRANSFORM-1 §1.3 from upstream transformer stages), the
-inherited keys are preserved by the derivation rule and **not**
-stripped. Each names a different component in the chain that
-produced the Message; the plugin additionally stamps its own
-`context["pipeline_id"]`. Attribution consumers
-(OVOS-CONTEXT-1 §5.2, audit / telemetry observers) apply a
-lifecycle-position precedence — see OVOS-CONTEXT-1 §5.2 — to pick
-a single owner when they need one.
-
-`Message.context["pipeline_id"]` is the plugin's **self-attribution**.
-Mirroring the `context["skill_id"]` / `data["skill_id"]` distinction
-of OVOS-INTENT-4 §3.1, a topic's `data` schema may also carry
-`pipeline_id` as the **subject** of the message (the plugin a
-query is filtered against, the plugin being described, etc.); a
-consumer reading `data.pipeline_id` is reading a subject, not a
-self-attribution.
+`Message.context["pipeline_id"]` is **self-attribution** — who
+emitted. A `data.pipeline_id` field on a topic's payload is a
+**subject** — the plugin a query or description concerns. A
+consumer reading attribution reads `context`; a consumer reading a
+subject reads `data`.
 
 #### Orchestrator-side enforcement
 
@@ -388,6 +342,22 @@ or session` is applied immediately after a non-null match,
 before the post-match-pre-dispatch window where intent
 transformers and CONTEXT-1's decay tick run.
 
+### 4.3 The capture map
+
+`Match.captures` is a `{string: string}` mapping (the same shape
+OVOS-INTENT-3 §7 defines for template / keyword intent slots).
+
+For skill-owned matches against intents the plugin previously
+consumed from OVOS-INTENT-4 registrations, the capture map keys
+are the slot names (template intents) or vocabulary names (keyword
+intents) of the matched intent.
+
+For plugin-owned matches, the capture map is whatever the plugin
+chooses to surface. It **MAY** be empty.
+
+The orchestrator does not interpret the capture map; it forwards
+it to the dispatched handler.
+
 ### 4.4 Match-phase timeout
 
 The `match` operation is logically synchronous from the orchestrator's
@@ -411,24 +381,6 @@ specification fixes only that the discipline **SHOULD** exist.
 
 ---
 
-### 4.3 The capture map
-
-`Match.captures` is a `{string: string}` mapping (the same shape
-OVOS-INTENT-3 §7 defines for template / keyword intent slots).
-
-For skill-owned matches against intents the plugin previously
-consumed from OVOS-INTENT-4 registrations, the capture map keys
-are the slot names (template intents) or vocabulary names (keyword
-intents) of the matched intent.
-
-For plugin-owned matches, the capture map is whatever the plugin
-chooses to surface. It **MAY** be empty.
-
-The orchestrator does not interpret the capture map; it forwards
-it to the dispatched handler.
-
----
-
 ## 5. Session fields owned by this specification
 
 This specification claims four session fields per OVOS-SESSION-1
@@ -439,9 +391,6 @@ session-scoped, propagate with the session under OVOS-SESSION-1 §4,
 and follow the deployment-default-fallback absence rule of
 OVOS-SESSION-1 §2.5: an omitted, empty, or absent field resolves at
 consumption to the deployment-configured default.
-
-§5.5 fixes how the positive and negative fields compose when both
-are set; §5.6 is an informative note on layer-2 authorization use.
 
 ### 5.1 `session.pipeline`
 
@@ -870,35 +819,12 @@ dispatch-handler subscription. §7.0's table only enumerates
 handler-owner shapes (the targets of dispatch); pure-matcher
 plugins live alongside both rows.
 
-A **plain skill** may also handle a reserved-intent-name
-dispatch topic when a companion specification defines one. For
-example, a skill that defines a `converse` method (OVOS-CONVERSE-1
-§9.3) subscribes to `<own_skill_id>:converse` via framework
-convention, not via OVOS-INTENT-4 registration — the reserved
-name is not registrable (§7.3). The plain-skill row above lists
-INTENT-4-registered intents as the *normal* path; reserved
-intent_names handled by framework convention extend it without
-changing the dispatch shape.
-
 The pipeline-plugin-with-handlers case is normative: **if a
 pipeline plugin emits matches whose `owner_id` equals its own
 `pipeline_id`, that identifier is also its `skill_id`** for the
 purposes of OVOS-INTENT-3, OVOS-INTENT-4, and every other spec
-that addresses skills by id. They are not two identifiers that
-happen to coincide; they are the same identifier under two
-roles.
-
-**Passive index registration.** A pipeline plugin with bundled
-handlers **SHOULD** publish the set of `intent_name` values it
-owns through the per-pipeline introspection topic
-`ovos.pipeline.<pipeline_id>.intents.list` (§10). Observers and
-introspection tools rely on this index to enumerate every
-handler in the deployment; without it, plugin-owned handlers
-are invisible to deployment-wide tooling that walks
-OVOS-INTENT-4 only. This is **not** OVOS-INTENT-4 registration —
-the plugin's matches do not flow through any external matcher —
-it is a one-way declaration of "these are the intent_names I
-dispatch on."
+that addresses skills by id. They are the same identifier under
+two roles, not two identifiers that happen to coincide.
 
 From the dispatch path's perspective the two shapes are
 indistinguishable. `<owner_id>:<intent_name>` carries no
@@ -1011,6 +937,13 @@ This specification fixes only the registry mechanism (reservation
 listing); the per-name semantics are owned by the reserving
 specification. Other specifications MAY reserve further names by
 adding rows to this table in their own PR.
+
+A plain skill (§7.0) subscribes to a reserved-name dispatch topic
+via framework convention rather than OVOS-INTENT-4 registration —
+the reserved name is not registrable. The normal skill path
+(INTENT-4-registered intents) and the reserved-name path share the
+same `<owner_id>:<intent_name>` dispatch shape; no dispatch
+mechanics change.
 
 ### 7.4 In-process equivalence
 
@@ -1287,6 +1220,14 @@ other plugins) discover that set at runtime, this specification
 defines a pull-query / scatter-response pattern keyed on
 `pipeline_id`.
 
+A pipeline plugin with bundled handlers **SHOULD** publish the set
+of `intent_name` values it owns through the query topic below.
+Observers and introspection tools rely on this index to enumerate
+every handler in the deployment; without it, plugin-owned handlers
+are invisible to deployment-wide tooling that walks OVOS-INTENT-4
+only. This is **not** OVOS-INTENT-4 registration — it is a
+one-way declaration of "these are the intent_names I dispatch on."
+
 ### 10.1 Query and response topics
 
 | Topic | Direction | Carries |
@@ -1378,6 +1319,12 @@ from the hosting process.
 
 ## 11. Conformance
 
+### A **deployment** **SHOULD**:
+
+- load at least one pipeline plugin that consumes OVOS-INTENT-4
+  registrations when skills emitting keyword or template intents are
+  present; without such a plugin those intents never match.
+
 ### An **orchestrator** **MUST**:
 
 - subscribe to the utterance-layer entry topic
@@ -1420,14 +1367,6 @@ specification. The orchestrator owns the handler-lifecycle trio
 (§8) and the dispatch envelope (§7). A handler is an opaque
 callable; the spec binds the orchestrator that invokes it, not the
 handler itself.
-
-### Non-goals
-
-The following are explicitly outside this specification: plugin
-loading and discovery; any pre-pipeline utterance transformation
-or cancellation chain; ASR n-best ranking semantics within
-plugins; per-plugin behavioural specs; the `session` object's
-wire shape and field set (owned by OVOS-SESSION-1).
 
 ---
 
