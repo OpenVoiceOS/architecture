@@ -267,7 +267,7 @@ other (§3), distinguished only by its identifier.
 
 ### 3.2 Language signals
 
-A session carries up to four BCP-47 language-tag fields, each
+A session carries up to six BCP-47 language-tag fields, each
 naming a different *kind* of language signal. All four are
 session-scoped, all four are omissible per §2, and all four are
 populated independently (typically by different stages of the
@@ -503,8 +503,8 @@ canonical cases:
 1. **`session_id == "default"`.** Per §3.1, an omitted `session_id`,
    an absent `session`, an empty `session: {}`, and an explicit
    `session_id: "default"` are all wire-equivalent. A producer that
-   intends device-local origin **SHOULD** omit `session_id` (or
-   `session` entirely) rather than emit the reserved string.
+   intends device-local origin **SHOULD** omit `session` entirely
+   rather than emit the reserved string.
 2. **A per-component override field whose value matches the
    deployment default.** Producers **SHOULD NOT** populate
    `pipeline`, `intent_context`, the six `*_transformers` lists,
