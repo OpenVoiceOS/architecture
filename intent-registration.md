@@ -1,6 +1,6 @@
 # Intent and Entity Registration Bus Contract
 
-**Spec ID:** OVOS-INTENT-4 · **Version:** 4 · **Status:** Draft
+**Spec ID:** OVOS-INTENT-4 · **Version:** 5 · **Status:** Draft
 
 This document defines the **bus messages** a skill uses to declare its
 intents and entities. It is the wire format for intent registration —
@@ -25,8 +25,9 @@ It builds on three companion specifications:
   result that this spec carries on the bus;
 - the *Locale Resource Formats Specification* (OVOS-INTENT-2) and the
   *Sentence Template Grammar Specification* (OVOS-INTENT-1) — the
-  file-or-inline contract and grammar referenced by each registration
-  payload.
+  authoring file formats and template grammar a skill loader expands
+  before emitting a registration payload (file paths never cross the
+  bus; see §5.1).
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and **MAY**
 are used as in RFC 2119.
@@ -205,27 +206,22 @@ one payload.
 ### 5.1 Vocabulary descriptor
 
 A **vocabulary descriptor** is a JSON object identifying one vocabulary
-(INTENT-3 §4.1). It uses the OVOS-INTENT-1 §6.1 file-or-inline contract:
-
-Inline form (preferred — see §5.5):
+(INTENT-3 §4.1):
 
 ```json
 { "name": "set", "samples": ["set", "change", "adjust"] }
 ```
 
-File form:
-
-```json
-{ "name": "set", "file": "/abs/path/to/set.voc" }
-```
-
 `name` is the vocabulary name (INTENT-3 §4.1) — this is the key under
 which the vocabulary's captured phrase appears in the match result
-(OVOS-PIPELINE-1 `Match.slots`; INTENT-3 §4.3). Exactly one of
-`samples` or `file` **MUST** be present.
+(OVOS-PIPELINE-1 `Match.slots`; INTENT-3 §4.3). `samples` entries are
+slot-free OVOS-INTENT-1 templates (INTENT-1 §1.1) and **MUST** contain
+at least one entry.
 
-`samples` entries are slot-free OVOS-INTENT-1 templates (INTENT-1 §1.1) and
-**MUST** contain at least one entry.
+Locale resource files (`.voc`, `.intent`, `.entity`, `.blacklist`;
+OVOS-INTENT-2) are a producer-side authoring convenience: a skill
+loader reads them and inlines their expanded content into the
+registration payload. File paths never appear on the wire.
 
 ### 5.2 Payload shape
 
@@ -275,13 +271,11 @@ malformed-payload rules:
 - A vocabulary **MUST NOT** appear under more than one role within a single
   registration (INTENT-3 §4.2). Vocabulary identity for this check is by
   `name`.
-- Every vocabulary descriptor **MUST** carry exactly one of `samples` or
-  `file` (§5.1).
-- Each `samples` array **MUST** be non-empty.
-- A vocabulary descriptor's `samples` (or expanded `file` contents)
-  **MUST** include at least one template that expands to a non-empty
-  sample (OVOS-INTENT-1 §3.6). A descriptor that yields zero
-  non-empty samples is malformed.
+- Every vocabulary descriptor **MUST** carry a non-empty `samples`
+  array (§5.1).
+- A vocabulary descriptor's `samples` **MUST** include at least one
+  template that expands to a non-empty sample (OVOS-INTENT-1 §3.6).
+  A descriptor that yields zero non-empty samples is malformed.
 
 A producer **MUST** include all four top-level keys (`required`,
 `optional`, `one_of`, `excluded`); a payload missing any of them is
@@ -297,18 +291,6 @@ bus is fire-and-forget (§2).
 
 A `.blacklist` is **not** used with keyword intents. The `excluded` role is
 the keyword-intent suppression mechanism (INTENT-3 §4.2, §5.4).
-
-### 5.5 File form is single-host only
-
-A `file:` reference is a filesystem path the consuming plugin **MUST**
-be able to resolve. When producer and plugin share a filesystem,
-file form is equivalent to inline; otherwise producers **MUST** use
-the inline form. Producers **SHOULD** prefer inline unconditionally —
-it is portable across deployment shapes and removes one class of
-silent malformed-payload failure. A plugin that cannot resolve a
-`file:` path treats the registration as malformed and does not
-index it (and logs per §5.3). The same rule applies to every
-`file:` field in §6 and §7.
 
 ---
 
@@ -335,40 +317,24 @@ INTENT-1 §3).
 }
 ```
 
-Or, using the file form (INTENT-1 §6.1; single-orchestrator only, §5.5):
-
-```json
-{
-  "skill_id": "music.skill",
-  "intent_name": "play_music",
-  "lang": "en-US",
-  "file": "/abs/path/to/play_music.intent",
-  "blacklist_file": "/abs/path/to/play_music.blacklist"
-}
-```
-
 Field reference:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `samples` | array of strings | exactly one of `samples`/`file` | OVOS-INTENT-1 templates with named slots (INTENT-1 §3, §5). |
-| `file` | string | exactly one of `samples`/`file` | Absolute path to a `.intent` resource (INTENT-2 §4.1). Single-orchestrator only (§5.5). |
+| `samples` | array of strings | yes | OVOS-INTENT-1 templates with named slots (INTENT-1 §3, §5). |
 | `blacklist` | array of strings | no | Slot-free phrases (INTENT-2 §4.3) whose occurrence suppresses the match (INTENT-3 §5.4). |
-| `blacklist_file` | string | no | Absolute path to a `.blacklist` file. At most one of `blacklist`/`blacklist_file` may be present. Single-orchestrator only (§5.5). |
 
 ### 6.2 Slot-consistency
 
-Every template in `samples` (or in the file) **MUST** declare the same set of
-named slots — the slot-consistency rule of INTENT-1 §5.5. A consuming plugin
-**MUST NOT** index a registration that violates the slot-consistency rule.
+Every template in `samples` **MUST** declare the same set of named slots —
+the slot-consistency rule of INTENT-1 §5.5. A consuming plugin **MUST NOT**
+index a registration that violates the slot-consistency rule.
 
 ### 6.3 Malformed payloads
 
 A consuming plugin **MUST NOT** index a template registration in which:
 
-- both `samples` and `file` are present, or neither is;
-- both `blacklist` and `blacklist_file` are present;
-- `samples` is empty;
+- `samples` is missing or empty;
 - a template is not parsable as OVOS-INTENT-1 §3 grammar;
 - a template expands to zero non-empty samples (OVOS-INTENT-1 §3.6);
 - the slot sets of the templates differ (§6.2).
@@ -399,32 +365,19 @@ with no entity still fills normally.
 }
 ```
 
-Or (single-orchestrator only, §5.5):
-
-```json
-{
-  "skill_id": "music.skill",
-  "entity_name": "engine",
-  "lang": "en-US",
-  "file": "/abs/path/to/engine.entity"
-}
-```
-
 Field reference:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `entity_name` | string | yes | Unique within the skill. By convention matches the slot name a template intent references. |
-| `samples` | array of strings | exactly one of `samples`/`file` | Slot-free value-set entries (INTENT-1 §5.4). |
-| `file` | string | exactly one of `samples`/`file` | Absolute path to a `.entity` resource (INTENT-2 §4.3). Single-orchestrator only (§5.5). |
+| `samples` | array of strings | yes | Slot-free value-set entries (INTENT-1 §5.4). |
 
 ### 7.2 Malformed payloads
 
-A consuming plugin **MUST NOT** index an entity registration in
-which both or neither of `samples` / `file` is present. The §5.3
-WARN-log rule applies: the rejecting plugin **MUST** log the
-rejection with `skill_id`, `entity_name`, `lang`, and a one-line
-reason.
+A consuming plugin **MUST NOT** index an entity registration whose
+`samples` is missing or empty. The §5.3 WARN-log rule applies: the
+rejecting plugin **MUST** log the rejection with `skill_id`,
+`entity_name`, `lang`, and a one-line reason.
 
 ---
 
@@ -589,13 +542,7 @@ Returns the full definition of one intent. Request payload:
 Response (`ovos.intent.describe.response`):
 
 - On success, `{ "ok": true, "method": "keyword"|"template", "definition": {...} }`
-  where `definition` is the §5 or §6 payload in inline form (always
-  `samples` / `blacklist`, never `file` paths). If the registration
-  arrived via `file:` and the orchestrator cannot expand it,
-  `definition` is omitted — absence on `ok: true` means "registered
-  but introspection-opaque." Consumers needing the definition in
-  that case **SHOULD** fall back to per-plugin introspection
-  (OVOS-PIPELINE-1 §10).
+  where `definition` is the §5 or §6 payload as it was broadcast.
 - On unknown intent, `{ "ok": false, "error": "..." }`.
 
 The orchestrator **MAY** restrict access to introspection topics;
@@ -614,8 +561,7 @@ authorization is out of scope.
 - set `Message.context["skill_id"]` to its own `skill_id` on every
   Message it emits, per §3.1;
 - conform every registration's payload to §5 (keyword), §6 (template),
-  or §7 (entity), respectively, including §5.5's single-host rule for
-  `file:` references;
+  or §7 (entity), respectively;
 - emit `ovos.intent.deregister` / `ovos.entity.deregister` /
   `ovos.skill.deregister` to retract its registrations, paired with
   the local release of the handler (§9, INTENT-3 §6.1);
@@ -632,8 +578,8 @@ registration landed; there is no acknowledgement.
   and matches by internal rules (e.g. an LLM persona) is also
   conformant.
 
-A plugin **MUST NOT** index a malformed registration (§§5.3, 5.5,
-6.2, 6.3, 7.2) or one whose `intent_name` is reserved (§3.2), and
+A plugin **MUST NOT** index a malformed registration (§§5.3, 6.2,
+6.3, 7.2) or one whose `intent_name` is reserved (§3.2), and
 **MUST** log every such rejection at WARN with `skill_id`,
 `intent_name`/`entity_name`, `lang`, and a one-line reason —
 fire-and-forget means this log is the producer's only debugging
@@ -681,7 +627,8 @@ handler lifecycle, utterance lifecycle — live in OVOS-PIPELINE-1.
   concept, identity, definition methods, and match result that this
   specification carries on the bus.
 - *Locale Resource Formats Specification* (OVOS-INTENT-2) — the
-  resource files referenced by the `file` form of each registration.
+  authoring file formats a skill loader expands into inline samples
+  before emitting a registration.
 - *Sentence Template Grammar Specification* (OVOS-INTENT-1) — the
-  grammar of the inline `samples` form, and the file-or-inline
-  training-data contract.
+  grammar of the `samples` strings carried in every registration
+  payload.
