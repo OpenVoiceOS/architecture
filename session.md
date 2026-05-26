@@ -183,9 +183,11 @@ newly-claimed field does not break consumers that predate the claim.
 
 This version of the specification recognizes the following fields.
 The "Owner" column names the specification that defines the field's
-semantic meaning, permitted values, propagation rule, and scope. This
-specification fixes only the field name and the wire type;
-everything else is owned by the cited specification.
+semantic meaning and permitted values. This specification fixes only
+the field name and the wire type; everything else is owned by the
+cited specification. All fields propagate unchanged on derivation
+(MSG-1 §4); all fields are session-scoped — they travel with the
+session and persist across utterances.
 
 | Field | Wire type | Owner |
 |-------|-----------|-------|
