@@ -51,7 +51,7 @@ This specification defines:
   `ovos.intent.matched`, `complete_intent_failure`,
   `ovos.utterance.handled`, and the natural-language response topic
   `ovos.utterance.speak` (§9.6);
-- **conformance** (§10).
+- **conformance** (§11).
 
 It does **not** define:
 
@@ -757,16 +757,15 @@ The spec recognises two handler-owner shapes:
 
 The examples in the second row are plugins whose own `match`
 emits matches addressed back to itself. A different shape — a
-**pure-matcher** pipeline plugin (Padatious / Adapt for skill
-intents; the converse plugin of OVOS-CONVERSE-1 for the
-reserved intent_names `converse` / `response`) — is also a
-pipeline plugin per §3 but is **not a handler-owner**: its
-`match` returns matches whose `owner_id` is some *other*
-component's identity. Pure-matcher plugins have only a
-`pipeline_id`; they have no `skill_id` and they own no
-dispatch-handler subscription. §7.0's table only enumerates
-handler-owner shapes (the targets of dispatch); pure-matcher
-plugins live alongside both rows.
+**pure-matcher** pipeline plugin — is also a pipeline plugin per §3
+but is **not a handler-owner**: its `match` returns matches whose
+`owner_id` is some *other* component's identity (for example, a
+template or keyword engine that matches against skill-registered
+intents, or a converse engine routing to reserved intent_names per
+§7.3). Pure-matcher plugins have only a `pipeline_id`; they have no
+`skill_id` and they own no dispatch-handler subscription. §7.0's
+table only enumerates handler-owner shapes (the targets of
+dispatch); pure-matcher plugins live alongside both rows.
 
 The pipeline-plugin-with-handlers case is normative: **if a
 pipeline plugin emits matches whose `owner_id` equals its own
@@ -794,29 +793,18 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
   `skill_id` is the voice-application identity (§7.0) — every
   dispatched handler owns one, whether it is a plain skill or a
   pipeline plugin with bundled handlers (in which case
-  `skill_id == pipeline_id`). This stamping carries the
-  handler-owner's identity forward into every Message the
-  handler emits via `forward` (OVOS-MSG-1 §5.1), satisfying
-  OVOS-INTENT-4 §3.1 by construction.
+  `skill_id == pipeline_id`). MSG-1 derivation semantics carry
+  this value forward into every Message the handler emits,
+  satisfying OVOS-INTENT-4 §3.1 by construction.
 - **`context["pipeline_id"]` stamping.** When the dispatched
   `<owner_id>` corresponds to a loaded pipeline plugin (the
   pipeline-plugin-with-bundled-handlers case of §7.0), the
   orchestrator **MUST** additionally stamp
   `context["pipeline_id"] = <owner_id>`. For such a handler
   `context["skill_id"]` and `context["pipeline_id"]` carry the
-  same identifier; consumers reading either key get the same
-  value. For a plain skill (not loaded as a pipeline plugin),
-  the orchestrator **MUST NOT** stamp `context["pipeline_id"]`.
-
-Any Message the skill subsequently emits **MUST** carry
-`context["skill_id"]` matching the `<owner_id>` of the dispatch
-that invoked it (OVOS-INTENT-4 §3.1). Because the orchestrator
-stamps the dispatch context and skills derive their emissions
-from it via `forward` / `reply`, this match is automatic — a
-skill that emits a Message whose `context["skill_id"]` differs
-from the dispatch is non-conformant, and the orchestrator
-**SHOULD** detect and log such drift if it is in a position to
-do so (loader-side interception per OVOS-INTENT-4 §3.1).
+  same identifier. For a plain skill (not loaded as a pipeline
+  plugin), the orchestrator **MUST NOT** stamp
+  `context["pipeline_id"]`.
 
 The dispatch Message's `data`:
 
@@ -990,7 +978,7 @@ same match. Re-dispatch is not defined by this specification.
 
 ## 9. Utterance-layer messages
 
-This specification formalizes five utterance-layer bus events.
+This specification formalizes the following utterance-layer bus events.
 All travel in standard OVOS-MSG-1 envelopes; routing follows the
 single-flip model of OVOS-MSG-1 §5.2.
 
@@ -1141,14 +1129,13 @@ namespace as the entry topic.
 | `lang` | string | no | BCP-47 tag of the response language. When absent, the output stage resolves language from the session per OVOS-SESSION-1 §3.2. |
 
 **Derivation and session propagation.** A handler **MUST** derive each
-`ovos.utterance.speak` emission via `Message.forward` or
-`Message.reply` (OVOS-MSG-1 §5) from the dispatch Message (§7) it
-received. This carries `context.session` and `context.skill_id` forward
-automatically — downstream stages (dialog-transformer chain
-OVOS-TRANSFORM-1 §3.5, the output-path specification) can read the
-session and attribute the response without additional wire fields. A
-`ovos.utterance.speak` Message that does not derive from a dispatch is
-non-conformant.
+`ovos.utterance.speak` emission from the dispatch Message (§7) it
+received, per MSG-1 §5 derivation semantics. This carries
+`context.session` and `context.skill_id` forward automatically —
+downstream stages (dialog-transformer chain OVOS-TRANSFORM-1 §3.5,
+the output-path specification) can read the session and attribute the
+response without additional wire fields. An `ovos.utterance.speak`
+Message that does not derive from a dispatch is non-conformant.
 
 **Multiplicity and ordering.** A handler **MAY** emit zero or more
 `ovos.utterance.speak` Messages. Zero is permitted — a handler that
