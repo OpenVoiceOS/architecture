@@ -166,11 +166,9 @@ no `method` axis.
 
 Other specifications **MAY** reserve specific `intent_name`
 values; the authoritative registry is OVOS-PIPELINE-1 §7.3. A
-consuming plugin **MUST NOT** index a registration whose
-`intent_name` is reserved, so it will never produce a match. The
-manifest (§10) **MUST** still index the broadcast and flag the
-entry with `reserved: true` in `ovos.intent.list` (§10.1) so
-tooling can surface the mistake.
+registration naming a reserved `intent_name` is **malformed** —
+the orchestrator and every consuming plugin treat it under the
+malformed-payload rules of §5.3 / §6.3 (log at WARN, do not index).
 
 ---
 
@@ -271,6 +269,8 @@ positional semantics.
 The constraint rules of INTENT-3 §4.2 are restated here as bus-layer
 malformed-payload rules:
 
+- The `intent_name` **MUST NOT** be one reserved by another spec
+  (§3.2; the authoritative registry is OVOS-PIPELINE-1 §7.3).
 - The combined `required` and `one_of` lists **MUST NOT** both be empty —
   an intent with only `optional` and `excluded` has nothing that must be
   present and is malformed (INTENT-3 §4.2).
@@ -344,6 +344,7 @@ index a registration that violates the slot-consistency rule.
 
 A consuming plugin **MUST NOT** index a template registration in which:
 
+- the `intent_name` is reserved by another spec (§3.2);
 - `samples` is missing or empty;
 - a template is not parsable as OVOS-INTENT-1 §3 grammar;
 - a template expands to zero non-empty samples (OVOS-INTENT-1 §3.6);
@@ -546,11 +547,9 @@ Response (`ovos.intent.list.response`):
 ```
 
 Each entry carries `skill_id`, `intent_name`, `lang`, a `method` of
-`"keyword"` or `"template"` (INTENT-3 §2), an `enabled` boolean (§8.5),
-and — when the `intent_name` is reserved (§3.2) — a `reserved: true`
-flag. A reserved-flagged entry exists in the manifest but will never
-produce a match; tooling **SHOULD** surface it as a misregistration.
-`reserved` is absent (equivalent to `false`) on normal entries.
+`"keyword"` or `"template"` (INTENT-3 §2), and an `enabled` boolean
+(§8.5). Reserved-name registrations are malformed (§3.2) and do not
+appear in the manifest.
 
 ### 10.2 `ovos.intent.describe`
 
@@ -571,10 +570,7 @@ Response (`ovos.intent.describe.response`):
   method was registered, two entries when both methods exist and no
   filter was given. When two entries are returned, the orchestrator
   **MUST** emit them in the order `keyword`, `template` so consumers
-  can rely on positional access. If the intent_name is reserved
-  (§3.2), the response **MUST** include `"reserved": true` at the
-  top level so a `.describe` consumer can diagnose the
-  misregistration without round-tripping through `.list`.
+  can rely on positional access.
 - On unknown intent, `{ "ok": false, "error": "..." }`.
 
 The orchestrator **MAY** restrict access to introspection topics;
@@ -612,11 +608,12 @@ registration landed; there is no acknowledgement.
   conformant.
 
 A plugin **MUST NOT** index a malformed registration (§§5.3, 6.2,
-6.3, 7.2) or one whose `intent_name` is reserved (§3.2), and
-**MUST** log every such rejection at WARN with `skill_id`,
-`intent_name`/`entity_name`, `lang`, and a one-line reason —
-fire-and-forget means this log is the producer's only debugging
-signal. Matching behaviour beyond that is OVOS-PIPELINE-1's concern.
+6.3, 7.2 — including registrations whose `intent_name` is reserved,
+§3.2) and **MUST** log every such rejection at WARN with `skill_id`,
+`intent_name`/`entity_name`, `lang`, the rejecting topic, and a
+one-line reason — fire-and-forget means this log is the producer's
+only debugging signal. Matching behaviour beyond that is
+OVOS-PIPELINE-1's concern.
 
 ### The **orchestrator** **MUST**:
 
@@ -624,8 +621,6 @@ signal. Matching behaviour beyond that is OVOS-PIPELINE-1's concern.
   **manifest** — a passive index built from observed broadcasts;
 - serve `ovos.intent.list` and `ovos.intent.describe` queries
   against the manifest, returning the shape of §10.1 / §10.2;
-- flag manifest entries whose `intent_name` is reserved (§3.2)
-  with `reserved: true` in `ovos.intent.list` responses;
 - treat a re-registration with the same key as replacement of the
   prior manifest entry (§8.1); the key is the quadruple
   `(skill_id, intent_name, lang, method)`, so other languages and

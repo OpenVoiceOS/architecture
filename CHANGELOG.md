@@ -77,27 +77,6 @@ tool does not recognize the token and cannot expand the template.
   guarantees, session lifecycle, and the internal shape of `session`
   beyond `session_id` and `lang` are explicitly out of scope.
 
-## OVOS-PIPELINE-1 — Utterance Lifecycle and Pipeline
-
-### 3
-
-- §7.3 — realign the reserved-intent_names rejection contract with
-  OVOS-INTENT-4 §3.2: enforcement is the consuming pipeline plugin's
-  (MUST NOT index, MUST log per INTENT-4 §5.3), not the orchestrator's;
-  the orchestrator's INTENT-4 manifest still indexes the broadcast with
-  `reserved: true` so tooling can surface the misregistration. Removes
-  the stale `OVOS-INTENT-4 §3.5` cross-reference (the section was
-  consolidated into INTENT-4 §3.2) and the stale `error_code` mechanism
-  (INTENT-4 is fire-and-forget — no `.response`).
-
-### 2
-
-- Pre-merge polish pass.
-
-### 1
-
-- Initial draft.
-
 ## OVOS-INTENT-4 — Intent and Entity Registration Bus Contract
 
 ### 1
