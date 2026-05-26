@@ -272,11 +272,11 @@ For an **intent**:
 |-------|------|----------|--------|
 | `skill_id` | string | yes | INTENT-3 §3 — assistant-unique. |
 | `intent_name` | string | yes | INTENT-3 §3 — unique within the skill. |
-| `lang` | string | yes | BCP-47 (INTENT-2 §2). An intent is defined per language (INTENT-3 §3). This is `data.lang` — the language of the resource being registered, distinct from `session.lang` which is the user's preferred language (OVOS-MSG-1 §4.2). |
+| `lang` | string | yes | BCP-47 (INTENT-2 §2), compared case-insensitively per OVOS-SESSION-1 §3.2. An intent is defined per language (INTENT-3 §3). This is `data.lang` — the language of the resource being registered, distinct from `session.lang` which is the user's preferred language (OVOS-SESSION-1 §3.2). |
 
 The triple `(skill_id, intent_name, lang)` is the **registration key**
 (INTENT-3 §6.1). Registering an intent whose key matches an existing
-registration **replaces** the previous one (§7).
+registration **replaces** the previous one (§8.1).
 
 For an **entity**, `intent_name` is replaced by `entity_name` (same
 uniqueness rule: unique within the skill).
@@ -660,7 +660,8 @@ Registering an intent whose `(skill_id, intent_name, lang)` triple matches
 an existing registration **replaces** it — the previous definition is
 discarded and wholly superseded by the new one (INTENT-3 §6.1). Replacement
 does **not** require a prior deregister message and **MUST** preserve any
-enabled/disabled state from §8.5 unless the producer explicitly resets it.
+enabled/disabled state from §8.5; a producer that wants to reset that state
+deregisters first (§8.2) and then re-registers.
 
 The same rule applies to entities, keyed on `(skill_id, entity_name, lang)`.
 
