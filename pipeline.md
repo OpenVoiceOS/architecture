@@ -43,7 +43,7 @@ This specification defines:
   `session.blacklisted_intents` (negative filters);
 - the **utterance lifecycle** (§6) — entry, iteration, dispatch,
   terminal events;
-- the **dispatch** topic shape (§7) — `<owner_id>:<intent_name>`;
+- the **dispatch** topic shape (§7) — `<skill_id>:<intent_name>`;
 - the **handler-lifecycle trio** (§8) —
   `ovos.intent.handler.start` / `.complete` / `.error`;
 - the **utterance-layer bus events** (§9) —
@@ -132,7 +132,7 @@ Constraints on `pipeline_id` strings:
 
 - Non-empty.
 - Bound by OVOS-MSG-1 §2.1.1: because `pipeline_id` appears as a
-  component in colon-separated topic shapes (`<owner_id>:<intent_name>`
+  component in colon-separated topic shapes (`<skill_id>:<intent_name>`
   in §7, per-pipeline introspection topics in §10), it **MUST NOT**
   contain `:`. The recommended form is ASCII letters / digits / `_` /
   `-` only.
@@ -197,8 +197,8 @@ fields below.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `owner_id` | string | yes | The handler-owner's identity — the `skill_id` of the dispatched handler. For a pipeline plugin with bundled handlers, this is the plugin's identity, which is **the same identifier** as its `pipeline_id` (§7.0). The dispatch topic shape `<owner_id>:<intent_name>` is uniform across both handler-owner shapes. |
-| `intent_name` | string | yes | An opaque non-empty string that, together with `owner_id`, names the handler to invoke. For skill-owned matches this is the intent name the skill registered. For plugin-owned matches this is whatever label the plugin chose for this response. |
+| `skill_id` | string | yes | The `skill_id` of the handler to invoke. For a pipeline plugin that matches itself, this equals its `pipeline_id` (§7.0). |
+| `intent_name` | string | yes | An opaque non-empty string that, together with `skill_id`, names the handler to invoke. For skill-owned matches this is the intent name the skill registered. For plugin-owned matches this is whatever label the plugin chose for this response. |
 | `lang` | string | no | The BCP-47 language tag the match was performed against. When the plugin received a non-`None` `lang` parameter (§4), this is typically that value (the plugin matched in the language the caller declared). A plugin that determined the language by other means (a multilingual matcher, a content-language-detecting matcher, a hard-coded engine) **MAY** set `lang` to whatever value reflects the language of the match. Absent when the plugin does not commit to a language — for example, a fallback plugin matching on language-independent rules. Downstream stages (intent-transformer chain per OVOS-TRANSFORM-1 §3.4, handlers under dispatch) treat `Match.lang` as authoritative for the match's language. |
 | `captures` | object (string→string) | yes | The capture map (§4.3). MAY be empty. |
 | `utterance` | string | yes | The specific candidate string from the input list that won the match. A plugin that does not track which candidate won **MUST** populate this with the first element of the input list as a fallback; the orchestrator forwards this value verbatim as `data.utterance` in the dispatch payload (§7.1) and **MUST NOT** substitute another value. |
@@ -418,7 +418,7 @@ intents **MUST NOT** be matched for this session.
 The contract is **two-tier**:
 
 1. A pipeline plugin **SHOULD NOT** return a `Match` whose
-   `owner_id` (§7.1) is a `skill_id` listed here. A plugin's
+   `skill_id` (§7.1) is a `skill_id` listed here. A plugin's
    internal handling of would-match-but-blacklisted candidates is
    **not specified** — it MAY skip the candidate before scoring,
    suppress its score below a match threshold, route to a
@@ -427,7 +427,7 @@ The contract is **two-tier**:
 2. A pipeline plugin that does not implement filtering is **not
    conformant** with this field. The orchestrator **MUST** therefore
    act as backstop: after a plugin returns a candidate `Match`, the
-   orchestrator **MUST** check `Match.owner_id` against
+   orchestrator **MUST** check `Match.skill_id` against
    `blacklisted_skills` and, if listed, **MUST** treat the match as
    if the plugin had declined — continue iteration to the next
    plugin per §6.2. No bus event is emitted for backstop filtering;
@@ -439,14 +439,14 @@ field.
 
 ### 5.4 `session.blacklisted_intents`
 
-An unordered array of fully-qualified `<owner_id>:<intent_name>`
+An unordered array of fully-qualified `<skill_id>:<intent_name>`
 strings (the dispatch-topic shape of §7) whose specific intents
 **MUST NOT** be matched for this session.
 
 The contract is identical in shape to §5.3 (two-tier:
 plugin-SHOULD + orchestrator-MUST-backstop), with the comparison
 performed against the candidate `Match`'s dispatch identity
-`<Match.owner_id>:<Match.intent_name>`.
+`<Match.skill_id>:<Match.intent_name>`.
 
 The bare `intent_name` form is **not** accepted in this field.
 `intent_name` is only unique within an owner, so a bare entry would
@@ -460,7 +460,7 @@ Entries are **language-agnostic.** OVOS-INTENT-4 §3.2 keys intent
 identity on the triple `(skill_id, intent_name, lang)`, so a single
 intent registered for `en-US` and `de-DE` is two separate
 registrations. A `blacklisted_intents` entry
-`<owner_id>:<intent_name>` denies both — there is no per-language
+`<skill_id>:<intent_name>` denies both — there is no per-language
 denylist. A deployment that needs language-scoped denial expresses
 it through a session whose `lang` already narrows the set of
 matchable registrations.
@@ -591,12 +591,12 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     │ engine-side context promotion (CONTEXT-1 §5.3) │
    │     │ intent-transformer chain runs (TRANSFORM-1     │
    │     │   §3.4) — may modify Match.captures, MUST NOT  │
-   │     │   change owner_id / intent_name                │
+   │     │   change skill_id / intent_name                 │
    │     │ post-decay turns_remaining-- (CONTEXT-1 §4)    │
    │     └────────────────────────────────────────────────┘
    │
    │     ovos.intent.matched                  (§9.2)
-   │     dispatch on <match.owner_id>:<match.intent_name>  (§7)
+   │     dispatch on <match.skill_id>:<match.intent_name>  (§7)
    │     (handler runs; emits lifecycle trio §8)
    │     ovos.utterance.speak (×0..N)          (§9.6)
    │     dialog-transformer chain runs        ← TRANSFORM-1 §3.5
@@ -714,24 +714,24 @@ orchestrator dispatches the matched handler by emitting a Message
 on the topic:
 
 ```
-<owner_id>:<intent_name>
+<skill_id>:<intent_name>
 ```
 
-where `<owner_id>` is `Match.owner_id` and `<intent_name>` is
+where `<skill_id>` is `Match.skill_id` and `<intent_name>` is
 `Match.intent_name`. Both segments are bound by OVOS-MSG-1 §2.1.1 — neither may
 contain `:` — so the single `:` split is unambiguous.
 
-### 7.0 `<owner_id>` is a `skill_id`
+### 7.0 `Match.skill_id` is the handler's identity
 
-`Match.owner_id` is the `skill_id` of the component that will
+`Match.skill_id` is the `skill_id` of the component that will
 handle the dispatch. The orchestrator does not distinguish between
 a skill whose intents were registered via OVOS-INTENT-4 and a
-pipeline plugin that matched itself — both are handler-owners
-reached by the same `<owner_id>:<intent_name>` topic, and the
+pipeline plugin that matched itself — both are reached by the
+same `<skill_id>:<intent_name>` dispatch topic, and the
 dispatched handler has the same obligations as any skill
 (OVOS-INTENT-4 §3.1).
 
-A pipeline plugin that returns matches where `owner_id` equals its
+A pipeline plugin that returns matches where `skill_id` equals its
 own `pipeline_id` is simply a component whose `skill_id` and
 `pipeline_id` happen to be the same identifier. It skips the
 OVOS-INTENT-4 registration step because it consumes no external
@@ -749,21 +749,21 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
   `reply`, so `destination` is the original utterance emitter and
   `source` is the orchestrator;
 - **`context["skill_id"]` stamping.** The orchestrator **MUST**
-  stamp `context["skill_id"] = <owner_id>` on every dispatch.
+  stamp `context["skill_id"] = <skill_id>` on every dispatch.
   MSG-1 derivation semantics carry this value forward into every
   Message the handler emits, satisfying OVOS-INTENT-4 §3.1 by
   construction.
 - **`context["pipeline_id"]` stamping.** The orchestrator **MUST**
   stamp `context["pipeline_id"]` on every dispatch with the
   `pipeline_id` of the plugin that produced the match (§3.1). When
-  the match is self-addressed (`owner_id == pipeline_id`, §7.0),
+  the match is self-addressed (`skill_id == pipeline_id`, §7.0),
   both context keys carry the same identifier.
 
 The dispatch Message's `data`:
 
 ```json
 {
-  "owner_id": "music.skill",
+  "skill_id": "music.skill",
   "intent_name": "play_music",
   "lang": "en-US",
   "utterance": "play the beatles",
@@ -773,7 +773,7 @@ The dispatch Message's `data`:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `owner_id` | string | yes | The `Match.owner_id` — the topic's prefix, repeated for the handler's convenience. |
+| `skill_id` | string | yes | The `Match.skill_id` — the topic's prefix, repeated for the handler's convenience. |
 | `intent_name` | string | yes | The `Match.intent_name` — the topic's suffix. |
 | `lang` | string | conditional | The language the utterance was recognized in. Populated from `Match.lang` when present. When `Match.lang` is absent, the orchestrator falls back to the entry-topic `Message.data.lang` (§9.1) if that field was present. If neither source provides a language, this field **MUST** be omitted. Handlers **MUST** treat this field as optional — its absence means no authoritative content language was determined for this match. |
 | `utterance` | string | yes | The candidate string that won the match. |
@@ -782,7 +782,7 @@ The dispatch Message's `data`:
 ### 7.2 Subscription discipline
 
 Each handler subscribes to exactly its own
-`<owner_id>:<intent_name>` topic. A skill subscribes to topics
+`<skill_id>:<intent_name>` topic. A skill subscribes to topics
 under its own `skill_id`; a plugin that bundles its own handlers
 subscribes to topics under its own `pipeline_id`. Because each
 topic is unique to one handler, the bus delivers the dispatch
@@ -805,7 +805,7 @@ pipeline plugin role. A reserved intent_name is one that:
 - a pipeline plugin **MAY** emit as the `intent_name` of a
   returned `Match` to signal "this match was produced by the
   role that reserves the name"; the dispatch then proceeds
-  normally per §7, addressed to `<owner_id>:<reserved_name>`,
+  normally per §7, addressed to `<skill_id>:<reserved_name>`,
   and the handler subscribed to that topic does whatever the
   reserving specification defines.
 
@@ -820,8 +820,8 @@ Reservations currently in force:
 
 | Reserved intent_name | Reserving spec | Meaning of a Match bearing this name |
 |----------------------|----------------|--------------------------------------|
-| `converse` | OVOS-CONVERSE-1 §4 | a converse plugin's claim that `<owner_id>` (an active handler) wants this utterance — the orchestrator dispatches `<owner_id>:converse` and the owner's converse handler runs |
-| `response` | OVOS-CONVERSE-1 §5 | a converse plugin's signal that `<owner_id>` (the response-mode holder) is to receive the awaited utterance — the orchestrator dispatches `<owner_id>:response` and the owner's response handler runs |
+| `converse` | OVOS-CONVERSE-1 §4 | a converse plugin's claim that `<skill_id>` (an active handler) wants this utterance — the orchestrator dispatches `<skill_id>:converse` and the owner's converse handler runs |
+| `response` | OVOS-CONVERSE-1 §5 | a converse plugin's signal that `<skill_id>` (the response-mode holder) is to receive the awaited utterance — the orchestrator dispatches `<skill_id>:response` and the owner's response handler runs |
 
 This specification fixes only the registry mechanism (reservation
 listing); the per-name semantics are owned by the reserving
@@ -832,16 +832,16 @@ A plain skill (§7.0) subscribes to a reserved-name dispatch topic
 via framework convention rather than OVOS-INTENT-4 registration —
 the reserved name is not registrable. The normal skill path
 (INTENT-4-registered intents) and the reserved-name path share the
-same `<owner_id>:<intent_name>` dispatch shape; no dispatch
+same `<skill_id>:<intent_name>` dispatch shape; no dispatch
 mechanics change.
 
 ### 7.4 In-process equivalence
 
-When the handler-owning component (skill or plugin) runs in the
+When the handler (skill or plugin) runs in the
 same process as the orchestrator, the orchestrator **MAY** invoke
 the handler directly without serializing the dispatch Message
 over a transport — provided every external observer sees the
-same `<owner_id>:<intent_name>` dispatch and the same
+same `<skill_id>:<intent_name>` dispatch and the same
 handler-lifecycle trio (§8) it would have seen for an
 out-of-process handler. This uniformity is what makes a
 deployment portable across in-process and out-of-process handler
@@ -892,7 +892,7 @@ Each lifecycle message's `data`:
 
 ```json
 {
-  "owner_id": "music.skill",
+  "skill_id": "music.skill",
   "intent_name": "play_music"
 }
 ```
@@ -901,7 +901,7 @@ Each lifecycle message's `data`:
 
 ```json
 {
-  "owner_id": "music.skill",
+  "skill_id": "music.skill",
   "intent_name": "play_music",
   "exception": "RuntimeError: Spotify is not configured"
 }
@@ -909,7 +909,7 @@ Each lifecycle message's `data`:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `owner_id` | string | yes | The handler-owning component's id (skill_id or pipeline_id). |
+| `skill_id` | string | yes | The `skill_id` of the handler that was dispatched. |
 | `intent_name` | string | yes | The intent the handler was dispatched for. |
 | `exception` | string | `error` only | Human-readable description of the failure raised by the handler. |
 
@@ -979,7 +979,7 @@ plugin's id:
 
 ```json
 {
-  "owner_id": "music.skill",
+  "skill_id": "music.skill",
   "intent_name": "play_music",
   "lang": "en-US",
   "utterance": "play the beatles",
@@ -990,7 +990,7 @@ plugin's id:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `owner_id`, `intent_name`, `lang`, `utterance`, `captures` | as §7.1 | yes | Same fields as the dispatch payload. |
+| `skill_id`, `intent_name`, `lang`, `utterance`, `captures` | as §7.1 | yes | Same fields as the dispatch payload. |
 | `pipeline_id` | string | yes | The `pipeline_id` of the plugin that produced the match. |
 
 `ovos.intent.matched` is a **notification**, not a dispatch.
@@ -1028,7 +1028,7 @@ ran and raised."
 
 ### 9.4 The dispatch topic
 
-`<owner_id>:<intent_name>` — see §7.
+`<skill_id>:<intent_name>` — see §7.
 
 ### 9.5 `ovos.utterance.handled`
 
@@ -1131,7 +1131,7 @@ loaded plugin emits one query per `pipeline_id` it cares about and
 aggregates the responses itself.
 
 The `pipeline_id` in the topic is the same identifier carried by
-`session.pipeline` (§5) and by `Match.owner_id` when the plugin
+`session.pipeline` (§5) and by `Match.skill_id` when the plugin
 owns its own handler (§7); a consumer that has already observed
 a `pipeline_id` from any of these sources can query it directly.
 
@@ -1145,12 +1145,12 @@ The plugin **MUST** reply with the currently-loaded intent set:
   "intents": [
     {
       "intent_name": "play_music",
-      "owner_id": "music.skill",
+      "skill_id": "music.skill",
       "lang": "en-US"
     },
     {
       "intent_name": "stop_music",
-      "owner_id": "music.skill",
+      "skill_id": "music.skill",
       "lang": "en-US"
     }
   ]
@@ -1162,7 +1162,7 @@ The plugin **MUST** reply with the currently-loaded intent set:
 | `pipeline_id` | string | yes | The responding plugin's id. |
 | `intents` | array | yes | Currently-loaded intents (possibly empty). |
 | `intents[].intent_name` | string | yes | Intent identifier. |
-| `intents[].owner_id` | string | yes | The owning component (`skill_id` or `pipeline_id` when plugin-owned). |
+| `intents[].skill_id` | string | yes | The `skill_id` of the handler. For a self-matching plugin, equals its `pipeline_id`. |
 | `intents[].lang` | string | yes | The language the intent is registered for. |
 
 A plugin **MAY** include additional per-intent fields (engine
@@ -1174,7 +1174,7 @@ metadata, confidence thresholds, sample templates) but consumers
 The request payload **MAY** carry filters:
 
 ```json
-{ "lang": "en-US", "owner_id": "music.skill" }
+{ "lang": "en-US", "skill_id": "music.skill" }
 ```
 
 When a filter is present, the plugin **SHOULD** restrict its
@@ -1228,7 +1228,7 @@ from the hosting process.
 - emit `complete_intent_failure` when no plugin claimed (§9.3);
 - emit `ovos.intent.matched` (§9.2) on every successful claim,
   before the dispatch;
-- dispatch on `<match.owner_id>:<match.intent_name>` per §7;
+- dispatch on `<match.skill_id>:<match.intent_name>` per §7;
 - handle a plugin exception by logging and continuing to the
   next plugin (§6.2), not by failing the utterance;
 - emit the handler-lifecycle trio (§8) wrapping every handler
@@ -1240,7 +1240,7 @@ from the hosting process.
 
 - expose a `match(utterance, lang, session) → Match | None` operation
   (§4);
-- when claiming, return a `Match` with `owner_id` and
+- when claiming, return a `Match` with `skill_id` and
   `intent_name` per §4 — never a partial or speculative claim;
 - bear a `pipeline_id` distinct from any other loaded plugin's
   id (§3);
