@@ -72,8 +72,8 @@ This specification defines:
   resumable across arbitrary elapsed time or orchestrator
   restart;
 - the **default-session ownership rule** (§5) — the one
-  exception to statelessness, codifying current ovos-core
-  `SessionManager.default_session` behaviour;
+  exception to statelessness; the orchestrator holds the
+  default session as persistent in-process state;
 - **conformance** (§6) for the four roles (bus, orchestrator,
   component, client).
 
@@ -158,8 +158,8 @@ This is the one exception to §2.2. The local device is a
 client of the orchestrator that runs in the same process tree
 as the orchestrator itself; making the orchestrator hold its
 state is the simplest representation of that physical
-co-location. It also formalises the existing ovos-core pattern
-of `SessionManager.default_session` (see APPENDIX §5).
+co-location. This is the simplest representation of that physical
+co-location.
 
 Behaviour rules for the default-session store are in §5.
 
