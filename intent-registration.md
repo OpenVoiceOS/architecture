@@ -65,7 +65,7 @@ It does **not** define:
   (OVOS-INTENT-1 §5.3 and the planned text-normalization spec);
 - the **utterance lifecycle**, **match-result notification**,
   **dispatch**, **handler-lifecycle trio**, or the
-  **intent-layer failure signal** (`complete_intent_failure`) — all
+  **intent-layer failure signal** (`ovos.intent.unmatched`) — all
   formalized by OVOS-PIPELINE-1, the spec that owns the
   orchestrator's contract;
 - the mapping from any predecessor topic names to the topics
@@ -456,7 +456,7 @@ File form:
 
 `name` is the vocabulary name (INTENT-3 §4.1) — this is the key under
 which the vocabulary's captured phrase appears in the match result
-(OVOS-PIPELINE-1 captures map; INTENT-3 §4.3). Exactly one of
+(OVOS-PIPELINE-1 `Match.slots`; INTENT-3 §4.3). Exactly one of
 `samples` or `file` **MUST** be present.
 
 `samples` entries are slot-free OVOS-INTENT-1 templates (INTENT-1 §1.1) and
@@ -514,7 +514,7 @@ malformed-payload rules:
   `file` (§5.1).
 - Each `samples` array **MUST** be non-empty.
 
-A orchestrator **MUST** reject any registration violating these rules with
+An orchestrator **MUST** reject any registration violating these rules with
 `error_code: "malformed_payload"` (§3.3).
 
 ### 5.4 No `.blacklist`
@@ -529,7 +529,7 @@ orchestrator. In a deployment where producer and orchestrator share a filesystem
 single-machine installs), file form is fully equivalent to inline. In
 distributed deployments — separate containers, separate hosts, or any case
 where the producer's filesystem is not visible to the orchestrator — producers
-**MUST** use the inline form (`samples`). A orchestrator that cannot resolve a
+**MUST** use the inline form (`samples`). An orchestrator that cannot resolve a
 `file:` path **MUST** reject the registration with
 `error_code: "malformed_payload"`.
 
@@ -584,12 +584,12 @@ Field reference:
 ### 6.2 Slot-consistency
 
 Every template in `samples` (or in the file) **MUST** declare the same set of
-named slots — the slot-consistency rule of INTENT-1 §5.5. A orchestrator **MUST**
+named slots — the slot-consistency rule of INTENT-1 §5.5. An orchestrator **MUST**
 reject a registration that violates it with `error_code: "malformed_payload"`.
 
 ### 6.3 Malformed payloads
 
-A orchestrator **MUST** reject (with `error_code: "malformed_payload"`) a template
+An orchestrator **MUST** reject (with `error_code: "malformed_payload"`) a template
 registration in which:
 
 - both `samples` and `file` are present, or neither is;
@@ -605,7 +605,7 @@ registration in which:
 Topic: `ovos.entity.register`.
 
 An entity is an **optional value-set hint** for a template-intent slot
-(INTENT-3 §5.2, INTENT-1 §5.4, INTENT-2 §4.4). Registering an entity is
+(INTENT-3 §5.2, INTENT-1 §5.4, INTENT-2 §4.3). Registering an entity is
 **never** a precondition for an intent that references the slot name; a slot
 with no entity still fills normally.
 
@@ -637,11 +637,11 @@ Field reference:
 |-------|------|----------|---------|
 | `entity_name` | string | yes | Unique within the skill. By convention matches the slot name a template intent references. |
 | `samples` | array of strings | exactly one of `samples`/`file` | Slot-free value-set entries (INTENT-1 §5.4). |
-| `file` | string | exactly one of `samples`/`file` | Absolute path to a `.entity` resource (INTENT-2 §4.4). Single-orchestrator only (§5.5). |
+| `file` | string | exactly one of `samples`/`file` | Absolute path to a `.entity` resource (INTENT-2 §4.3). Single-orchestrator only (§5.5). |
 
 ### 7.2 Malformed payloads
 
-A orchestrator **MUST** reject an entity registration with
+An orchestrator **MUST** reject an entity registration with
 `error_code: "malformed_payload"` if both or neither of `samples`/`file` is
 present.
 
