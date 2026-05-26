@@ -846,9 +846,11 @@ Other normative specifications **MAY** reserve specific
 `intent_name` values for matches produced by a particular
 pipeline plugin role. A reserved intent_name is one that:
 
-- skills and pipelines **MUST NOT** register under OVOS-INTENT-4
-  (the orchestrator MUST reject registrations bearing a reserved
-  name, per OVOS-INTENT-4 §3.5);
+- skills and pipelines **MUST NOT** register under OVOS-INTENT-4;
+  a registration naming a reserved intent_name is malformed and
+  every consumer (including the orchestrator's manifest) treats it
+  under the OVOS-INTENT-4 §5.3 malformed-payload rules — log at
+  WARN, do not index;
 - a pipeline plugin **MAY** emit as the `intent_name` of a
   returned `Match` to signal "this match was produced by the
   role that reserves the name"; the dispatch then proceeds
