@@ -130,21 +130,13 @@ fields. A specification that claims a field **MUST**:
    identifier (no `:`, no whitespace, no nested dotted paths).
 2. **Fix** the field's wire type — one of: string, boolean, number,
    array, object — and document its full shape and permitted values.
-3. **Declare** the field's **propagation rule**. The default is
-   "propagates unchanged" (§4); a specification **MAY** declare a
-   field *non-propagating* (stripped on `forward` / `reply` /
-   `response`), in which case the carrier's behaviour overrides §4
-   for that field only.
-4. **Declare** the field's **scope**: *session-scoped* (set once,
-   travels with the session) or *per-Message* (overwritten on every
-   Message). Session-scoped is the default.
-5. **Specify** the **deployment-default value** the consumer falls
+3. **Specify** the **deployment-default value** the consumer falls
    back to when the field is omitted (§2.1). The default **MAY** be
    "no behaviour" (the consumer skips the field-dependent action) or
    a concrete value drawn from deployment configuration. A consumer
    **MUST NOT** reject a Message because a claimed field is omitted;
    the default applies.
-6. **Avoid collision** with any field already claimed by this
+4. **Avoid collision** with any field already claimed by this
    specification (§3) or by another specification in force.
 
 There is no central registry document beyond §3. The claiming
@@ -526,8 +518,7 @@ derivations — applies unmodified to every field of §3.
 
 For the avoidance of doubt:
 
-- Every field in §3 propagates with the same rule unless its owner
-  specification declares it non-propagating per §2.2 step 3.
+- Every field in §3 propagates unchanged — no field is non-propagating.
 - A consumer that derives a Message **MUST NOT** strip session
   fields it does not understand; it **MUST** preserve them so that a
   later consumer in the chain that does understand the field can
@@ -623,8 +614,7 @@ A consumer **SHOULD**:
 
 ### A specification that **claims a new session field** **MUST**:
 
-- follow §2.2 in full — name, wire type, propagation, scope,
-  absence rule, no collision;
+- follow §2.2 in full — name, wire type, deployment-default, no collision;
 - be self-contained: define everything the field needs in the
   claiming specification, not by reference to this one.
 
