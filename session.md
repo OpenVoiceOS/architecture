@@ -229,10 +229,20 @@ consumer **MUST NOT** parse or ascribe structure to its value beyond
 string equality, with one exception: the value **`"default"`** is
 **reserved** and carries one specific meaning:
 
-> *the Message originates from the device itself.*
+> *interact with the device-local session.*
 
-It marks a Message as locally-originated rather than as belonging to
-any remote or named participant.
+A Message bearing `session_id: "default"` is processed as part of
+the device's default session — the persistent, locally-held session
+described in OVOS-SESSION-2 §6. This is the normal path for
+messages that originate from the device itself, but it is equally
+valid for **remote clients that wish to interact with the local
+device** (remote-control commands, home-automation "speak" requests,
+media injection from a layer-2 framework). Using `"default"` from a
+remote client is deliberate impersonation of the device-local
+session; whether that is authorized is a **layer-2 concern** outside
+this specification. A layer-2 authentication system **MAY** gate
+access to the default session behind an elevated-privilege flag (an
+"admin" grant or equivalent); SESSION-1 places no requirement on it.
 
 `"default"` is also the value a consumer fills in whenever
 `session_id` is omitted (§2.1). This means an absent `session`, an
@@ -241,13 +251,13 @@ resolve to the same identifier at consumption: `"default"`. A
 consumer **MUST NOT** treat the three forms differently for any
 policy decision defined by this specification.
 
-A producer that wants the Message treated as device-local **MAY**
-either omit `session_id` (or `session` entirely) or set
+A producer that wants to interact with the device-local session
+**MAY** either omit `session_id` (or `session` entirely) or set
 `session_id: "default"` explicitly. The two are equivalent on the
 wire.
 
-A consumer that wants to apply different policy to device-local
-Messages (audio routing, presence sensing, output locality) **MAY**
+A consumer that wants to apply different policy to the default
+session (audio routing, presence sensing, output locality) **MAY**
 branch on `session_id == "default"`. No other policy hook is defined
 by this specification on the value of `session_id`.
 
@@ -285,9 +295,9 @@ participant **also speaks or understands**, ordered by preference
 operates inside; `lang` is the primary, `secondary_langs` is the
 fallback pool.
 
-`secondary_langs` **MUST NOT** contain `lang` (it is *additional*
-languages, not a list including the primary). It **MUST NOT**
-contain duplicates. An empty array and an omitted field are
+`secondary_langs` **MUST NOT** contain `lang` at the time of
+emission (it is *additional* languages, not a list including the
+primary). It **MUST NOT** contain duplicates. An empty array and an omitted field are
 equivalent and mean "no additional languages declared".
 
 Typical uses by consumers:
@@ -409,18 +419,25 @@ does not bind a single ordering; it lists each signal's meaning
 (above) and leaves consolidation to the orchestrator and the consumer
 performing the operation.
 
-As **informative guidance** — not a normative rule — a sensible
-default ordering for most stages is:
+As **informative guidance** — not a normative rule — each pipeline
+stage naturally prioritizes different signals:
 
-```
-request_lang  →  stt_lang  →  detected_lang  →  lang  →  deployment default
-```
+- **STT configuration** — bias toward `request_lang` (the emitter's
+  hint about what language is coming) before falling back to `lang`.
+- **Language detection** — produce `detected_lang` from the audio or
+  transcript; use `lang` + `secondary_langs` to constrain the
+  candidate set.
+- **Intent matching and dialog selection** — prefer `stt_lang` or
+  `detected_lang` (the language the utterance was actually in), then
+  `lang`.
+- **Response rendering (dialog, prompt)** — prefer `output_lang`
+  when set; fall back to `lang`.
+- **TTS voice selection** — key on the per-payload `data.lang` of
+  the text being spoken (§3.2.8); ignore `request_lang` entirely.
 
-with the per-payload `data.lang` (the content language of the
-Message being processed) taking absolute priority for any operation
-whose purpose is to act on that payload's content (TTS narrating
-already-rendered text, translation of a specific string, format
-conversion of a specific resource).
+`data.lang` takes absolute priority for any operation whose purpose
+is to act on a specific payload's content — it records the language
+already present in the payload, which the operation must match.
 
 A consumer **MAY** choose any consolidation order that suits its
 stage and need. A consumer **MUST NOT** assume any one signal is
@@ -443,16 +460,18 @@ A consumer that needs the payload's content language reads
 
 ### 3.3 `site_id`
 
-`site_id` is an **opaque group identifier** for the session.
-Semantically it names a group the session belongs to; the grouping
-criterion (physical site, organisational unit, device cluster,
-deployment tenant, tag set, anything else) is not fixed by this
-specification.
+`site_id` is an **opaque group identifier** for the session. It
+names the group or physical location the session belongs to; the
+grouping criterion (physical site, room, device cluster,
+organisational unit, deployment tenant) is chosen by the deployer
+and is not fixed by this specification.
 
-No consumer is reserved by this specification. The field exists to
-**claim the name** in the SESSION-1 registry so that future specs
-and layer-2 systems may attach grouping policy to a stable wire
-slot without colliding.
+The primary consumer is **routing and output-locality policy**: a
+component that routes audio, selects a TTS sink, or decides which
+device speaks **MAY** use `site_id` to scope its decision to the
+appropriate physical or logical group. A layer-2 system **MAY**
+enforce that sessions from a given `site_id` are served only by
+components registered to that site.
 
 Constraints:
 
@@ -462,8 +481,10 @@ Constraints:
   value carries spec-defined meaning. In particular, the value
   `"unknown"` — a value some implementations use as a placeholder —
   carries no normative meaning under this specification.
-- **Session-scoped.** Like every other field in §3, `site_id`
-  propagates per §4 and is not derived per-message.
+- **Set by the session origin.** `site_id` SHOULD be populated by
+  the client or device that initiates the session, not by the
+  orchestrator. A component that forwards or derives a Message MUST
+  NOT overwrite an existing `site_id`.
 
 ### 3.4 Wire weight
 
@@ -525,8 +546,10 @@ For the avoidance of doubt:
   read it (§2.4).
 - A consumer that **does** modify a session field (because it owns
   the field's semantics and the modification is part of its
-  contract) **MAY** do so. Any such mutation is governed by the
-  field owner's specification, not this one.
+  contract) **MAY** do so. Such mutations are permitted only at the
+  boundaries defined by OVOS-SESSION-2 §2.6 (transformer, pipeline,
+  and handler boundaries); the mutation's semantics are governed by
+  the field owner's specification, not this one.
 
 ### 4.1 Default materialization
 
@@ -534,15 +557,14 @@ OVOS-MSG-1 §4.1 permits an implementation to **materialize** a
 default session on a derived Message when the source Message had no
 `session`. That section permits "any device-local fields the
 implementation chooses"; this specification narrows that permission
-for the field set §3 claims. A materialized default **MUST** set
-`session_id: "default"`. A materialized default **MUST NOT** populate
-the per-component override fields of §3 (`pipeline`, `intent_context`,
-the six `*_transformers`, `blacklisted_skills`, `blacklisted_intents`,
-`blacklisted_pipelines`, the six `blacklisted_*_transformers`,
-`site_id`) — those fields have meaning only
-when explicitly set by the session origin, and a materialized default
-would falsely declare a divergence from deployment defaults that the
-origin never asked for. Fields outside the §3 closed set remain
+for the field set §3 claims. A materialized default **MUST** set `session_id: "default"`. A
+materialized default **MUST NOT** populate any field whose
+deployment default is a deployment-configured or "no behaviour"
+value — those fields carry meaning only when explicitly set by the
+session origin, and materializing them would falsely declare a
+divergence from deployment defaults that the origin never requested.
+Fields whose default is a fixed normative value (`session_id:
+"default"`) MUST be set. Fields outside the §3 closed set remain
 governed by OVOS-MSG-1 §4.1 alone.
 
 ---
@@ -574,7 +596,9 @@ treat the Message as malformed per OVOS-MSG-1 §2 and §6.
 - when setting any field listed in §3, use the wire type fixed by §3
   and the value space fixed by the owner specification;
 - propagate `session` unchanged across Message derivations per
-  OVOS-MSG-1 §5 and §4 of this specification;
+  OVOS-MSG-1 §5 and §4 of this specification, except when acting as
+  the owner of a session field and mutating it at a permitted
+  boundary (OVOS-SESSION-2 §2.6);
 - not strip session fields it does not understand (§2.4, §4).
 
 A producer **MUST NOT**:
