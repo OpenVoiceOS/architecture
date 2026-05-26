@@ -49,7 +49,8 @@ This specification defines:
 - the **utterance-layer bus events** (§9) —
   the utterance entry topic `ovos.utterance.handle` (§9.1),
   `ovos.intent.matched`, `complete_intent_failure`,
-  `ovos.utterance.handled`;
+  `ovos.utterance.handled`, and the natural-language response topic
+  `ovos.utterance.speak` (§9.6);
 - **conformance** (§10).
 
 It does **not** define:
@@ -714,8 +715,9 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     ovos.intent.matched                  (§9.2)
    │     dispatch on <match.owner_id>:<match.intent_name>  (§7)
    │     (handler runs; emits lifecycle trio §8)
+   │     ovos.utterance.speak (×0..N)          (§9.6)
    │     dialog-transformer chain runs        ← TRANSFORM-1 §3.5
-   │     (TTS rendering; tts-transformer chain — §3.6)
+   │     (output-path delivery; tts-transformer chain — §3.6)
    │     ovos.utterance.handled               (§9.5)
    │     break
    │
@@ -738,14 +740,14 @@ transformer chains run on handler-emitted natural-language responses and
 on the rendered audio respectively, off the dispatch return-path.
 **`ovos.utterance.handled` is emitted at handler completion** —
 immediately after `ovos.intent.handler.complete` (or `.error`) — and
-does **not** gate on any downstream audio rendering. A handler's
-obligation to this specification ends when it returns; it queues
-natural-language responses (the `speak` Message) without knowing or
-caring whether the deployment has any audio-output capability at all.
-Audio output is fully decoupled from the pipeline: a chat-only
-deployment receives the same utterance lifecycle and the same end-marker
-as an audio deployment. The dialog and TTS chains are shown in the flow
-diagram in their logical causal position; they are not a
+does **not** gate on any downstream output delivery. A handler's
+obligation to this specification ends when it returns; it emits zero or
+more `ovos.utterance.speak` Messages (§9.6) without knowing or caring
+whether the deployment has any audio-output capability at all. Audio
+output is fully decoupled from the pipeline: a chat-only deployment
+receives the same utterance lifecycle and the same end-marker as an
+audio deployment. The dialog and TTS transformer chains are shown in the
+flow diagram in their logical causal position; they are not a
 synchronization barrier for `ovos.utterance.handled`.
 
 Pseudocode is informative; normative rules are in §§4–9.
@@ -810,7 +812,7 @@ followed by the universal end-marker `ovos.utterance.handled`:
 
 | Outcome | Sequence of utterance-layer events |
 |---------|------------------------------------|
-| Matched by a plugin | `ovos.intent.matched` → dispatch + (handler trio §8) → `ovos.utterance.handled` |
+| Matched by a plugin | `ovos.intent.matched` → dispatch + (handler trio §8) → `ovos.utterance.speak` ×0..N → `ovos.utterance.handled` |
 | No plugin matched | `complete_intent_failure` → `ovos.utterance.handled` |
 | Cancelled by a transformer | `ovos.utterance.cancelled` → `ovos.utterance.handled` (see OVOS-TRANSFORM-1 §8.2) |
 
@@ -1218,6 +1220,62 @@ A conformant orchestrator **MUST** emit exactly one
 `ovos.utterance.handled` per entry-topic Message (§9.1).
 Multiple emissions for one utterance are malformed; zero is
 malformed.
+
+### 9.6 `ovos.utterance.speak` — natural-language response
+
+`ovos.utterance.speak` is the **natural-language output exit point** of
+the pipeline — the symmetric counterpart to the `ovos.utterance.handle`
+entry point (§9.1). Together they define the natural-language I/O
+boundary of the voice assistant: human speech (or text) arrives on the
+entry topic; the assistant's natural-language response departs on this
+topic.
+
+A handler emits `ovos.utterance.speak` to deliver a natural-language
+response string for the assistant to convey to the user. What the
+deployment does with the Message downstream — TTS rendering, audio
+queueing, playback, chat display — is out of scope for this
+specification and is defined by the output-path companion specification.
+A deployment with no audio output (a text-only chat bridge, a test
+harness) receives the same `ovos.utterance.speak` Message as an
+audio-capable deployment.
+
+The topic name follows the naming conventions of OVOS-MSG-1 §2.1:
+imperative-mood verb (`speak` — a request for the assistant to speak
+this response), dot-separated hierarchy, same `ovos.utterance.*`
+namespace as the entry topic.
+
+**Payload:**
+
+```json
+{
+  "utterance": "It is currently 22 degrees and sunny.",
+  "lang": "en-US"
+}
+```
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `utterance` | string | yes | The natural-language response string. |
+| `lang` | string | no | BCP-47 tag of the response language. When absent, the output stage resolves language from the session per OVOS-SESSION-1 §3.2. |
+
+**Derivation and session propagation.** A handler **MUST** derive each
+`ovos.utterance.speak` emission via `Message.forward` or
+`Message.reply` (OVOS-MSG-1 §5) from the dispatch Message (§7) it
+received. This carries `context.session` and `context.skill_id` forward
+automatically — downstream stages (dialog-transformer chain
+OVOS-TRANSFORM-1 §3.5, the output-path specification) can read the
+session and attribute the response without additional wire fields. A
+`ovos.utterance.speak` Message that does not derive from a dispatch is
+non-conformant.
+
+**Multiplicity and ordering.** A handler **MAY** emit zero or more
+`ovos.utterance.speak` Messages. Zero is permitted — a handler that
+acts silently (playing a sound, toggling a device, queuing media) is
+conformant. When a handler emits multiple, the order of emission is the
+intended delivery order; the output stage **SHOULD** preserve it.
+
+**Broadcast.** `ovos.utterance.speak` carries no `destination` — it is
+broadcast. Any output component subscribed to the topic may consume it.
 
 ---
 
