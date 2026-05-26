@@ -15,7 +15,7 @@ This specification is **prescriptive, not descriptive**. The field set
 it lists in §3 is the closed set of fields with normative meaning in
 this version. A field that no normative specification claims is not a
 field of `session`; a consumer that encounters such a field treats it
-per §2.3.
+per §2.4.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and
 **MAY** are used as in RFC 2119.
@@ -27,7 +27,7 @@ The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and
 This specification defines:
 
 - the JSON shape of the `session` carrier (§2);
-- the **field-registry mechanism** (§2.1) that lets other normative
+- the **field-registry mechanism** (§2.2) that lets other normative
   specifications claim `session` fields;
 - the **closed set of fields claimed in this version** (§3), each
   cited to its owner specification;
@@ -47,7 +47,7 @@ It does **not** define:
 - **authentication, authorization, encryption, multi-tenant
   routing** — layer-2 concerns built on top of the OVOS-MSG-1 §3
   substrate;
-- any field not claimed by a normative specification under §2.1.
+- any field not claimed by a normative specification under §2.2.
 
 ---
 
@@ -60,7 +60,7 @@ Every field defined or claimed under this specification is
 
 - A producer **MAY** omit any field. Omission means *"let the
   orchestrator decide"* — the consumer fills the field with its own
-  deployment default at the point of consumption (§2.5).
+  deployment default at the point of consumption (§2.1).
 - A producer **MUST NOT** emit any field as JSON `null`. Fields are
   either present with a value drawn from the value space defined by
   the owner specification, or omitted entirely.
@@ -70,14 +70,14 @@ Every field defined or claimed under this specification is
 
 A consumer that encounters an explicit `null` **MUST** treat it as a
 malformed value: it **SHOULD** log the violation and **MUST** behave
-as if the field were omitted (§2.5). A consumer **MUST NOT** reject
+as if the field were omitted (§2.1). A consumer **MUST NOT** reject
 the Message solely because of a `null` field — fall back to the
 omitted-field rule instead.
 
 A session with only `session_id` is well-formed. A session with the
-empty object `{}` is well-formed and is interpreted per §2.5.
+empty object `{}` is well-formed and is interpreted per §2.1.
 
-### 2.5 Omission means "let the orchestrator decide"
+### 2.1 Omission means "let the orchestrator decide"
 
 Field omission is the **single mechanism** by which a producer
 defers a session value to the orchestrator. A producer **MUST**
@@ -121,7 +121,7 @@ empty / absent session at any point — that is, replace the omission
 on a Message it emits with an explicit value drawn from its
 deployment defaults. Materialization is governed by §4.1.
 
-### 2.1 Field-registry mechanism
+### 2.2 Field-registry mechanism
 
 Other normative specifications **MAY** claim additional `session`
 fields. A specification that claims a field **MUST**:
@@ -139,7 +139,7 @@ fields. A specification that claims a field **MUST**:
    travels with the session) or *per-Message* (overwritten on every
    Message). Session-scoped is the default.
 5. **Specify** the **deployment-default value** the consumer falls
-   back to when the field is omitted (§2.5). The default **MAY** be
+   back to when the field is omitted (§2.1). The default **MAY** be
    "no behaviour" (the consumer skips the field-dependent action) or
    a concrete value drawn from deployment configuration. A consumer
    **MUST NOT** reject a Message because a claimed field is omitted;
@@ -156,17 +156,17 @@ field. A consumer is bound by the claim itself, not by §3's
 enumeration of it; §3 is a convenience roster, not the source of
 normativity for claimed fields.
 
-### 2.2 Closed set
+### 2.3 Closed set
 
 Every field with **normative meaning** on `session` is listed in §3
-or is claimed by a specification that follows §2.1. A field that
+or is claimed by a specification that follows §2.2. A field that
 appears in `session` but is claimed by no normative specification is
 non-normative — carried for the convenience of producers and consumers
 that recognize it, but no consumer is bound to interpret it, no
 producer is bound to emit it, and a consumer that does not recognize
-it treats it per §2.3.
+it treats it per §2.4.
 
-### 2.3 Unknown-field tolerance
+### 2.4 Unknown-field tolerance
 
 A consumer **MUST NOT** reject a Message because `session` carries a
 key the consumer does not know. A consumer **MUST NOT** strip unknown
@@ -198,7 +198,7 @@ everything else is owned by the cited specification.
 | `detected_lang` | string (BCP-47) | §3.2 (this spec) |
 | `pipeline` | array of string | OVOS-PIPELINE-1 §5 |
 | `intent_context` | object | OVOS-CONTEXT-1 §2 |
-| `active_handlers` | array of `[string, number]` | OVOS-CONVERSE-1 §2.1 |
+| `active_handlers` | array of object | OVOS-CONVERSE-1 §2.1 |
 | `response_mode` | object | OVOS-CONVERSE-1 §2.2 |
 | `audio_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
 | `utterance_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
@@ -241,7 +241,7 @@ It marks a Message as locally-originated rather than as belonging to
 any remote or named participant.
 
 `"default"` is also the value a consumer fills in whenever
-`session_id` is omitted (§2.5). This means an absent `session`, an
+`session_id` is omitted (§2.1). This means an absent `session`, an
 empty `session: {}`, and an explicit `session_id: "default"` all
 resolve to the same identifier at consumption: `"default"`. A
 consumer **MUST NOT** treat the three forms differently for any
@@ -499,9 +499,9 @@ canonical cases:
    when the session genuinely diverges from the default.
 3. **An empty array on a list-valued override field.** For every
    list-valued override field claimed by §3 (and by other specs
-   via the §2.1 registry), an empty array (`[]`) is
+   via the §2.2 registry), an empty array (`[]`) is
    wire-equivalent to omission: both resolve to the
-   deployment default at consumption (§2.5). A producer
+   deployment default at consumption (§2.1). A producer
    **SHOULD** omit the field rather than emit `[]`. This includes
    the three denylists (`blacklisted_*`), the six
    `*_transformers` chains, and the `pipeline` ordering.
@@ -511,25 +511,25 @@ redundant default-valued field is non-optimal but conformant. A
 consumer **MUST** tolerate the resulting wire weight; this
 specification places no maximum on session size.
 
-Other specifications claiming session fields via §2.1 inherit
+Other specifications claiming session fields via §2.2 inherit
 this rule for the fields they claim — they need not restate it.
 
 ---
 
 ## 4. Propagation
 
-The Message-level propagation rule of OVOS-MSG-1 §4.3 — that
+The Message-level propagation rule of OVOS-MSG-1 §4.1 — that
 `session` rides unchanged across `forward`, `reply`, and `response`
 derivations — applies unmodified to every field of §3.
 
 For the avoidance of doubt:
 
 - Every field in §3 propagates with the same rule unless its owner
-  specification declares it non-propagating per §2.1 step 3.
+  specification declares it non-propagating per §2.2 step 3.
 - A consumer that derives a Message **MUST NOT** strip session
   fields it does not understand; it **MUST** preserve them so that a
   later consumer in the chain that does understand the field can
-  read it (§2.3).
+  read it (§2.4).
 - A consumer that **does** modify a session field (because it owns
   the field's semantics and the modification is part of its
   contract) **MAY** do so. Any such mutation is governed by the
@@ -537,7 +537,7 @@ For the avoidance of doubt:
 
 ### 4.1 Default materialization
 
-OVOS-MSG-1 §4.3 permits an implementation to **materialize** a
+OVOS-MSG-1 §4.1 permits an implementation to **materialize** a
 default session on a derived Message when the source Message had no
 `session`. That section permits "any device-local fields the
 implementation chooses"; this specification narrows that permission
@@ -550,7 +550,7 @@ the six `*_transformers`, `blacklisted_skills`, `blacklisted_intents`,
 when explicitly set by the session origin, and a materialized default
 would falsely declare a divergence from deployment defaults that the
 origin never asked for. Fields outside the §3 closed set remain
-governed by OVOS-MSG-1 §4.3 alone.
+governed by OVOS-MSG-1 §4.1 alone.
 
 ---
 
@@ -582,31 +582,33 @@ treat the Message as malformed per OVOS-MSG-1 §2 and §6.
   and the value space fixed by the owner specification;
 - propagate `session` unchanged across Message derivations per
   OVOS-MSG-1 §5 and §4 of this specification;
-- not strip session fields it does not understand (§2.3, §4).
+- not strip session fields it does not understand (§2.4, §4).
 
 A producer **MUST NOT**:
 
 - emit any session field with the JSON value `null` (§2); a field
   is either present with a value drawn from the owner specification's
-  value space, or omitted entirely;
+  value space, or omitted entirely.
+
+A producer **SHOULD NOT**:
+
 - populate a per-component override field (§3 — `pipeline`,
   `intent_context`, the six `*_transformers`, `blacklisted_skills`,
   `blacklisted_intents`, `blacklisted_pipelines`, `site_id`) with a
   value that matches the deployment default merely as a form of
   explicit confirmation. Omit the field and let the orchestrator's
-  default apply (§2.5, §3.4). (The §3.4 wire-weight rule states
-  this as **SHOULD NOT**; producers that cannot determine the
-  deployment default are non-optimal but conformant.)
+  default apply (§2.1, §3.4). Producers that cannot determine the
+  deployment default are non-optimal but conformant.
 
 ### A **consumer** of session-carrying Messages **MUST**:
 
 - treat an omitted field, an empty session object `{}`, and an
   absent `session` identically — all mean "let the orchestrator
-  decide" and resolve to deployment defaults at consumption (§2.5);
+  decide" and resolve to deployment defaults at consumption (§2.1);
 - treat an explicit `null` as a malformed value: behave as if the
   field were omitted and **SHOULD** log the violation (§2);
 - tolerate any field it does not recognize and propagate it
-  unchanged on derived Messages (§2.3, §4);
+  unchanged on derived Messages (§2.4, §4);
 - key per-session state on `session_id`;
 - not reject a Message because of the presence, absence, or value
   of any single session field — invalid values for fields whose
@@ -619,7 +621,7 @@ A consumer **SHOULD**:
 
 ### A specification that **claims a new session field** **MUST**:
 
-- follow §2.1 in full — name, wire type, propagation, scope,
+- follow §2.2 in full — name, wire type, propagation, scope,
   absence rule, no collision;
 - be self-contained: define everything the field needs in the
   claiming specification, not by reference to this one.
@@ -633,7 +635,7 @@ semantics (both owned by OVOS-SESSION-2); session-store
 protocols, central session indexing, session authentication and
 authorization, per-field encryption, multi-tenant session
 isolation guarantees beyond the opaque `session_id` keying, and
-any field not claimed under §2.1 by a normative specification.
+any field not claimed under §2.2 by a normative specification.
 
 ---
 
