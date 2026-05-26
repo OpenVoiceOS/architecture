@@ -87,23 +87,41 @@ below). Adoption is voluntary; conformance, once adopted, is not.
 
 ## Specifications
 
+### Intent stack — what a skill defines
+
 | ID | Document | Version | Status |
 |----|----------|---------|--------|
 | OVOS-INTENT-1 | [Sentence Template Grammar](sentence-template-grammar.md) | 2 | Draft |
-| OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 2 | Draft |
+| OVOS-INTENT-2 | [Locale Resource Formats](locale-resource-formats.md) | 2 | Draft · [v3 in review (PR #4)](https://github.com/OpenVoiceOS/architecture/pull/4) |
 | OVOS-INTENT-3 | [Intent Definition](intent-definition.md) | 1 | Draft |
-| OVOS-MSG-1 | [Bus Message](message-object.md) | 1 | Draft |
+| OVOS-INTENT-4 | [Intent and Entity Registration](intent-registration.md) | 2 | [Draft — in review (PR #9)](https://github.com/OpenVoiceOS/architecture/pull/9) |
+
+### Bus stack — how components talk
+
+| ID | Document | Version | Status |
+|----|----------|---------|--------|
+| OVOS-MSG-1 | [Bus Message](message-object.md) | 2 | Draft |
+| OVOS-SESSION-1 | [Session Carrier Wire Shape](session.md) | 1 | Draft |
+| OVOS-SESSION-2 | [Session Lifecycle and State Ownership](session-lifecycle.md) | 1 | Draft |
+
+### Orchestrator stack — what processes utterances
+
+| ID | Document | Version | Status |
+|----|----------|---------|--------|
+| OVOS-PIPELINE-1 | [Utterance Lifecycle and Pipeline](pipeline.md) | 2 | Draft |
+| OVOS-TRANSFORM-1 | [Transformer Plugins](transformer.md) | 1 | [Draft — in review (PR #20)](https://github.com/OpenVoiceOS/architecture/pull/20) |
+| OVOS-CONTEXT-1 | [Intent Context](intent-context.md) | 1 | [Draft — in review (PR #18)](https://github.com/OpenVoiceOS/architecture/pull/18) |
+| OVOS-CONVERSE-1 | [Active Handlers and Interactive Response](converse.md) | 1 | [Draft — in review (PR #25)](https://github.com/OpenVoiceOS/architecture/pull/25) |
 
 Each spec carries its own scope statement, design rationale, and
-conformance section in its own header. Open the document for the
-full picture — the table above is just an index.
+conformance section in its header. Open the document for the full
+picture — the tables above are an index.
 
-**Reading order.** The intent specs are numbered in dependency
-order: OVOS-INTENT-1 defines the template grammar; OVOS-INTENT-2
-builds on it to define the resource files; OVOS-INTENT-3 builds on
-both to define what an intent is. OVOS-MSG-1 is the bus-layer
-envelope and the routing / session model — independent of the
-intent stack and readable at any point.
+**Reading order by role:**
+- *Writing a skill?* INTENT-1 → INTENT-2 → INTENT-3. INTENT-4 only if you need the registration wire format.
+- *Building a pipeline plugin?* PIPELINE-1, then SESSION-1 + SESSION-2, then the role spec (CONVERSE-1, CONTEXT-1, or TRANSFORM-1).
+- *Building an orchestrator?* MSG-1 → SESSION-1 → SESSION-2 → PIPELINE-1, then INTENT-4, CONTEXT-1, CONVERSE-1, TRANSFORM-1.
+- *Surveying the architecture?* [APPENDIX §1](APPENDIX.md) for the three-stack narrative.
 
 For background — design rationale, comparisons with other systems,
 the catalogue of known divergences from current code, and known
