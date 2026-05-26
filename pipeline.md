@@ -1086,7 +1086,7 @@ that wants to feed an utterance into the assistant — a listener,
 a chat bridge, a CLI, a test harness, a remote-peer client.
 Receiving on this topic kicks off the lifecycle of §6.
 
-The topic name follows the naming conventions of OVOS-MSG-1 §2.1.2:
+The topic name follows the naming conventions of OVOS-MSG-1 §2.1:
 imperative-mood verb (`handle` — a request for the assistant to
 handle this utterance), dot-separated hierarchy, no `:` (which is
 reserved for component-pair dispatch topics), and pairs with the
@@ -1300,8 +1300,6 @@ from the hosting process.
 
 - expose a `match(utterance, lang, session) → Match | None` operation
   (§4);
-- be **side-effect-free during `match`** (§4.2) — no Messages
-  emitted, no state changed beyond what is needed to decide;
 - when claiming, return a `Match` with `owner_id` and
   `intent_name` per §4 — never a partial or speculative claim;
 - bear a `pipeline_id` distinct from any other loaded plugin's
