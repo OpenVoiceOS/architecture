@@ -26,7 +26,7 @@ time, lets an orchestrator restart without losing client-side
 continuity, and lets multiple orchestrators in a deployment serve
 the same session without coordination.
 
-It builds on four companion specifications:
+It builds on five companion specifications:
 
 - the *Bus Message Specification* (OVOS-MSG-1) — the envelope,
   routing keys, `forward` / `reply` / `response` derivations,
@@ -40,6 +40,10 @@ It builds on four companion specifications:
   `Match.updated_session` channel that match-phase session
   mutations travel on, and the universal end-marker
   `ovos.utterance.handled`;
+- the *Transformer Plugin Specification* (OVOS-TRANSFORM-1) —
+  defines six transformer hooks (audio, utterance, metadata,
+  intent, dialog, TTS) that are normative session-mutation
+  boundaries per §2.6;
 - the *Intent Context Specification* (OVOS-CONTEXT-1) and the
   *Active Handlers and Interactive Response Specification*
   (OVOS-CONVERSE-1) — both elect the §2.4 SHOULD-project
@@ -87,7 +91,10 @@ This specification does **not** define:
   are someone else's spec;
 - **cross-client session sharing** — two clients holding the
   same `session_id` would race on session state; coordination
-  is out of scope;
+  is out of scope. A layer-2 system that routes Messages to
+  specific clients (using MSG-1 `source` / `destination`)
+  can disambiguate which client owns a given `session_id`, but
+  that routing policy is a layer-2 responsibility;
 - **session migration between orchestrators** — handled
   implicitly by the §2.2 stateless rule (any orchestrator can
   serve any named session because no orchestrator holds state
