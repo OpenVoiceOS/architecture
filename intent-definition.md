@@ -341,8 +341,8 @@ removed, all of its intents are deregistered.
 ### 6.2 The intent engine
 
 An **intent engine** is a tool that consumes intent definitions and, given an
-utterance, identifies which registered intent it triggers. In OVOS an intent
-engine is realized as an intent pipeline plugin.
+utterance, identifies which registered intent it triggers. In this architecture
+an intent engine is realized as an intent pipeline plugin (OVOS-PIPELINE-1).
 
 Conceptually, every intent engine is a **classifier paired with a slot
 extractor**. Given an utterance — ASR-normalized text, as in OVOS-INTENT-1 §2 —
@@ -376,13 +376,13 @@ assistant is expected to run.
 **Which engines are loaded is a deployment matter (non-normative).** This
 specification defines the shape and contract of an intent and its engine
 interface; it does not govern how an installation is assembled. Which intent
-engines are loaded is chosen by the user or integrator. A typical OVOS install
-is expected to provide at least one engine of each kind — one accepting keyword
-intents and one accepting template intents — but OVOS is an open platform: an
-installation may load whatever engines it likes, including, for example, an
-LLM- or chatbot-based engine in place of the usual ones. Because of this, a
-skill developer is advised to document which definition method (or specific
-engine) the skill relies on, so users can ensure a compatible engine is loaded.
+engines are loaded is chosen by the deployer. A conformant deployment is
+expected to provide at least one engine of each kind — one accepting keyword
+intents and one accepting template intents — but the platform is open: an
+installation may load whatever engines it likes, including an LLM- or
+chatbot-based engine in place of the usual ones. Because of this, a skill
+developer is advised to document which definition method (or specific engine)
+the skill relies on, so deployers can ensure a compatible engine is loaded.
 This is an implementation and deployment detail, outside the scope of this
 specification.
 
@@ -395,20 +395,20 @@ Whichever method defined an intent, a successful match yields one uniform
 
 - the **qualified intent name** `skill_id:intent_name` (§3) — identifying which
   intent, and therefore which skill and which handler;
-- a **capture map** — a mapping of names to captured text values. For a keyword
+- a **slots map** — a mapping of names to extracted text values. For a keyword
   intent the keys are vocabulary names (§4.3); for a template intent the keys
-  are slot names (§5.2). A capture map **MAY** be empty.
+  are slot names (§5.2). A slots map **MAY** be empty.
 
-Captured values are **opaque sequences of words**, returned as text. This
+Slot values are **opaque sequences of words**, returned as text. This
 specification defines **no** value typing or coercion — consistent with
 OVOS-INTENT-1 §5.2–§5.3, which defers typing to a future text-normalization
 specification.
 
-In classifier terms the qualified intent name is the **label** and the capture
+In classifier terms the qualified intent name is the **label** and the slots
 map is the **payload**: the label selects which handler runs, the payload is
 the data that handler is given. The orchestrator routes the result to the **one handler** bound to
 that intent at registration, and to nothing else. The handler always receives
-the capture map — a set of key-value pairs, possibly empty — and that is the
+the slots map — a set of key-value pairs, possibly empty — and that is the
 only data it receives from the intent layer. Running that handler is the whole
 purpose of the intent: it is the point at which a recognized natural-language
 command becomes the execution of the developer's code.
@@ -418,7 +418,7 @@ such metadata is engine-specific and is **not** defined by this specification.
 
 ### 7.1 Handlers must cope with missing slots
 
-A handler **MUST NOT** assume the capture map is complete. The map may be empty
+A handler **MUST NOT** assume the slots map is complete. The map may be empty
 or partial: an optional slot may simply not have occurred (§4.2, §5.1), and
 classification is never perfect — an engine may extract fewer slots than the
 handler expects, or route a misclassified utterance to it. The intent layer
@@ -428,9 +428,9 @@ guarantee that every slot a handler relies on is present or correct.
 Coping with a missing or implausible slot is therefore the **handler's**
 responsibility. A handler **SHOULD** prompt the user for data it needs but did
 not receive, and **MAY** decline — treating the call as a misclassification —
-when the captured values do not make sense for it. This recovery behaviour is
+when the slot values do not make sense for it. This recovery behaviour is
 skill logic and is out of scope for this specification; what the specification
-requires is only that a handler not assume a complete capture map.
+requires is only that a handler not assume a complete slots map.
 
 ---
 
@@ -444,7 +444,7 @@ requires is only that a handler not assume a complete capture map.
 - ensure the definition conforms to §4 or §5 and to OVOS-INTENT-1 and
   OVOS-INTENT-2;
 - register the definition and the handler together as one unit (§6.1);
-- write the handler so it copes with a missing or partial capture map (§7.1).
+- write the handler so it copes with a missing or partial slots map (§7.1).
 
 **An intent engine** **MUST**:
 
