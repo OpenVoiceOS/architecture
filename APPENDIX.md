@@ -127,42 +127,19 @@ The specifications are built bottom-up in three stacks:
 ### 1.3 Compatibility levels
 
 Each specification carries its own integer `Version`, bumped per
-PR per the contributing rules in the README. The architecture as
-a whole is spoken of at **compatibility levels** — versioned
-snapshots a tool may target, checked against by
-`ovos-spec-lint`.
+PR per the contributing rules in the README.
 
-The compatibility-level model works cleanly for the **intent
-stack**, where a single integer identifies a coherent grammar /
-resources / intent-definition snapshot. The bus and orchestrator
-stacks do not yet map onto the same single-axis ladder; a
-specification-set-wide version tuple covering every spec is a
-planned follow-up.
+For the **intent stack**, a single integer identifies a coherent
+grammar / resources / intent-definition snapshot checked by
+`ovos-spec-lint`. The ladder:
 
-The intent-stack ladder:
+- **V0** — undocumented pre-spec baseline; no `.blacklist`, no `<name>` references.
+- **V1** — INTENT-1, -2, -3 at v1; headline addition is the `.blacklist` role.
+- **V2** — V1 plus inline vocabulary references (`<name>`); a V2 template cannot be expanded by a V1 tool.
 
-- **V0** — *informal.* The undocumented, de-facto behaviour from
-  before these specifications existed. V0 is not specified
-  anywhere; it is the baseline the formalization started from.
-  V0 has no notion of the `.blacklist` resource role or of
-  `<name>` references.
-- **V1** — the intent stack as first formalized:
-  OVOS-INTENT-1, -2 and -3, each at version 1. V1's headline
-  addition over V0 is the `.blacklist` role.
-- **V2** — V1 plus **inline vocabulary references** (the
-  `<name>` token): OVOS-INTENT-1 and OVOS-INTENT-2 at version 2.
-  A V2 template cannot be expanded by a V1 tool.
-
-The bus stack (OVOS-MSG-1), the registration spec
-(OVOS-INTENT-4), the session spec (OVOS-SESSION-1), the
-orchestrator spec (OVOS-PIPELINE-1), the context spec
-(OVOS-CONTEXT-1), and the transformer spec (OVOS-TRANSFORM-1)
-are versioned **individually** and not placed on a unified
-compatibility ladder. A tool targeting them today cites per-spec
-versions: "MSG-1 v2, INTENT-4 v1, PIPELINE-1 v2." Whether the
-compat-level model evolves into a multi-axis grid, per-stack
-ladders, or is quietly deprecated in favour of per-spec
-versions only, is deferred.
+The bus and orchestrator stacks are versioned **individually**
+and not placed on a unified ladder — a tool targeting them cites
+per-spec versions ("MSG-1 v2, PIPELINE-1 v2").
 
 ### 1.4 Reference implementations and ecosystem tooling
 
@@ -193,14 +170,6 @@ preview, and submit translations as pull requests. It is the
 OVOS counterpart to Home Assistant's managed `intents`
 repository.
 
-Two honest notes on `ovos-localize`: it is currently
-**descriptive** of real OVOS skills — it also handles legacy
-file types these specs deliberately drop — so as the specs and
-the ecosystem converge, its file-type coverage and the specs
-will need to meet in the middle; and its translation validators
-are a natural home for spec conformance checks, distinct from
-but related to the planned grammar-level conformance corpus
-(§7).
 
 ---
 
@@ -208,9 +177,9 @@ but related to the planned grammar-level conformance corpus
 
 The OVOS specifications occupy territory adjacent to several
 existing voice-assistant systems. This section locates the
-design choices against each comparator. The summary in §2.7
-records where OVOS leads architecturally, where it follows, and
-where it makes a deliberately different choice.
+design choices against each comparator. The summary in §2.5
+records where the voice OS leads architecturally, where it
+follows, and where it makes a deliberately different choice.
 
 ### 2.1 Home Assistant and Rhasspy — shared grammar lineage
 
@@ -337,23 +306,12 @@ Neither ASK nor Dialogflow has a `session.pipeline`-equivalent
 anything like the layer-2 substrate of OVOS-MSG-1 §3.4. ASK
 has built-in intents (`AMAZON.HelpIntent`) but they are
 handled inside the skill; Dialogflow has fallback intents but
-they do not have first-class dispatch identity. OVOS-PIPELINE-1's
-`<pipeline_id>:<intent_name>` lets a non-skill component
-advertise its own intent identity *to the user* on the bus,
-indistinguishable from a skill — original to OVOS.
+they do not have first-class dispatch identity. OVOS-PIPELINE-1's dispatch polymorphism
+(`skill_id == pipeline_id` for plugin-bundled handlers) lets a
+non-skill component advertise its own intent identity on the bus,
+indistinguishable from a skill — original to this architecture.
 
-### 2.5 hassil — comparable only at the grammar layer
-
-The Home Assistant template-matcher, comparable only to
-OVOS-INTENT-1 / -2 / -3 (grammar + locale resources + intent
-concept). hassil has no equivalent of OVOS-MSG-1 (no bus
-envelope), OVOS-PIPELINE-1 (no pipeline notion — HA runs a
-single matcher), OVOS-TRANSFORM-1 (no per-utterance
-transformers), or OVOS-CONTEXT-1 (no decaying session state).
-The grammar layer is broadly equivalent to OVOS-INTENT-1;
-everything above the grammar is OVOS-only.
-
-### 2.6 Summary — where OVOS leads, follows, and differs
+### 2.5 Summary — where the voice OS leads, follows, and differs
 
 **OVOS leads architecturally** in three places:
 
@@ -504,45 +462,28 @@ of conversational state. The async-by-default model means
 those future specs only need to define *what* the state is,
 not *how* it travels.
 
-#### 3.1.3 Why HiveMind works
+#### 3.1.3 Layer-2 substrates
 
-HiveMind is the canonical layer-2 system this design enables.
-A HiveMind satellite is just another user-side emitter — it
-sets `source` to its peer ID, populates `session` with a
-per-peer session, and emits a Message. Inside OVOS:
+The single-flip routing model and the no-central-state
+design make layer-2 federation composable without modifying
+the assistant core. A remote peer is just another user-side
+emitter: it sets `source` to its peer ID, populates `session`
+with its own named session, and emits a Message. The
+orchestrator runs the same `.reply` flip; response messages
+carry `destination == peer ID`; the bridge (watching the bus)
+routes them back over the transport. The
+`session_id == "default"` rule keeps device-local TTS on the
+device's speakers because remote sessions carry their own
+`session_id` and never `"default"`.
 
-- ovos-core runs the same `.reply` flip (§3.1.1 step 2) —
-  `destination` becomes the satellite's peer ID instead of
-  the local microphone.
-- Skills `.forward` as usual — `destination` stays the
-  satellite ID through every handler emission.
-- HiveMind, watching the bus, sees each message addressed to
-  its peer and routes it back over the HiveMind transport.
-
-The pre-existing `session_id == "default"` rule keeps
-device-local TTS on the device's speakers (per
-`ovos-audio/utils.py`'s `require_default_session`), because
-remote HiveMind sessions carry their own `session_id` and
-never `"default"`.
-
-None of this required HiveMind to modify OVOS core. The
-mechanism that makes it work — single-flip routing, opaque
-per-session identifiers, no central state — was an OVOS
-design, built into `ovos-bus-client/message.py:194-198`
-before this spec family was written; OVOS-MSG-1 formalizes
-the design rather than introducing it.
-
-A layer-2 substrate also has a uniform **authorization
-surface** in the spec family without inventing a separate
-channel: client sessions populate the preference fields of
-OVOS-SESSION-1 (`pipeline`, the six `<type>_transformers`)
-to request behaviour, while the layer-2 substrate populates
-the policy fields (`blacklisted_pipelines`,
-`blacklisted_skills`, `blacklisted_intents`, the six
-`blacklisted_<type>_transformers`) from the peer's grant.
-OVOS-PIPELINE-1 §5.5 and OVOS-TRANSFORM-1 §5.3 compose them
-deterministically (preference → availability → policy) at the
-orchestrator without per-hop re-authorization.
+Layer-2 bridges also inherit the session-field
+**preference/policy split** without extra mechanism: client
+sessions populate the preference fields
+(`pipeline`, `<type>_transformers`) to request behaviour;
+the bridge populates the policy fields
+(`blacklisted_pipelines`, `blacklisted_<type>_transformers`)
+from the peer's grant. PIPELINE-1 §5.5 and TRANSFORM-1 §5.3
+compose them deterministically at the orchestrator.
 
 ### 3.2 The pipeline-plugin model
 
@@ -573,7 +514,7 @@ refinement**, not a wholesale new abstraction. It:
 
 - formalizes the plugin contract (the `match` shape, the
   `Match` result, the side-effect-free discipline);
-- defines `<owner_id>:<intent_name>` **dispatch
+- defines `<skill_id>:<intent_name>` **dispatch
   polymorphism** so a plugin can bundle its own handler (a
   language-model persona, a chatbot) as a first-class
   participant alongside skill-owned handlers;
@@ -636,7 +577,7 @@ the spec family makes the integration shape predictable.
 **1. Pipeline plugins (OVOS-PIPELINE-1 §3) — the dispatch-layer
 adapter.** A pipeline plugin wraps an external matcher,
 consumes the utterance, and returns a `Match` with the
-plugin's own `pipeline_id` as `owner_id`. The external
+plugin's own `pipeline_id` as `skill_id`. The external
 protocol becomes a first-class participant in the dispatch
 surface, indistinguishable from a skill from the bus's
 perspective. This is how language-model APIs, deterministic
@@ -676,7 +617,7 @@ without modifying the assistant core.
   de-facto LLM interface). A persona-style pipeline plugin
   wraps an OpenAI-compatible client (§3 of PIPELINE-1,
   injection point 1 above). The plugin emits `Match` with
-  `owner_id = <pipeline_id>` and bundles its own handler
+  `skill_id = <pipeline_id>` and bundles its own handler
   using the dispatch polymorphism of OVOS-PIPELINE-1 §7. The
   user sees a normal response; the LLM is a first-class
   intent owner.
@@ -892,7 +833,7 @@ the normative sections.
   since the orchestrator's job *is* iterating plugins and
   translating their matches into bus events. Splitting
   them would leave neither coherent.
-- **Plugin contract is minimal.** `match(utterance, lang,
+- **Plugin contract is minimal.** `match(utterances, lang,
   session) → Match | None`. Side-effect-free during
   `match`; everything else (state, registrations,
   language-model calls, response generation) is
@@ -911,11 +852,11 @@ the normative sections.
   `pipeline_id` in `Session.pipeline`. The current
   convention is compatible with PIPELINE-1 unchanged.
 - **Skills and plugins are equivalent handler owners.**
-  Dispatch topic `<owner_id>:<intent_name>` polymorphism
-  (owner is `skill_id` or `pipeline_id`) lets a plugin
-  bundle its own handler — for example, a language-model
-  persona plugin that has no skills behind it — and still
-  be addressed uniformly.
+  The dispatch topic `<skill_id>:<intent_name>` is uniform:
+  for a pure-matcher plugin the `skill_id` is the matched
+  skill's id; for a plugin that bundles its own handler
+  (e.g. a language-model persona) `skill_id == pipeline_id`.
+  Both are addressed the same way.
 - **Universal `ovos.utterance.handled` end-marker on every
   terminal path.** One reserved invariant lets observers
   count turns, route fallbacks, and know "the assistant
@@ -940,7 +881,7 @@ the normative sections.
   `requires_context` and `excludes_context` declarations.
 - **Two explicit scopes encoded in the key shape.**
   `private` (orchestrator auto-prefixes with
-  `<owner_id>:`) and `shared` (flat, cross-skill). The
+  `<skill_id>:`) and `shared` (flat, cross-skill). The
   current OVOS code models the same distinction informally
   (`MycroftSkill.set_context` auto-prefixes with
   `alphanumeric_skill_id`; `set_cross_skill_context` fans
@@ -999,7 +940,7 @@ the normative sections.
   normalization specification. TRANSFORM-1 §3.4 is the
   spec'd injection home for typing: a deployer ships
   date / number / duration parsing once, and every skill
-  receives typed values in `Match.captures` regardless of
+  receives typed values in `Match.slots` regardless of
   which engine matched. The OVOS analogue of ASK's
   `AMAZON.DATE` and Dialogflow's `@sys.date-time`, but as
   an injected enrichment rather than a built-in engine
@@ -1045,7 +986,7 @@ the normative sections.
   concept the field encodes) and adding orchestrator-stamped
   `cancel_by: <transformer_id>`. The spec's
   `ovos.utterance.cancelled` terminal event sits alongside
-  `complete_intent_failure`, keeping cancellation and
+  `ovos.intent.unmatched`, keeping cancellation and
   failure observably distinct on the bus.
 - **`lang` parameter is bidirectional** (TRANSFORM-1 §3.0).
   Four of the six per-type contracts (audio, utterance,
@@ -1057,23 +998,14 @@ the normative sections.
   downstream stages. Language-detector and clearing cases
   fall out of the same channel.
 - **Per-type self-identification keys, list-valued.**
-  TRANSFORM-1 §1.3 claims six `Message.context` keys — one
-  per transformer type (`audio_transformer_ids`, …,
-  `tts_transformer_ids`) — rather than a single generic
-  key. Two reasons. First, role matters: a Message at the
-  dialog stage may have been touched by five transformer
-  types in sequence, and lumping them into one slot loses
-  the role partitioning that exists in every other
-  surface of the spec (per-type registries, per-type
-  `*_transformers` overrides, per-type introspection
-  topics). Second, multi-type plugins disambiguate: a
-  plugin shipping both an utterance and a dialog
-  transformer under the same `transformer_id` would, with
-  a single generic key, leave consumers unable to tell
-  which role emitted. The keys are *lists*, not single
-  strings, because transformers chain by design — the
-  list preserves the full per-type chain on the wire in
-  order of touch.
+  TRANSFORM-1 §1.3 claims six `Message.context` keys
+  (one per transformer type) rather than a single generic
+  key. Role matters: a Message may have been touched by
+  multiple types in sequence, and a multi-type plugin
+  (e.g., both utterance and dialog) would be ambiguous
+  in a single-key model. Keys are lists because
+  transformers chain — the full per-type chain is
+  preserved in order.
 - **Per-type denylists complete the policy surface.**
   TRANSFORM-1 §5.2 claims six
   `blacklisted_<type>_transformers` session fields,
@@ -1082,22 +1014,14 @@ the normative sections.
   `pipeline` / `blacklisted_pipelines` pair of PIPELINE-1
   §5. Three-stage composition (preference → availability
   → policy) in §5.3 mirrors PIPELINE-1 §5.5 exactly.
-- **The per-type "explosion" is deliberate.** Counting
-  transformer-related session-field claims: six chain
-  orderings + six denylists = twelve fields, plus six
-  `Message.context` attribution keys. The alternative — a
-  `transformer_<type>:<name>` prefix-encoded single
-  namespace — would require prefix parsing at every
-  lookup. The per-type partition matches the partitioning
-  that already exists in the §1.1 registries, the §4
-  chain ordering rules, and the §6 introspection topics.
-  Under the canonical SHOULD-omit rule of SESSION-1 §3.4,
-  the common case carries zero of these fields on the
-  wire. If the field count ever proves painful in
-  practice, the cleanest fallback is an object-valued form
-  (`session.transformers: {audio: [...], ...}`),
-  collapsing twelve flat fields into two structured ones
-  with the per-type partition preserved as object keys.
+- **The per-type "explosion" is deliberate.** Twelve flat
+  session fields (six chain-orderings + six denylists) plus
+  six `Message.context` attribution keys. A prefix-encoded
+  single namespace would require prefix parsing at every
+  lookup; the per-type partition matches the existing
+  registry and chain-ordering structure. Under
+  SESSION-1 §3.4's SHOULD-omit rule the common case carries
+  zero of these on the wire.
 - **Language signals live in SESSION-1.** Language signals
   (`stt_lang`, `request_lang`, `detected_lang`, alongside
   `lang`, `secondary_langs`, `output_lang`) are
@@ -1140,8 +1064,6 @@ and needs no implementation change:
   matches `ovos-bus-client.Message.{forward,reply,response}`.
 - The `.response` suffix convention — pervasive across OVOS
   topics today.
-- The `complete_intent_failure` no-match topic (PIPELINE-1) —
-  matches current topic name verbatim.
 - `ovos.utterance.cancelled` and `ovos.utterance.handled`
   (PIPELINE-1) — match current topic names verbatim.
 - Per-utterance first-match-wins iteration (PIPELINE-1) —
@@ -1160,6 +1082,7 @@ and needs no implementation change:
 | INTENT-3 v1.1 | "host" | "orchestrator" | Editorial; conformance unchanged. |
 | PIPELINE-1 | `mycroft.skill.handler.start` / `.complete` / `.error` | `ovos.intent.handler.start` / `.complete` / `.error` | Renamed into the `ovos.intent.*` namespace for uniformity. Breaks every existing handler-lifecycle observer; the migration cost is real. |
 | PIPELINE-1 | `recognizer_loop:utterance` | `ovos.utterance.handle` | See §5.4 entry. Migration touches `ovos-dinkum-listener`, `ovos-simple-listener`, `ovos-audio`, and `ovos-core/intent_services/service.py`. |
+| PIPELINE-1 | `complete_intent_failure` | `ovos.intent.unmatched` | Follows `ovos.intent.*` namespace; pairs with `ovos.intent.matched`. |
 
 ### 5.2.1 Topics to remove from ovos-core
 
@@ -1196,28 +1119,17 @@ defined by any spec** and should be removed or replaced:
   prescribed shape uses the structured `(skill_id,
   intent_name, lang)` triple plus `samples|file` and
   `blacklist|blacklist_file`.
-- **Dispatch payload uses unified `owner_id`** (PIPELINE-1
-  §7.0, §7.1). Today dispatch carries `skill_id` only.
-  PIPELINE-1 §7.0 collapses handler-owner shapes to two:
-  plain skill (handler reached via its `skill_id`) and
-  pipeline plugin with bundled handlers (the plugin's
-  `pipeline_id == skill_id` — one identifier filling both
-  roles). Conceptually `skill_id` is the voice-app identity
-  (every handler-owner has one); `pipeline_id` is the
-  matching-engine identity (only loaded plugins have one).
-  Plugins-with-handlers MUST NOT register their intents
-  under INTENT-4 — they own the handler directly — and
-  SHOULD publish their intent_names via the per-pipeline
-  passive index (§7.0, §10) for observability. A
-  pure-matcher plugin (Padatious, Adapt, the converse
-  plugin) has only a `pipeline_id` and produces matches
-  whose `owner_id` is some other component's identity. The
-  dispatch payload uniformly carries `owner_id` regardless
-  of shape.
-- **Handler-lifecycle payload includes `owner_id`**
-  (PIPELINE-1 §8.2). Today the trio payload is
-  `{name: <handler_func_name>}`. Prescribed: `{owner_id,
-  intent_name, optional exception}`.
+- **Dispatch payload is minimal** (PIPELINE-1 §7.1). Today
+  dispatch carries `skill_id` and `intent_name` in the
+  payload. PIPELINE-1 drops both from the payload — they
+  are already in the topic (`<skill_id>:<intent_name>`);
+  a consumer that needs them splits the topic. The
+  prescribed payload is `{lang, utterance, slots}`.
+  For plugin-bundled handlers (`pipeline_id == skill_id`),
+  the same uniform dispatch applies.
+- **Handler-lifecycle payload updated** (PIPELINE-1 §8.2).
+  Today the trio payload is `{name: <handler_func_name>}`.
+  Prescribed: `{skill_id, intent_name, optional exception}`.
 
 ### 5.4 Architectural divergences
 
@@ -1231,17 +1143,11 @@ defined by any spec** and should be removed or replaced:
   not a change to existing behaviour.
 - **The match contract is the single obligation** (PIPELINE-1
   §4.2). The plugin's `match` operation has one MUST: return
-  a `Match` (§4.1) or `null`. Bus emissions during `match`
-  are allowed — a plugin that polls other components, calls
-  out to a model server, or runs any matching strategy that
-  requires bus communication is conformant. This matches the
-  actual OVOS converse-plugin pattern (it polls active skills
-  during its match decision) and accommodates LLM-backed and
-  agent-backed plugin shapes that are inherently bus-active.
-  Session mutation during `match` is via the explicit
-  `Match.updated_session` channel — see the next entry — so
-  declined plugins' exploratory mutations never reach the
-  next iteration step.
+  a `Match` or `null`. Bus emissions during `match` are
+  allowed — converse plugins, LLM-backed matchers, and
+  agent-backed shapes are all conformant. Session mutation
+  during `match` goes via `Match.updated_session` so
+  declined matches' mutations never escape.
 - **`Match.updated_session` as the match-phase session channel**
   (PIPELINE-1 §4.1, §4.2). Promotes the existing ovos-core
   code pattern
@@ -1298,30 +1204,24 @@ defined by any spec** and should be removed or replaced:
   `forward`/`reply` inherit automatically. Loader-side
   interception covers off-dispatch emissions.
 - **Entry-point topic renamed `ovos.utterance.handle`**
-  (PIPELINE-1 §9.1). Current deployments use the
-  legacy `recognizer_loop:utterance` topic name. That name fails
-  the naming conventions of OVOS-MSG-1 §2.1.2 on three
-  counts: it uses `:` as a segment separator (where `:` is
-  reserved for `<owner_id>:<intent_name>` dispatch topics);
-  its leading segment names an implementation role (the
-  audio-input "recognizer loop") rather than a stable
-  assistant root; and it does not pair with the past-tense
-  terminal event `ovos.utterance.handled`. The rename fixes
-  all three: dot-separated hierarchy, stable `ovos.` root,
-  request/terminal pair (`handle` ↔ `handled`) sharing a
-  root verb. Migration cost is real — every audio-input
-  service emits this, every intent-service handler
-  subscribes — touching `ovos-dinkum-listener`,
-  `ovos-simple-listener`, `ovos-audio`, and
-  `ovos-core/intent_services/service.py`. A transitional
-  deployment MAY subscribe to both names during migration.
+  (PIPELINE-1 §9.1). `recognizer_loop:utterance` fails
+  MSG-1 §2.1.2 naming conventions: `:` as a segment
+  separator, an implementation-role prefix, and no pairing
+  with the terminal `ovos.utterance.handled`. Migration cost
+  is real — every audio-input service and intent-service
+  handler is affected. A transitional deployment MAY
+  subscribe to both names during migration.
 
 ### 5.5 New topics with no direct precedent
 
 - **`ovos.intent.matched`** (PIPELINE-1 §9.2). The
-  positive-match broadcast notification. Current OVOS has
-  `complete_intent_failure` for the negative case but no
-  positive equivalent.
+  positive-match broadcast notification. No current equivalent.
+- **`ovos.intent.unmatched`** (PIPELINE-1 §9.4). Renamed from
+  `complete_intent_failure`; follows the `ovos.intent.*`
+  namespace for symmetry with `ovos.intent.matched`.
+- **`ovos.utterance.speak`** (PIPELINE-1 §9.6). The NL output
+  exit point; symmetric to `ovos.utterance.handle`. No current
+  equivalent — TTS trigger is currently implicit.
 - **`ovos.intent.list` / `ovos.intent.describe`** (INTENT-4
   §10). Introspection topics served from the orchestrator's
   passive registration index.
@@ -1384,10 +1284,10 @@ a number of legacy names. Implementer migration aid:
 | Legacy topic | Status |
 |--------------|--------|
 | `recognizer_loop:utterance` | renamed to `ovos.utterance.handle` (see §5.4) |
-| `complete_intent_failure` | **unchanged** — kept as the no-match signal. |
+| `complete_intent_failure` | renamed to `ovos.intent.unmatched` — follows `ovos.intent.*` namespace. |
 | `ovos.utterance.cancelled` | **unchanged** — kept as the cancellation signal. |
 | `ovos.utterance.handled` | **unchanged** — kept as the universal end-marker. |
-| `<skill_id>:<intent_name>` | **unchanged** — kept as the dispatch topic; PIPELINE-1 extends the shape to `<owner_id>:<intent_name>` so plugins can also own handlers. |
+| `<skill_id>:<intent_name>` | **unchanged** — dispatch topic; a plugin-bundled handler has `skill_id == pipeline_id`. |
 | `mycroft.skill.handler.start` / `.complete` / `.error` | renamed to `ovos.intent.handler.start` / `.complete` / `.error` |
 
 #### Out of scope
