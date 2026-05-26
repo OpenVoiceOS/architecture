@@ -65,10 +65,15 @@ The specifications are built bottom-up in three stacks:
   **imperative** continuous-dialog primitive, complementary to
   CONTEXT-1 — its §7 fixes the evaluation order between the two
   surfaces). OVOS-TRANSFORM-1 defines the six injection-point
-  transformer chains. The orchestrator stack sits on top of the
-  bus stack (uses MSG-1's envelope and routing, SESSION-1's
-  session carrier) and around the intent stack (intent
-  registrations are one kind of input pipeline plugins consume).
+  transformer chains. OVOS-SESSION-2 defines the session
+  lifecycle and state-ownership model (stateless orchestrator
+  for named sessions, orchestrator-owned default session,
+  projection mandate forcing all cross-utterance state into
+  session-resident fields). The orchestrator stack sits on top
+  of the bus stack (uses MSG-1's envelope and routing,
+  SESSION-1's session carrier with SESSION-2's lifecycle) and
+  around the intent stack (intent registrations are one kind
+  of input pipeline plugins consume).
 
 ### 1.3 Compatibility levels
 
@@ -1476,13 +1481,16 @@ uniformity is in the namespace, not in a fixed depth.
   `common_query`, `ocp`, `persona`, `stop`. Each defines its
   own internal behaviour and its own bus emissions beyond
   the universal lifecycle PIPELINE-1 prescribes.
-- **A full session-lifecycle specification.** SESSION-1
-  defines the wire shape; lifecycle (start, end, expiry,
-  resumption) and the full set of session preferences
-  current OVOS already carries (`persona_id`,
+- **Session preference fields not yet claimed.** SESSION-1
+  defines the wire shape and OVOS-SESSION-2 (in flight at
+  PR #27) defines the lifecycle and state-ownership model;
+  what remains deferred is the full set of session
+  preferences current OVOS already carries (`persona_id`,
   `time_format`, `date_format`, `system_unit`,
-  `tts_preferences`, `location`, …) are deferred to a
-  future specification.
+  `tts_preferences`, `location`, …) — these need to be
+  claimed under SESSION-1 §2.1's field registry by their
+  respective owning specs (a future preferences spec,
+  OCP / persona / locale specs as appropriate).
 - **Text normalization of ASR output.** The basis for slot
   value typing (INTENT-1 §5.3). Deferred to its own
   specification.
