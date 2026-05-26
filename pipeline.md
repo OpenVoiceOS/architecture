@@ -295,7 +295,7 @@ chooses to surface. It **MAY** be empty.
 The orchestrator does not interpret the capture map; it forwards
 it to the dispatched handler.
 
-### 4.4 Match-phase timeout
+### 4.4 Match-phase timeout and latency discipline
 
 The `match` operation is logically synchronous from the orchestrator's
 perspective — the orchestrator calls `match` and waits for the return
@@ -315,6 +315,24 @@ emitted for the timeout at this stage.
 The timeout bound, the recovery policy, and whether a timed-out plugin
 triggers the §6.2 circuit-breaker are deployer-configurable. This
 specification fixes only that the discipline **SHOULD** exist.
+
+**Latency discipline.** In voice-assistant deployments, match-phase
+latency directly determines response latency — the pipeline is
+sequential and the user is waiting. Plugins **SHOULD** therefore return
+from `match` as quickly as possible and defer all long-running work to
+the handler phase. A plugin that can determine it will claim an
+utterance without fully processing it **SHOULD** return a `Match`
+immediately and begin expensive processing (model inference, network
+calls, disambiguation) inside the handler, not inside `match`.
+
+A language-model plugin is the canonical example: it typically knows it
+will consume any utterance that reaches it and can return a `Match`
+immediately; the actual generation belongs in the handler. The match
+phase is a routing decision, not a processing phase.
+
+The orchestrator **SHOULD** surface match-phase duration as an
+observable metric so deployers can identify plugins that violate this
+discipline.
 
 ---
 
