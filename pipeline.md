@@ -312,7 +312,7 @@ fields below.
 | `intent_name` | string | yes | An opaque non-empty string that, together with `owner_id`, names the handler to invoke. For skill-owned matches this is the intent name the skill registered. For plugin-owned matches this is whatever label the plugin chose for this response. |
 | `lang` | string | no | The BCP-47 language tag the match was performed against. When the plugin received a non-`None` `lang` parameter (§4), this is typically that value (the plugin matched in the language the caller declared). A plugin that determined the language by other means (a multilingual matcher, a content-language-detecting matcher, a hard-coded engine) **MAY** set `lang` to whatever value reflects the language of the match. Absent when the plugin does not commit to a language — for example, a fallback plugin matching on language-independent rules. Downstream stages (intent-transformer chain per OVOS-TRANSFORM-1 §3.4, handlers under dispatch) treat `Match.lang` as authoritative for the match's language. |
 | `captures` | object (string→string) | yes | The capture map (§4.3). MAY be empty. |
-| `utterance` | string | no | The specific candidate string from the input list that won the match. |
+| `utterance` | string | yes | The specific candidate string from the input list that won the match. A plugin that does not track which candidate won **MUST** populate this with the first element of the input list as a fallback; the orchestrator forwards this value verbatim as `data.utterance` in the dispatch payload (§7.1) and **MUST NOT** substitute another value. |
 | `updated_session` | object | no | A replacement `session` snapshot the plugin produced during `match` (§4.2). When present, the orchestrator MUST use this snapshot — in place of the inbound utterance's session — for the dispatch and every downstream stage. When absent, the inbound session is carried unchanged. This is the **only** mechanism by which a plugin's match-phase session mutations reach downstream consumers; in-place mutations of the inbound session object are not visible past the plugin boundary. |
 
 The orchestrator interprets a non-`None` return as a definitive
@@ -386,6 +386,29 @@ The §6 flow diagram reflects this: `session = match.updated_session
 or session` is applied immediately after a non-null match,
 before the post-match-pre-dispatch window where intent
 transformers and CONTEXT-1's decay tick run.
+
+### 4.4 Match-phase timeout
+
+The `match` operation is logically synchronous from the orchestrator's
+perspective — the orchestrator calls `match` and waits for the return
+value. Because §4.2 permits a plugin to communicate over the bus during
+`match` (poll a model server, ask the user a disambiguation question,
+etc.), the call can block for an unbounded time.
+
+The orchestrator **SHOULD** bound each `match` invocation by a
+deployment-defined time. If a plugin has not returned within the bound,
+the orchestrator **MUST** treat the call as if the plugin had raised an
+exception — log the timeout, skip to the next plugin per §6.2, and
+continue normally. Any partial mutation performed by the plugin during the
+timed-out call is discarded (there is no `Match` to carry an
+`updated_session`; the inbound session is unchanged). No bus event is
+emitted for the timeout at this stage.
+
+The timeout bound, the recovery policy, and whether a timed-out plugin
+triggers the §6.2 circuit-breaker are deployer-configurable. This
+specification fixes only that the discipline **SHOULD** exist.
+
+---
 
 ### 4.3 The capture map
 
@@ -711,8 +734,19 @@ and before iteration, against the candidate utterance list. The
 CONTEXT-1 §5.3 sanctions engine-side `session.intent_context`
 mutation and where TRANSFORM-1 §3.4 inserts the intent-transformer
 chain over the chosen `Match`. The **dialog** and **TTS**
-transformer chains run on handler-emitted speak Messages and on
-the rendered audio respectively, off the dispatch return-path.
+transformer chains run on handler-emitted natural-language responses and
+on the rendered audio respectively, off the dispatch return-path.
+**`ovos.utterance.handled` is emitted at handler completion** —
+immediately after `ovos.intent.handler.complete` (or `.error`) — and
+does **not** gate on any downstream audio rendering. A handler's
+obligation to this specification ends when it returns; it queues
+natural-language responses (the `speak` Message) without knowing or
+caring whether the deployment has any audio-output capability at all.
+Audio output is fully decoupled from the pipeline: a chat-only
+deployment receives the same utterance lifecycle and the same end-marker
+as an audio deployment. The dialog and TTS chains are shown in the flow
+diagram in their logical causal position; they are not a
+synchronization barrier for `ovos.utterance.handled`.
 
 Pseudocode is informative; normative rules are in §§4–9.
 
@@ -923,7 +957,7 @@ The dispatch Message's `data`:
 |-------|------|----------|---------|
 | `owner_id` | string | yes | The `Match.owner_id` — the topic's prefix, repeated for the handler's convenience. |
 | `intent_name` | string | yes | The `Match.intent_name` — the topic's suffix. |
-| `lang` | string | yes | The language the utterance was recognized in (`data.lang`, OVOS-MSG-1 §4.2). |
+| `lang` | string | conditional | The language the utterance was recognized in. Populated from `Match.lang` when present. When `Match.lang` is absent, the orchestrator falls back to the entry-topic `Message.data.lang` (§9.1) if that field was present. If neither source provides a language, this field **MUST** be omitted. Handlers **MUST** treat this field as optional — its absence means no authoritative content language was determined for this match. |
 | `utterance` | string | yes | The candidate string that won the match. |
 | `captures` | object (string→string) | yes | The capture map (§4.3). MAY be empty. |
 
@@ -1142,8 +1176,22 @@ topic (§7).
 ### 9.3 `complete_intent_failure`
 
 Emitted by the orchestrator when pipeline iteration completed
-with no plugin claiming the utterance. Broadcast. Payload
-**MAY** carry the original utterance data for observability.
+with no plugin claiming the utterance. Broadcast.
+
+```json
+{
+  "utterances": ["turn off the lights"],
+  "lang": "en-US"
+}
+```
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `utterances` | array of strings | no | The candidate utterance list that no plugin matched, as it stood after the utterance-transformer chain. Included for observability; consumers **MUST NOT** re-submit it without explicit user intent. |
+| `lang` | string | no | BCP-47 tag from the entry-topic Message (§9.1), if it was present. Absent when the entry-topic carried no `lang`. |
+
+Both fields are optional. An observer that receives no fields still
+knows no plugin matched — the topic name alone is normative.
 
 This message **MUST** be followed immediately by
 `ovos.utterance.handled` (§9.5).
