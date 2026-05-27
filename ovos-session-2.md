@@ -159,7 +159,6 @@ This is the one exception to §2.2. The local device is a
 client of the orchestrator that runs in the same process tree
 as the orchestrator itself; making the orchestrator hold its
 state is the simplest representation of that physical
-co-location. This is the simplest representation of that physical
 co-location.
 
 Behaviour rules for the default-session store are in §5.
@@ -290,7 +289,7 @@ the update incidentally.
 ### 2.7 Out-of-utterance session sync — `ovos.session.sync`
 
 When a component needs to broadcast a session update outside
-the utterance lifecycle it MUST do so via the dedicated topic
+the utterance lifecycle it SHOULD use the dedicated topic
 `ovos.session.sync`. The Message carries `Message.context.session`
 with the updated snapshot per OVOS-MSG-1; the `session_id`
 within that carrier identifies the session being updated.
@@ -455,7 +454,7 @@ orchestrator operation:
   default state on the dispatch they receive;
 - session mutations during the lifecycle (transformer
   boundaries §2.6, `Match.updated_session` per PIPELINE-1
-  §5.2, in-handler mutations) propagate into the store
+  §4.2, in-handler mutations) propagate into the store
   through the standard derivation chain.
 
 The merge semantics for inbound default-session Messages follow
@@ -574,7 +573,7 @@ A component **SHOULD NOT** mutate session fields in its handler
 unless the mutation is necessary or prescribed by another
 specification (§2.6 discipline rule). When a session update
 must be propagated outside the normal utterance flow, the
-component MUST use `ovos.session.sync` (§2.7).
+component SHOULD use `ovos.session.sync` (§2.7).
 
 ### 6.4 Client
 
