@@ -173,19 +173,30 @@ A `global_stop` Match is returned in three cases:
 
 ### 5.2 Match construction
 
+The `global_stop` Match MUST carry a fully-cleaned `updated_session`:
+
 ```
 Match(
-  skill_id=<shared_pipeline_id>,
-  intent_name="global_stop",
-  updated_session=<session with active_handlers emptied,
-                  converse_handlers emptied,
-                  and response_mode removed>
+  skill_id   = <shared_pipeline_id>,
+  intent_name = "global_stop",
+  updated_session = <session with:
+    active_handlers  → []
+    converse_handlers → []
+    response_mode    → absent>
 )
 ```
 
+All three fields are cleared atomically at match time via
+`Match.updated_session` (PIPELINE-1 §4.2), before dispatch. The stop
+plugin owns this cleanup entirely — no downstream component needs to
+inspect or drain these fields as a consequence of a global stop.
+
 PIPELINE-1 §7.1 stamps `<shared_pipeline_id>` onto `active_handlers`
 at dispatch time (the name `global_stop` is not reserved, so stamping
-suppression does not apply).
+suppression does not apply). This is intentional: the stop plugin MAY
+participate in converse after a global stop — for example, to handle a
+follow-up clarification such as "not the cooking timer" — provided it
+registers a converse handler.
 
 ### 5.3 Broadcast
 
@@ -204,11 +215,11 @@ trio. The namespace `ovos.stop.*` is reserved by this specification.
 
 ### 6.1 `response_mode`
 
-A stop plugin MUST clear `session.response_mode` via `Match.updated_session`:
-
-- for `intent_name: "stop"` — clear the entry whose `owner_id` matches
-  the dispatch target;
-- for `intent_name: "global_stop"` — remove `response_mode` entirely.
+For `intent_name: "stop"`, a stop plugin MUST clear the
+`session.response_mode` entry whose `owner_id` matches the dispatch
+target, via `Match.updated_session`. (For `intent_name: "global_stop"`,
+`response_mode` is removed entirely as part of the §5.2 Match
+construction.)
 
 An uncleared `response_mode` for a stopped skill would route the next
 utterance to that skill as if it were still awaiting a response.
