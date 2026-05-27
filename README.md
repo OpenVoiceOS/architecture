@@ -113,7 +113,6 @@ below). Adoption is voluntary; conformance, once adopted, is not.
 | OVOS-CONTEXT-1 | [Intent Context](intent-context.md) | 1 | [Draft — in review (PR #18)](https://github.com/OpenVoiceOS/architecture/pull/18) |
 | OVOS-CONVERSE-1 | [Active Handlers and Interactive Response](converse.md) | 1 | [Draft — in review (PR #25)](https://github.com/OpenVoiceOS/architecture/pull/25) |
 | OVOS-STOP-1 | [Stop Pipeline Plugin](ovos-stop-1.md) | 1 | [Draft — in review (PR #33)](https://github.com/OpenVoiceOS/architecture/pull/33) |
-| OVOS-COMMON-QUERY-1 | [Common Query Pipeline Plugin](common-query.md) | 1 | Draft |
 
 Each spec carries its own scope statement, design rationale, and
 conformance section in its header. Open the document for the full
