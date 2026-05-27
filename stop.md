@@ -7,10 +7,9 @@ pipeline plugin that matches utterances expressing the user's
 intention to interrupt the assistant's current activity — and the
 bus surface by which it cascades a stop request across the
 recency-ordered list of active handlers and broadcasts a global
-stop signal when no handler can absorb the request. The two
-intent_names `stop` and `global_stop` are reserved at the
-OVOS-PIPELINE-1 §7.3 registry; no other plugin or skill may
-register them.
+stop signal when no handler can absorb the request. The
+intent_name `stop` is reserved at the OVOS-PIPELINE-1 §7.3
+registry; no other plugin or skill may register it.
 
 It builds on OVOS-MSG-1 (envelope, `forward` / `reply` /
 `response`), OVOS-PIPELINE-1 (pipeline-plugin contract, dispatch
@@ -39,20 +38,28 @@ APIs, or wake-word and barge-in policies.
 
 ---
 
-## 2. Reserved intent_names
+## 2. Reserved intent_name
+
+This specification reserves a single intent_name at the
+OVOS-PIPELINE-1 §7.3 registry:
 
 | Reserved intent_name | Meaning of a Match bearing this name |
 |----------------------|--------------------------------------|
-| `stop` | A specific active handler should cease activity. Dispatched on `<target_skill_id>:stop` where the target is the LIFO head of positive pong responders (§4). |
-| `global_stop` | All assistant activity should cease. Dispatched on `<stop_plugin_id>:global_stop`; the handler emits `ovos.stop` (§5). |
+| `stop` | A specific active handler should cease activity for the inbound `session_id`. Dispatched on `<target_skill_id>:stop` where the target is the LIFO head of positive pong responders (§4). |
 
-Skills and other pipelines **MUST NOT** register either name
-under OVOS-INTENT-4. A registration naming a reserved
-intent_name is malformed per OVOS-INTENT-4 §5.3 — consumers log
-at WARN and do not index.
+Skills and other pipelines **MUST NOT** register `stop` under
+OVOS-INTENT-4. A registration naming the reserved intent_name
+is malformed per OVOS-INTENT-4 §5.3 — consumers log at WARN and
+do not index. The reservation prevents competing skill-level
+matches from bypassing the §4 cascade.
 
-A stop plugin **MUST** use one of these two intent_names in
-every Match it returns.
+The stop plugin's escalation path uses the intent_name
+`global_stop` for its own self-dispatch
+(`<stop_plugin_id>:global_stop`, §5). This name is plugin-internal
+and not reserved: a skill MAY register `global_stop` for its own
+purposes, as the dispatch shape namespaces the topic under
+`<stop_plugin_id>` and cannot collide with another skill's
+handler.
 
 ---
 
@@ -198,17 +205,25 @@ of genuinely stoppable handlers.
 
 ---
 
-## 5. Global stop — `intent_name: "global_stop"`
+## 5. Global stop escalation
 
-A `global_stop` Match is returned in three cases (§3.3, §4.1):
+When a stop utterance cannot be cascaded to a specific handler,
+the stop plugin escalates to a global broadcast. The escalation
+path uses the intent_name `global_stop` as a plugin-internal
+self-dispatch (not a reserved name; see §2).
 
-- explicit "stop everything" vocabulary match;
-- generic stop with empty `active_handlers`;
-- generic stop with no positive pong responders.
+A `global_stop` self-dispatch is emitted in three cases:
+
+- explicit "stop everything" vocabulary match (§3.3);
+- generic stop with empty `active_handlers` (§4.1 step 1);
+- generic stop with no positive pong responders (§4.1 step 5).
 
 ### 5.1 Dispatch and broadcast
 
-The orchestrator dispatches `<stop_plugin_id>:global_stop`. The
+The orchestrator dispatches `<stop_plugin_id>:global_stop`.
+Because `skill_id` equals the stop plugin's own `pipeline_id`,
+the dispatch is uniquely routed to the stop handler regardless
+of any skill that happens to use the same intent_name. The
 stop handler emits the universal broadcast:
 
 | Topic | Direction | Summary |
@@ -366,9 +381,10 @@ Dispatch topics fire the handler-lifecycle trio per PIPELINE-1
 
 ### The orchestrator **MUST**:
 
-- treat OVOS-INTENT-4 registrations naming `stop` or
-  `global_stop` as malformed per INTENT-4 §5.3 — log at WARN
-  and decline to index.
+- treat OVOS-INTENT-4 registrations naming `stop` as malformed
+  per INTENT-4 §5.3 — log at WARN and decline to index.
+  Registrations naming `global_stop` are accepted normally;
+  `global_stop` is not reserved.
 
 ---
 
