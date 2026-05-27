@@ -46,7 +46,7 @@ OVOS-PIPELINE-1 §7.3 registry:
 
 | Reserved intent_name | Meaning of a Match bearing this name |
 |----------------------|--------------------------------------|
-| `stop` | A specific active handler should cease activity for the inbound `session_id`. Dispatched on `<target_skill_id>:stop` where the target is the LIFO head of positive pong responders (§4). |
+| `stop` | A specific active handler should cease activity for the inbound `session_id`. Dispatched on `<target_skill_id>:stop` where the target is the most recently activated (highest `activated_at`) positive pong responder (§4). |
 
 Skills and other pipelines **MUST NOT** register `stop` under
 OVOS-INTENT-4. A registration naming the reserved intent_name
@@ -84,8 +84,8 @@ the choice is a deployment concern.
 
 `Match.skill_id` MUST equal the target of the dispatch:
 
-- for `intent_name: "stop"`, the LIFO head of positive pong
-  responders (§4.2);
+- for `intent_name: "stop"`, the most recently activated
+  (highest `activated_at`) positive pong responder (§4.2);
 - for `intent_name: "global_stop"`, the stop plugin's own
   `pipeline_id`.
 
@@ -140,8 +140,9 @@ Inside `match`:
    in `active_handlers` MUST be ignored; late pongs MAY be
    ignored.
 4. If at least one positive responder exists, select the one
-   whose position in `session.active_handlers` is most recent
-   (LIFO head among positives). Construct `updated_session` by
+   with the highest `activated_at` in `session.active_handlers`
+   — the most recently activated skill among those that
+   reported they can stop. Construct `updated_session` by
    removing that `skill_id` from `active_handlers` and clearing
    any `response_mode` entry it owns. Return
    `Match(skill_id=<that_skill_id>, intent_name="stop",

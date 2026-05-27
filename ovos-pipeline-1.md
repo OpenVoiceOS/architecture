@@ -808,10 +808,12 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
   the match is self-addressed (`skill_id == pipeline_id`, §7.0),
   both context keys carry the same identifier.
 - **`session.active_handlers` push.** The orchestrator **MUST**
-  push `{skill_id: <skill_id>}` onto the head of
-  `session.active_handlers`, evicting any prior entry with the same
-  `skill_id`. The list is a recency-ordered (MRU) record of which
-  skills are currently active for the session. The push is
+  push `{skill_id: <skill_id>, activated_at: <orchestrator-stamped
+  Unix timestamp in seconds>}` onto `session.active_handlers`,
+  evicting any prior entry with the same `skill_id`. The list is
+  a recency record keyed by `activated_at` — consumers determine
+  "most recently activated" by comparing timestamps, not by list
+  position. The push is
   **suppressed** only for dispatches on reserved intent_names
   listed in §7.3 — a reserved-name dispatch represents a
   continuation of an already-active skill's participation or its
