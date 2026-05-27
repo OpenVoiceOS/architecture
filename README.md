@@ -121,11 +121,11 @@ picture — the tables above are an index.
 - *Writing a skill?* INTENT-1 → INTENT-2 → INTENT-3. INTENT-4 only if you need the registration wire format.
 - *Building a pipeline plugin?* PIPELINE-1, then SESSION-1 + SESSION-2, then the role spec (CONVERSE-1, CONTEXT-1, or TRANSFORM-1).
 - *Building an orchestrator?* MSG-1 → SESSION-1 → SESSION-2 → PIPELINE-1, then INTENT-4, CONTEXT-1, CONVERSE-1, TRANSFORM-1.
-- *Surveying the architecture?* [APPENDIX §1](APPENDIX.md) for the three-stack narrative.
+- *Surveying the architecture?* [appendix/overview.md §1](appendix/overview.md) for the three-stack narrative.
 
 For background — design rationale, comparisons with other systems,
 the catalogue of known divergences from current code, and known
-gaps — see [APPENDIX.md](APPENDIX.md). For term definitions, see
+gaps — see [APPENDIX.md](APPENDIX.md) (index) or browse by topic under [appendix/](appendix/). For term definitions, see
 [GLOSSARY.md](GLOSSARY.md). For the version history of each spec,
 see [CHANGELOG.md](CHANGELOG.md).
 
@@ -163,8 +163,9 @@ implementations and conformance results can name the version they
 target.
 
 PRs that touch only the non-normative material —
-[APPENDIX.md](APPENDIX.md), [GLOSSARY.md](GLOSSARY.md), this
-README, examples — do not require a version bump.
+[APPENDIX.md](APPENDIX.md) and [appendix/](appendix/) files,
+[GLOSSARY.md](GLOSSARY.md), this README, examples — do not
+require a version bump.
 
 ---
 
