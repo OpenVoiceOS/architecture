@@ -307,6 +307,16 @@ OVOS-MSG-1) and continues to identify the session for routing;
 §7 dispatch, not a round-trip. It does not fire the
 handler-lifecycle trio and does not activate any owner.
 
+A handler emitting `ovos.session.sync` from within a
+dispatched handler invocation MUST derive the Message via
+`forward` (OVOS-MSG-1 §5). `forward` preserves the routing
+metadata of the inbound dispatch, ensuring the sync reaches
+the originating client through any layer-2 transport
+(satellite, gateway, or equivalent) that routes by those
+fields. An `ovos.session.sync` emitted without `forward`
+inside a handler carries no routing metadata and will not
+reach remote clients.
+
 **When to emit.** A component MAY emit `ovos.session.sync`
 at any time for any reason. It SHOULD do so only when:
 
