@@ -8,8 +8,9 @@ intention to interrupt the assistant's current activity — and the
 bus surface by which it cascades a stop request across the
 recency-ordered list of active handlers and broadcasts a global
 stop signal when no handler can absorb the request. The
-intent_name `stop` is reserved at the OVOS-PIPELINE-1 §7.3
-registry; no other plugin or skill may register it.
+intent_names `stop` and `global_stop` are reserved at the
+OVOS-PIPELINE-1 §7.3 registry; no other plugin or skill may
+register them.
 
 It builds on OVOS-MSG-1 (envelope, `forward` / `reply` /
 `response`), OVOS-PIPELINE-1 (pipeline-plugin contract, dispatch
@@ -28,7 +29,8 @@ The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 ## 1. Scope
 
 This specification defines the stop plugin role, the reserved
-intent_name `stop`, the stoppability discovery and cascade
+intent_names `stop` and `global_stop`, the stoppability
+discovery and cascade
 algorithm, the global broadcast namespace, and the session-scoping
 obligations of stop subscribers.
 
@@ -39,28 +41,28 @@ APIs, or wake-word and barge-in policies.
 
 ---
 
-## 2. Reserved intent_name
+## 2. Reserved intent_names
 
-This specification reserves a single intent_name at the
+This specification reserves two intent_names at the
 OVOS-PIPELINE-1 §7.3 registry:
 
 | Reserved intent_name | Meaning of a Match bearing this name |
 |----------------------|--------------------------------------|
 | `stop` | A specific active handler should cease activity for the inbound `session_id`. Dispatched on `<target_skill_id>:stop` where the target is the LIFO head of positive pong responders (§4). |
+| `global_stop` | The stop plugin's escalation when no specific handler can absorb the stop. Dispatched on `<stop_plugin_id>:global_stop`; the handler emits the `ovos.stop` broadcast (§5). |
 
-Skills and other pipelines **MUST NOT** register `stop` under
-OVOS-INTENT-4. A registration naming the reserved intent_name
-is malformed per OVOS-INTENT-4 §5.3 — consumers log at WARN and
-do not index. The reservation prevents competing skill-level
-matches from bypassing the §4 cascade.
+Skills and other pipelines **MUST NOT** register either name
+under OVOS-INTENT-4. A registration naming a reserved
+intent_name is malformed per OVOS-INTENT-4 §5.3 — consumers log
+at WARN and do not index.
 
-The stop plugin's escalation path uses the intent_name
-`global_stop` for its own self-dispatch
-(`<stop_plugin_id>:global_stop`, §5). This name is plugin-internal
-and not reserved: a skill MAY register `global_stop` for its own
-purposes, as the dispatch shape namespaces the topic under
-`<stop_plugin_id>` and cannot collide with another skill's
-handler.
+Reserving `global_stop` is what gates PIPELINE-1 §7.1's
+suppression of the `active_handlers` push for the stop plugin's
+own self-dispatch: the orchestrator does not distinguish
+skill from pipeline-plugin dispatches, so suppression is keyed
+strictly off the reserved-name registry. Without the
+reservation, the stop plugin's `pipeline_id` would be pushed
+into `active_handlers` on every global stop.
 
 ---
 
@@ -217,8 +219,8 @@ proportional to the number of genuinely stoppable handlers.
 
 When a stop utterance cannot be cascaded to a specific handler,
 the stop plugin escalates to a global broadcast. The escalation
-path uses the intent_name `global_stop` as a plugin-internal
-self-dispatch (not a reserved name; see §2).
+path uses the reserved intent_name `global_stop` as a
+self-dispatch (§2).
 
 A `global_stop` self-dispatch is emitted in three cases:
 
@@ -237,10 +239,10 @@ where `updated_session` is the inbound session with:
 
 - `active_handlers` emptied — global stop terminates every
   active handler, and the cleared list is the accurate
-  post-stop state. Because the `global_stop` dispatch is a
-  pipeline-plugin self-dispatch, PIPELINE-1 §7.1's stamping
-  push is suppressed (§7.0) — `updated_session` is the final
-  state at dispatch;
+  post-stop state. Because `global_stop` is a reserved
+  intent_name (§2), PIPELINE-1 §7.1's stamping push is
+  suppressed — `updated_session` is the final state at
+  dispatch;
 - `response_mode` removed entirely (§6.1).
 
 ### 5.2 Dispatch and broadcast
@@ -438,10 +440,9 @@ Dispatch topics fire the handler-lifecycle trio per PIPELINE-1
 
 ### The orchestrator **MUST**:
 
-- treat OVOS-INTENT-4 registrations naming `stop` as malformed
-  per INTENT-4 §5.3 — log at WARN and decline to index.
-  Registrations naming `global_stop` are accepted normally;
-  `global_stop` is not reserved.
+- treat OVOS-INTENT-4 registrations naming `stop` or
+  `global_stop` as malformed per INTENT-4 §5.3 — log at WARN
+  and decline to index.
 
 ---
 
