@@ -290,9 +290,18 @@ the update incidentally.
 
 When a component needs to broadcast a session update outside
 the utterance lifecycle it SHOULD use the dedicated topic
-`ovos.session.sync`. The Message carries `Message.context.session`
-with the updated snapshot per OVOS-MSG-1; the `session_id`
-within that carrier identifies the session being updated.
+`ovos.session.sync`. The updated session snapshot is the
+**payload** of the Message — carried in `Message.data` as a
+`session` object, not in `Message.context.session`.
+`Message.context.session` remains the ambient carrier (per
+OVOS-MSG-1) and continues to identify the session for routing;
+`Message.data.session` is the explicit sync content.
+
+`Message.data` shape:
+
+| Key | Type | Required | Meaning |
+|-----|------|----------|---------|
+| `session` | object | yes | The updated session snapshot. Follows SESSION-1 wire shape; omitted fields leave the receiver's current values unchanged (§5.1 merge rule). |
 
 `ovos.session.sync` is a plain broadcast — not a PIPELINE-1
 §7 dispatch, not a round-trip. It does not fire the
@@ -316,10 +325,10 @@ no in-utterance emission is available.
 
 **Consumer obligations.**
 
-- The **orchestrator** MUST merge a received
-  `ovos.session.sync` into its working session snapshot for
-  the affected `session_id`. The merge follows §5.1's
-  field-replacement rule: present fields in the synced
+- The **orchestrator** MUST merge `Message.data.session` from
+  a received `ovos.session.sync` into its working session
+  snapshot for the affected `session_id`. The merge follows
+  §5.1's field-replacement rule: present fields in the synced
   snapshot replace current values; absent fields leave current
   values unchanged. For `session_id == "default"` the working
   snapshot is the default-session store (§5); for named
@@ -332,8 +341,10 @@ no in-utterance emission is available.
   so that clients and observers receive a session snapshot that
   includes the sync update.
 - **Clients** SHOULD update their local session store when
-  they observe `ovos.session.sync` carrying a `session_id`
-  matching their own, using the same merge semantics as §3.
+  they observe `ovos.session.sync` whose `Message.context.session`
+  carries a `session_id` matching their own, merging
+  `Message.data.session` using the same field-replacement
+  semantics as §3.
 
 ---
 
@@ -612,7 +623,7 @@ default-session store *is* that state for the local device.
 
 | Topic | Direction | Purpose |
 |-------|-----------|---------|
-| `ovos.session.sync` | component → all | Broadcast an explicit session update outside the utterance lifecycle (§2.7). Carries `Message.context.session` with the updated snapshot. |
+| `ovos.session.sync` | component → all | Broadcast an explicit session update outside the utterance lifecycle (§2.7). Updated snapshot in `Message.data.session`; `session_id` identified via `Message.context.session` per MSG-1. |
 
 No other normative bus topic is defined by this specification.
 The per-utterance session propagation (§2.6) and end-marker
