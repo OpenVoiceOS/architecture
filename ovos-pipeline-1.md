@@ -1186,7 +1186,11 @@ a `pipeline_id` from any of these sources can query it directly.
 
 ### 10.2 Response payload
 
-The plugin **MUST** reply with the currently-loaded intent set:
+The plugin **MUST** emit the response derived via `reply`
+(OVOS-MSG-1 §5.2), so that routing metadata is preserved and
+the response reaches the requester through any layer-2
+transport. The response carries the currently-loaded intent
+set:
 
 ```json
 {
