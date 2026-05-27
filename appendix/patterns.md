@@ -20,10 +20,12 @@ the bus is not just an internal transport — it is the
 **substrate higher-level systems plug into without modifying
 the assistant core**. Two mechanics make that work:
 **single-flip routing** (§3.1.1), which keeps the routing pair
-correct end-to-end without per-component effort; and **no
-central state or correlation** (§3.1.2), which makes layer-2
-systems composable. HiveMind is the canonical example of what
-both together enable (§3.1.3).
+correct end-to-end without per-component effort; **forward vs
+reply discipline** (§3.1.2), which ensures non-dispatch
+emissions are routed correctly through layer-2 transports; and
+**no central state or correlation** (§3.1.3), which makes
+layer-2 systems composable. HiveMind is the canonical example
+of what all three together enable (§3.1.4).
 
 #### 3.1.1 The single-flip routing model
 
@@ -83,7 +85,45 @@ Implementers using `.reply` where `.forward` is appropriate
 produce mis-routed messages that work in local tests but
 silently break layer-2 routing.
 
-#### 3.1.2 No central correlation, no central state
+#### 3.1.2 Choosing `forward` vs `reply` for non-dispatch emissions
+
+The single-flip model above applies to the dispatch path, but the
+same choice arises whenever any component emits a Message derived
+from one it received. The rule is:
+
+- **Use `forward`** when the new Message travels in the **same
+  direction** as the source — toward the same destination. A handler
+  emitting `speak`, a session sync, or a lifecycle event during a
+  dispatch uses `forward`; the user-side client receives it because
+  the `destination` was already set by the earlier `reply` flip.
+- **Use `reply`** when the new Message travels **back toward the
+  sender** of the source — a responder answering a requester. A
+  skill responding to `ovos.stop.ping`, a handler answering a
+  `<owner_id>.converse.request` poll, or a plugin answering an
+  introspection request all use `reply`; the flip routes the answer
+  back to whoever asked.
+
+The practical consequence for layer-2 systems (satellites, gateways,
+HiveMind nodes): routing metadata is the only mechanism a transport
+has to decide where a Message goes. A component that uses `reply`
+where `forward` is correct sends the Message back at itself instead
+of toward the user; a component that uses `forward` where `reply` is
+correct broadcasts with no destination instead of targeting the
+requester. Both mistakes work on a single-node local bus (where
+everything is broadcast anyway) and silently fail in layer-2
+deployments.
+
+The specs enforce this consistently:
+
+| Emission | Derivation | Reason |
+|---|---|---|
+| Handler lifecycle trio (PIPELINE-1 §8) | `forward` | Travels toward the client alongside the dispatch |
+| `ovos.session.sync` from a handler (SESSION-2 §2.7) | `forward` | Session update travels toward the client |
+| `ovos.stop.pong` (STOP-1 §4.2) | `reply` | Response back to the stop plugin that pinged |
+| `<owner_id>.converse.response` (CONVERSE-1 §4.2) | `reply` | Response back to the converse plugin that polled |
+| Pipeline introspection response (PIPELINE-1 §10.2) | `reply` | Response back to the observer that requested |
+
+#### 3.1.3 No central correlation, no central state
 
 The bus is **fully asynchronous**. OVOS does not centrally
 correlate request/response chains, and does not centrally
@@ -121,7 +161,7 @@ of conversational state. The async-by-default model means
 those future specs only need to define *what* the state is,
 not *how* it travels.
 
-#### 3.1.3 Layer-2 substrates
+#### 3.1.4 Layer-2 substrates
 
 The single-flip routing model and the no-central-state
 design make layer-2 federation composable without modifying
@@ -257,9 +297,10 @@ to and from an external transport, and either operates entirely
 external (Wyoming-style audio / STT / TTS services talking
 over TCP to a bridge that proxies the OVOS bus) or remotes the
 whole bus (HiveMind-style layer-2 substrates). The
-single-flip routing of §3.1.1 and the no-central-state stance
-of §3.1.2 are what make the bus-boundary adapter feasible
-without modifying the assistant core.
+single-flip routing of §3.1.1, the forward/reply discipline
+of §3.1.2, and the no-central-state stance of §3.1.3 are what
+make the bus-boundary adapter feasible without modifying the
+assistant core.
 
 #### Per-protocol notes
 
