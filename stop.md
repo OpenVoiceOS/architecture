@@ -26,9 +26,9 @@ The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 
 ## 1. Scope
 
-This specification defines the stop plugin role, the two reserved
-intent_names, the stoppability discovery and cascade algorithm,
-the global broadcast namespace, and the session-scoping
+This specification defines the stop plugin role, the reserved
+intent_name `stop`, the stoppability discovery and cascade
+algorithm, the global broadcast namespace, and the session-scoping
 obligations of stop subscribers.
 
 It does **not** define vocabulary file formats, matching
