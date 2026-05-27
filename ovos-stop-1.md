@@ -60,36 +60,30 @@ circuit-breaker rules as every other pipeline plugin.
 
 ### 3.1 Pipeline identity and dispatch target
 
-A stop plugin is loaded as one or more `pipeline_id` entries in
-`session.pipeline`. Multiple confidence tiers (`stop_high`,
-`stop_medium`, `stop_low`) MAY be registered as separate `pipeline_id`s
-or merged into one plugin. When registered as separate entries, all
-tiers MUST share a single `global_stop` dispatch handler — identified
-by a common `pipeline_id` — so that exactly one `ovos.stop` broadcast
-is emitted per global stop event.
+A stop plugin MAY be loaded as multiple `pipeline_id` entries in
+`session.pipeline` (e.g. separate confidence tiers). When multiple
+entries are deployed, the implementation MUST ensure exactly one
+`ovos.stop` broadcast is emitted per global stop event per session.
 
 `Match.skill_id` MUST equal:
 
 - for `intent_name: "stop"` — the most recently activated positive pong
   responder selected per §4;
-- for `intent_name: "global_stop"` — the shared `pipeline_id` whose
-  handler emits `ovos.stop`.
+- for `intent_name: "global_stop"` — the `pipeline_id` whose handler
+  emits `ovos.stop`.
 
-### 3.2 Match obligations
-
-A stop plugin **MUST**:
+A stop plugin MUST:
 
 - return `None` for any language for which it cannot resolve stop
   vocabulary;
 - read `session.active_handlers` to drive the §4 cascade;
 - perform the ping-pong exchange (§4.2) inside `match`.
 
-### 3.3 Vocabulary
+### 3.2 Vocabulary
 
-A stop plugin SHOULD distinguish generic stop utterances from explicit
-"stop everything" utterances. Generic stop triggers the §4 cascade;
-"stop everything" maps directly to `intent_name: "global_stop"` without
-consulting `active_handlers`.
+A stop plugin SHOULD provide explicit "stop everything" vocabulary that
+maps directly to `intent_name: "global_stop"` without running the §4
+cascade. Generic stop utterances run the cascade per §4.
 
 ---
 
@@ -102,8 +96,7 @@ Inside `match`:
 1. Read `session.active_handlers`. If empty, return a `global_stop`
    Match per §5.
 2. Emit `ovos.stop.ping` and collect `ovos.stop.pong` responses within
-   a deployer-configured timeout (RECOMMENDED default: 0.5 s;
-   SHOULD NOT exceed 1 s).
+   a deployer-configured timeout (default: 0.5 s; SHOULD NOT exceed 1 s).
 3. Identify positive responders: pongs where `can_handle: true` and
    `skill_id` appears in `session.active_handlers`. Pongs from skills
    not in `active_handlers` MUST be ignored; late pongs MAY be ignored.
@@ -133,9 +126,13 @@ Inside `match`:
 `can_handle: true` asserts that the handler has user-visible or
 session-affecting activity in progress for the inbound `session_id`
 **and** is prepared to cease it on receipt of `<skill_id>:stop`.
+
 A handler with no current activity MUST respond `can_handle: false`
-or remain silent. A handler that does not respond within the timeout
-is treated as `can_handle: false`.
+or remain silent. A handler that does not subscribe to
+`ovos.stop.ping`, or does not respond within the timeout, is treated
+as `can_handle: false` and is ineligible as a stop target for that
+ping round. If no handler declares stoppability, the cascade escalates
+to `global_stop` per §4.1 step 5.
 
 ### 4.3 Dispatch and stop handler obligations
 
@@ -147,8 +144,8 @@ The stop handler MUST:
 
 - cease the activity it declared stoppable, scoped to the inbound
   `session_id`;
-- treat a second `<skill_id>:stop` or `ovos.stop` arriving while
-  already stopping as idempotent.
+- not initiate a second stop sequence if a stop dispatch arrives while
+  already stopping — the duplicate MUST be treated as a no-op.
 
 The stop handler MUST NOT interrupt activity belonging to a different
 `session_id`.
@@ -167,7 +164,7 @@ with the updated list, so that future ping rounds bypass it.
 
 A `global_stop` Match is returned in three cases:
 
-- explicit "stop everything" vocabulary (§3.3);
+- explicit "stop everything" vocabulary (§3.2);
 - generic stop with empty `active_handlers` (§4.1 step 1);
 - generic stop with no positive pong responders (§4.1 step 5).
 
@@ -187,16 +184,13 @@ Match(
 ```
 
 All three fields are cleared atomically at match time via
-`Match.updated_session` (PIPELINE-1 §4.2), before dispatch. The stop
-plugin owns this cleanup entirely — no downstream component needs to
-inspect or drain these fields as a consequence of a global stop.
+`Match.updated_session` (PIPELINE-1 §4.2), before dispatch.
 
 PIPELINE-1 §7.1 stamps `<shared_pipeline_id>` onto `active_handlers`
 at dispatch time (the name `global_stop` is not reserved, so stamping
 suppression does not apply). This is intentional: the stop plugin MAY
 participate in converse after a global stop — for example, to handle a
-follow-up clarification such as "not the cooking timer" — provided it
-registers a converse handler.
+follow-up clarification — provided it registers a converse handler.
 
 ### 5.3 Broadcast
 
@@ -217,31 +211,22 @@ trio. The namespace `ovos.stop.*` is reserved by this specification.
 
 For `intent_name: "stop"`, a stop plugin MUST clear the
 `session.response_mode` entry whose `owner_id` matches the dispatch
-target, via `Match.updated_session`. (For `intent_name: "global_stop"`,
+target, via `Match.updated_session`. For `intent_name: "global_stop"`,
 `response_mode` is removed entirely as part of the §5.2 Match
-construction.)
-
-An uncleared `response_mode` for a stopped skill would route the next
-utterance to that skill as if it were still awaiting a response.
+construction.
 
 ### 6.2 `active_handlers`
 
 `session.active_handlers` (OVOS-PIPELINE-1 §7.1) is the stop
 cascade's recency input. It is distinct from `session.converse_handlers`
 (OVOS-CONVERSE-1 §2.1), the converse plugin's eligibility list.
-Draining `active_handlers` on stop does **not** affect
-`converse_handlers` — a stopped skill remains eligible for converse
-turns until its TTL expires or it self-removes.
 
 A stop plugin MUST drain `active_handlers` via `Match.updated_session`
 (committed pre-dispatch per PIPELINE-1 §4.2):
 
 - `stop` Match — remove the dispatch target entry only;
 - `global_stop` Match — empty `active_handlers` entirely and empty
-  `converse_handlers` (OVOS-CONVERSE-1 §2.1) entirely. A global stop
-  ends all active engagement; leaving skills in the converse eligibility
-  list would allow the converse plugin to continue polling them until
-  their TTL expires.
+  `converse_handlers` (OVOS-CONVERSE-1 §2.1) entirely.
 
 The stamping push (PIPELINE-1 §7.1) is suppressed for the reserved
 intent_name `stop`, so the removal in `updated_session` is the final
@@ -250,9 +235,14 @@ state. It is not suppressed for `global_stop`.
 ### 6.3 Denylists
 
 A stop plugin MUST honour `session.blacklisted_skills` and
-`session.blacklisted_intents` (PIPELINE-1 §5). A handler whose
-`skill_id` appears in `blacklisted_skills` MUST NOT be pinged or
-selected as a stop target.
+`session.blacklisted_intents` (PIPELINE-1 §5):
+
+- `blacklisted_skills`: a handler whose `skill_id` appears in this list
+  MUST NOT be pinged or selected as a stop target;
+- `blacklisted_intents`: applies to the dispatched intent_name (`"stop"`
+  or `"global_stop"`). A stop plugin MUST return `None` if the matched
+  intent_name appears in `blacklisted_intents`. This list does not
+  affect the ping broadcast.
 
 ---
 
@@ -300,21 +290,22 @@ handler-lifecycle trio. No other topic in this table does.
 
 - return `intent_name` of exactly `"stop"` or `"global_stop"` (§2, §3.1);
 - set `Match.skill_id` per §3.1;
-- return `None` when no stop vocabulary matches or `lang` is unsupported;
+- return `None` when no stop vocabulary matches or `lang` is unsupported (§3.1);
 - collect pong responses within a deployer-configured timeout (§4.1);
 - ignore pongs from skills absent from `session.active_handlers` (§4.1);
-- clear `session.response_mode` via `Match.updated_session` (§6.1);
+- treat non-responding handlers as `can_handle: false` (§4.2);
+- clear `session.response_mode` for the dispatch target via `Match.updated_session` (§6.1);
 - drain `active_handlers` via `Match.updated_session` (§6.2);
 - on `global_stop`, also empty `converse_handlers` via `Match.updated_session` (§6.2);
 - return `global_stop` when `active_handlers` is empty or no positive pong responder exists (§4.1 steps 1, 5);
-- honour `session.blacklisted_skills` and `session.blacklisted_intents` (§6.3);
-- subscribe to `<own_pipeline_id>:global_stop` and emit `ovos.stop` (§5.3).
+- honour `session.blacklisted_skills` and `session.blacklisted_intents` per §6.3;
+- subscribe to `<own_pipeline_id>:global_stop` and emit `ovos.stop` (§5.3);
+- emit exactly one `ovos.stop` broadcast per global stop event per session (§3.1).
 
 ### Stop pipeline plugin — SHOULD:
 
 - configure the ping-pong timeout to not exceed 1 s (§4.1);
-- skip the ping and return `global_stop` immediately when `active_handlers` is empty (§4.1 step 1);
-- place all confidence tiers under a shared `pipeline_id` for `global_stop` (§3.1).
+- provide explicit "stop everything" vocabulary mapping to `global_stop` without cascade (§3.2).
 
 ### Deployment — SHOULD:
 
@@ -326,7 +317,7 @@ handler-lifecycle trio. No other topic in this table does.
 - subscribe to both `<own_skill_id>:stop` and `ovos.stop`;
 - on `<own_skill_id>:stop`, cease stoppable activity for the inbound `session_id` (§4.3);
 - on `ovos.stop`, cease all activity for the inbound `session_id`;
-- treat duplicate stop dispatches and `ovos.stop` broadcasts as idempotent.
+- treat a duplicate `<own_skill_id>:stop` or `ovos.stop` as a no-op (§4.3).
 
 ### Skill — SHOULD:
 
