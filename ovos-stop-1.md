@@ -101,7 +101,9 @@ Inside `match`:
    `skill_id` appears in `session.active_handlers`. Pongs from skills
    not in `active_handlers` MUST be ignored; late pongs MAY be ignored.
 4. If at least one positive responder exists, select the entry with the
-   highest `activated_at` in `session.active_handlers`. Construct
+   highest `activated_at` in `session.active_handlers`. If two entries
+   share the same `activated_at`, select the entry appearing latest in
+   the list (most recently stamped). Construct
    `updated_session` removing that `skill_id` from `active_handlers`
    and clearing any `response_mode` entry it owns. Return
    `Match(skill_id=<that_skill_id>, intent_name="stop", updated_session=...)`.
@@ -109,10 +111,15 @@ Inside `match`:
 
 ### 4.2 Ping and pong shape
 
-**`ovos.stop.ping`** — broadcast. Payload MAY be empty. The inbound
-`session_id` is carried in Message context (OVOS-MSG-1).
+**`ovos.stop.ping`** — broadcast. Payload MAY be empty. `session_id`
+is carried in Message context per OVOS-MSG-1.
 
-**`ovos.stop.pong`** — shared reply topic.
+**`ovos.stop.pong`** — shared reply topic. A handler MUST emit a
+Message of type `ovos.stop.pong` derived via `reply` (OVOS-MSG-1 §5),
+so that routing metadata is preserved and the pong reaches the stop
+plugin regardless of where the skill is running (local or remote).
+`source` and `destination` are layer-2 metadata and do not affect the
+topic name.
 
 ```json
 { "skill_id": "example.skill", "can_handle": true }
@@ -149,6 +156,10 @@ The stop handler MUST:
 
 The stop handler MUST NOT interrupt activity belonging to a different
 `session_id`.
+
+`Match.updated_session` is committed before dispatch (PIPELINE-1 §4.2)
+and is not rolled back if the stop handler emits the `.error`
+lifecycle event.
 
 ### 4.4 Self-pruning of `active_handlers`
 
@@ -196,8 +207,8 @@ follow-up clarification — provided it registers a converse handler.
 
 The handler dispatched by `<shared_pipeline_id>:global_stop` MUST emit
 `ovos.stop`. Every component performing user-visible activity MUST
-subscribe to `ovos.stop` and cease activity for the broadcast's
-`session_id`.
+subscribe to `ovos.stop` and cease activity for the `session_id`
+carried in Message context per OVOS-MSG-1.
 
 `ovos.stop` is not a dispatch topic — it does not follow the
 `<skill_id>:<intent_name>` shape and does not fire the handler-lifecycle
@@ -211,7 +222,8 @@ trio. The namespace `ovos.stop.*` is reserved by this specification.
 
 For `intent_name: "stop"`, a stop plugin MUST clear the
 `session.response_mode` entry whose `owner_id` matches the dispatch
-target, via `Match.updated_session`. For `intent_name: "global_stop"`,
+target, via `Match.updated_session`. If no such entry exists, the
+field is left unchanged. For `intent_name: "global_stop"`,
 `response_mode` is removed entirely as part of the §5.2 Match
 construction.
 
@@ -240,9 +252,11 @@ A stop plugin MUST honour `session.blacklisted_skills` and
 - `blacklisted_skills`: a handler whose `skill_id` appears in this list
   MUST NOT be pinged or selected as a stop target;
 - `blacklisted_intents`: applies to the dispatched intent_name (`"stop"`
-  or `"global_stop"`). A stop plugin MUST return `None` if the matched
-  intent_name appears in `blacklisted_intents`. This list does not
-  affect the ping broadcast.
+  or `"global_stop"`). A stop plugin MUST return `None` if the resolved
+  intent_name appears in `blacklisted_intents`. A `stop` utterance that
+  would resolve to `global_stop` (§4.1 steps 1 or 5) is subject to the
+  `global_stop` entry, not the `stop` entry. This list does not affect
+  the ping broadcast.
 
 ---
 
@@ -321,8 +335,8 @@ handler-lifecycle trio. No other topic in this table does.
 
 ### Skill — SHOULD:
 
-- subscribe to `ovos.stop.ping` and reply on `ovos.stop.pong` with
-  `can_handle` reflecting stoppable activity for the inbound `session_id` (§4.2);
+- subscribe to `ovos.stop.ping` and respond with a `reply`-derived
+  `ovos.stop.pong` carrying `can_handle` for the inbound `session_id` (§4.2);
 - remove itself from `session.active_handlers` when it cannot be stopped (§4.4).
 
 ### Non-skill component performing user-visible activity — MUST:
