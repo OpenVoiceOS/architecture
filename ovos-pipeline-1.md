@@ -879,13 +879,14 @@ pipeline plugin role. A reserved intent_name is one that:
 
 A reservation is a **namespace lease**, not a dispatch
 modification. Dispatches on reserved intent_names fire §7.1
-routing and §8 handler-trio identically to ordinary dispatches.
-The one exception is the §7.1 `session.active_handlers` push,
-which is suppressed on reserved-name dispatches — a reserved
-name represents a continuation or termination of an already-
-active skill's participation, not a fresh activation. The
-reserving specification gets exclusive use of the name across
-the deployment's skill set; it gets no other privilege.
+context stamping, §7.2 routing, and §8 handler-trio identically
+to ordinary dispatches. The one exception is the
+`session.active_handlers` push defined in §7.1, which is
+suppressed on reserved-name dispatches — a reserved name
+represents a continuation or termination of an already-active
+skill's participation, not a fresh activation. The reserving
+specification gets exclusive use of the name across the
+deployment's skill set; it gets no other privilege.
 
 Reservations currently in force:
 
