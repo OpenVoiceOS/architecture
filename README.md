@@ -113,6 +113,7 @@ below). Adoption is voluntary; conformance, once adopted, is not.
 | OVOS-CONTEXT-1 | [Intent Context](intent-context.md) | 1 | [Draft — in review (PR #18)](https://github.com/OpenVoiceOS/architecture/pull/18) |
 | OVOS-CONVERSE-1 | [Active Handlers and Interactive Response](converse.md) | 1 | [Draft — in review (PR #25)](https://github.com/OpenVoiceOS/architecture/pull/25) |
 | OVOS-STOP-1 | [Stop Pipeline Plugin](ovos-stop-1.md) | 1 | [Draft — in review (PR #33)](https://github.com/OpenVoiceOS/architecture/pull/33) |
+| OVOS-COMMON-QUERY-1 | [Common Query Pipeline Plugin](common-query.md) | 1 | Draft |
 
 Each spec carries its own scope statement, design rationale, and
 conformance section in its header. Open the document for the full
@@ -120,8 +121,8 @@ picture — the tables above are an index.
 
 **Reading order by role:**
 - *Writing a skill?* INTENT-1 → INTENT-2 → INTENT-3. INTENT-4 only if you need the registration wire format.
-- *Building a pipeline plugin?* PIPELINE-1, then SESSION-1 + SESSION-2, then the role spec (CONVERSE-1, CONTEXT-1, or TRANSFORM-1).
-- *Building an orchestrator?* MSG-1 → SESSION-1 → SESSION-2 → PIPELINE-1, then INTENT-4, CONTEXT-1, CONVERSE-1, TRANSFORM-1.
+- *Building a pipeline plugin?* PIPELINE-1, then SESSION-1 + SESSION-2, then the role spec (CONVERSE-1, CONTEXT-1, TRANSFORM-1, or STOP-1).
+- *Building an orchestrator?* MSG-1 → SESSION-1 → SESSION-2 → PIPELINE-1, then INTENT-4, CONTEXT-1, CONVERSE-1, TRANSFORM-1, STOP-1.
 - *Surveying the architecture?* [appendix/overview.md §1](appendix/overview.md) for the three-stack narrative.
 
 For background — design rationale, comparisons with other systems,
