@@ -14,10 +14,11 @@ registry; no other plugin or skill may register it.
 It builds on OVOS-MSG-1 (envelope, `forward` / `reply` /
 `response`), OVOS-PIPELINE-1 (pipeline-plugin contract, dispatch
 shape, lifecycle trio, reserved-name registry),
-OVOS-SESSION-1 (session field registry), OVOS-SESSION-2
-(mutation boundaries and session-keyed-state projection), and
-OVOS-CONVERSE-1 (`session.active_handlers` recency list,
-`session.response_mode`).
+OVOS-SESSION-1 (session field registry — `active_handlers`,
+`response_mode`), and OVOS-SESSION-2 (mutation boundaries and
+session-keyed-state projection). `session.active_handlers` is
+populated by OVOS-PIPELINE-1 §7.1's dispatch-time stamping rule
+and drained by stop consumption defined here.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 **MAY**, and **RECOMMENDED** are used as in RFC 2119.
@@ -142,7 +143,10 @@ Inside `match`:
    removing that `skill_id` from `active_handlers` and clearing
    any `response_mode` entry it owns. Return
    `Match(skill_id=<that_skill_id>, intent_name="stop",
-   updated_session=...)`.
+   updated_session=...)`. PIPELINE-1 §7.1's dispatch-time push
+   is suppressed for reserved-name dispatches (§7.3), so the
+   removal carried in `updated_session` is the final state at
+   dispatch.
 5. If no positive responder exists, return a `global_stop` Match
    constructed per §5.
 
@@ -199,11 +203,13 @@ session.
 
 A handler that cannot be stopped — by design, by current state,
 or for the relevant session — SHOULD remove itself from
-`session.active_handlers` (via the mutation pathway defined in
-CONVERSE-1) so that future ping rounds bypass it entirely.
-Self-pruning is the static complement to the runtime ping-pong;
-together they keep the discovery cost proportional to the number
-of genuinely stoppable handlers.
+`session.active_handlers` so that future ping rounds bypass it
+entirely. The removal MAY be communicated by emitting any
+session-carrying Message with the updated list; the orchestrator
+and downstream consumers observe the next inbound session
+without the entry. Self-pruning is the static complement to the
+runtime ping-pong; together they keep the discovery cost
+proportional to the number of genuinely stoppable handlers.
 
 ---
 
@@ -230,9 +236,11 @@ updated_session=...)`
 where `updated_session` is the inbound session with:
 
 - `active_handlers` emptied — global stop terminates every
-  handler the session is tracking, and the cleared list
-  propagates through the rest of the utterance lifecycle and
-  subsequent utterances;
+  active handler, and the cleared list is the accurate
+  post-stop state. Because the `global_stop` dispatch is a
+  pipeline-plugin self-dispatch, PIPELINE-1 §7.1's stamping
+  push is suppressed (§7.0) — `updated_session` is the final
+  state at dispatch;
 - `response_mode` removed entirely (§6.1).
 
 ### 5.2 Dispatch and broadcast
@@ -274,8 +282,8 @@ does not interrupt another session's playback.
 
 ### 6.1 `response_mode`
 
-A stop plugin SHOULD clear `session.response_mode` via
-`Match.updated_session` whenever it matches:
+If `session.response_mode` is present, a stop plugin SHOULD clear
+it via `Match.updated_session` whenever it matches:
 
 - for `intent_name: "stop"`, clear the entry whose `owner_id`
   matches the dispatch target;
@@ -284,27 +292,35 @@ A stop plugin SHOULD clear `session.response_mode` via
 
 Per PIPELINE-1 §6.3, session mutations carried by
 `Match.updated_session` are committed at dispatch time; the
-clear is durable even if the handler crashes mid-execution.
+clear is durable even if the handler crashes mid-execution. The
+semantics and ownership of the field are defined elsewhere; this
+spec only requires that a stop operation cancels any wait the
+stopped target was holding.
 
 ### 6.2 `active_handlers`
 
-A stop plugin MUST update `session.active_handlers` via
-`Match.updated_session` according to the Match it emits:
+`session.active_handlers` is populated by PIPELINE-1 §7.1's
+dispatch-time stamping rule on every ordinary dispatch. The
+stamping push is suppressed for reserved intent_names (§7.3) —
+`stop`, `converse`, `response` — so reserved-name dispatches
+never add to the list.
+
+A stop plugin MUST drain the list via `Match.updated_session`,
+which is committed pre-dispatch (PIPELINE-1 §4.2):
 
 - a `stop` Match MUST remove the dispatch target entry only,
   leaving the rest of the list intact;
 - a `global_stop` Match MUST empty `active_handlers` entirely
   (§5.1).
 
-This propagates the post-stop state through the rest of the
-utterance lifecycle and keeps subsequent reads of
-`active_handlers` (by downstream plugins, the handler trio, or
-the next utterance) accurate without waiting for TTL pruning or
-size-cap eviction.
-
-Other CONVERSE-1 mutation pathways (TTL pruning, size cap,
-activation events) and skill self-pruning (§4.4) continue to own
-the remaining lifecycle of the list outside of stop matches.
+Pre-dispatch mutation is the cleanest defined boundary for
+session state changes: the orchestrator commits
+`updated_session`, suppresses the push (because the dispatch
+is on a reserved name or self-addressed to the stop plugin),
+and the downstream lifecycle sees the post-stop list. No
+consumer-side removal protocol is needed; no race between an
+optimistic pre-removal and a failed handler exists because
+removal and dispatch happen atomically at the same boundary.
 
 ### 6.3 Denylists
 
@@ -412,9 +428,8 @@ Dispatch topics fire the handler-lifecycle trio per PIPELINE-1
   with its own `skill_id` and `can_handle` reflecting feasibility
   *for the inbound `session_id`* — or remain silent if it has no
   stoppable activity for that session;
-- remove itself from `session.active_handlers` (via CONVERSE-1's
-  mutation pathway) when it cannot be stopped, so that future
-  ping rounds bypass it (§4.4).
+- remove itself from `session.active_handlers` when it cannot
+  be stopped, so that future ping rounds bypass it (§4.4).
 
 ### Every non-skill component performing user-visible activity **MUST**:
 

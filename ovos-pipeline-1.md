@@ -807,6 +807,22 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
   `pipeline_id` of the plugin that produced the match (§3.1). When
   the match is self-addressed (`skill_id == pipeline_id`, §7.0),
   both context keys carry the same identifier.
+- **`session.active_handlers` push.** The orchestrator **MUST**
+  push `{skill_id: <skill_id>}` onto the head of
+  `session.active_handlers`, evicting any prior entry with the same
+  `skill_id`. The list is a recency-ordered (MRU) record of which
+  skills are currently active for the session. The push is
+  **suppressed** in two cases: (1) pipeline-plugin self-dispatches
+  (`skill_id == pipeline_id`, §7.0) — the list records skill
+  activity, not pipeline-plugin internals; (2) dispatches on any
+  reserved intent_name listed in §7.3 — a reserved-name dispatch
+  represents a continuation of an already-active skill's
+  participation (converse, response) or its termination (stop),
+  not a fresh activation. The push is applied after
+  `Match.updated_session` is committed, so a plugin that wants to
+  remove the target ahead of the dispatch (e.g., STOP-1's stop
+  cascade) does so via `updated_session` and the suppressed push
+  leaves the removal in effect.
 
 The dispatch Message's `data`:
 
@@ -859,11 +875,14 @@ pipeline plugin role. A reserved intent_name is one that:
   reserving specification defines.
 
 A reservation is a **namespace lease**, not a dispatch
-modification. Every dispatch in this specification — including
-dispatches on reserved intent_names — fires §7.1 stamping,
-§7.2 routing, and §8 handler-trio identically. The reserving
-specification gets exclusive use of the name across the
-deployment's skill set; it gets no other privilege.
+modification. Dispatches on reserved intent_names fire §7.1
+routing and §8 handler-trio identically to ordinary dispatches.
+The one exception is the §7.1 `session.active_handlers` push,
+which is suppressed on reserved-name dispatches — a reserved
+name represents a continuation or termination of an already-
+active skill's participation, not a fresh activation. The
+reserving specification gets exclusive use of the name across
+the deployment's skill set; it gets no other privilege.
 
 Reservations currently in force:
 
