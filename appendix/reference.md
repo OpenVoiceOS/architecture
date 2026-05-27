@@ -144,3 +144,21 @@ Three properties hold across all four:
 All four surfaces share the `ovos.<domain>.` prefix; verb
 segments vary by domain (some nest, some don't). The
 uniformity is in the namespace, not in a fixed depth.
+
+### 6.5 Message derivation cheat-sheet — `forward` vs `reply`
+
+Use `forward` when a Message travels in the **same direction**
+as the source (handler → client). Use `reply` when a Message
+travels **back toward the sender** of the source (responder →
+requester). Using the wrong derivation produces messages that
+work on a single-node local bus but silently mis-route through
+layer-2 transports (see appendix/patterns.md §3.1.2).
+
+| Emission | Derivation | Rule |
+|---|---|---|
+| Handler `speak`, GUI events, session mutations during dispatch (PIPELINE-1 §7) | `forward` | Same direction as the inbound dispatch |
+| Handler-lifecycle trio `.start` / `.complete` / `.error` (PIPELINE-1 §8) | `forward` | Same direction as the inbound dispatch |
+| `ovos.session.sync` emitted inside a handler (SESSION-2 §2.7) | `forward` | Session update travels toward the originating client |
+| `ovos.stop.pong` (STOP-1 §4.2) | `reply` | Skill answers back to the stop plugin that sent the ping |
+| `<owner_id>.converse.response` (CONVERSE-1 §4.2) | `reply` | Owner answers back to the converse plugin that polled |
+| Pipeline introspection response (PIPELINE-1 §10.2) | `reply` | Plugin answers back to the observer that requested |
