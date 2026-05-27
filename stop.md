@@ -126,9 +126,8 @@ to a single handler or escalates to `global_stop`.
 
 Inside `match`:
 
-1. Read `session.active_handlers`. If empty, return
-   `Match(skill_id=<own_pipeline_id>, intent_name="global_stop")`
-   (§5).
+1. Read `session.active_handlers`. If empty, return a
+   `global_stop` Match constructed per §5.
 2. Emit a single `ovos.stop.ping` broadcast and collect responses
    on `ovos.stop.pong` up to a deployer-defined timeout
    (RECOMMENDED default: 0.5 seconds).
@@ -144,8 +143,8 @@ Inside `match`:
    any `response_mode` entry it owns. Return
    `Match(skill_id=<that_skill_id>, intent_name="stop",
    updated_session=...)`.
-5. If no positive responder exists, return
-   `Match(skill_id=<own_pipeline_id>, intent_name="global_stop")`.
+5. If no positive responder exists, return a `global_stop` Match
+   constructed per §5.
 
 ### 4.2 Ping and pong
 
@@ -221,7 +220,22 @@ A `global_stop` self-dispatch is emitted in three cases:
 - generic stop with empty `active_handlers` (§4.1 step 1);
 - generic stop with no positive pong responders (§4.1 step 5).
 
-### 5.1 Dispatch and broadcast
+### 5.1 Match construction
+
+A `global_stop` Match MUST be:
+
+`Match(skill_id=<own_pipeline_id>, intent_name="global_stop",
+updated_session=...)`
+
+where `updated_session` is the inbound session with:
+
+- `active_handlers` emptied — global stop terminates every
+  handler the session is tracking, and the cleared list
+  propagates through the rest of the utterance lifecycle and
+  subsequent utterances;
+- `response_mode` removed entirely (§6.1).
+
+### 5.2 Dispatch and broadcast
 
 The orchestrator dispatches `<stop_plugin_id>:global_stop`.
 Because `skill_id` equals the stop plugin's own `pipeline_id`,
@@ -246,7 +260,7 @@ dispatch itself.
 The namespace `ovos.stop.*` is reserved by this specification
 for future stop-related signals.
 
-### 5.2 Session scoping
+### 5.3 Session scoping
 
 A subscriber to `ovos.stop` MUST cease only the activity it has
 running for the broadcast's inbound `session_id`. A TTS engine
@@ -274,22 +288,23 @@ clear is durable even if the handler crashes mid-execution.
 
 ### 6.2 `active_handlers`
 
-A stop plugin MUST remove the dispatch target from
-`session.active_handlers` via `Match.updated_session` whenever it
-emits a `stop` Match. This propagates the post-stop state through
-the rest of the utterance lifecycle and keeps subsequent reads of
+A stop plugin MUST update `session.active_handlers` via
+`Match.updated_session` according to the Match it emits:
+
+- a `stop` Match MUST remove the dispatch target entry only,
+  leaving the rest of the list intact;
+- a `global_stop` Match MUST empty `active_handlers` entirely
+  (§5.1).
+
+This propagates the post-stop state through the rest of the
+utterance lifecycle and keeps subsequent reads of
 `active_handlers` (by downstream plugins, the handler trio, or
 the next utterance) accurate without waiting for TTL pruning or
 size-cap eviction.
 
-The plugin MUST NOT modify entries other than the dispatch
-target. Other CONVERSE-1 mutation pathways (TTL pruning, size
-cap, activation events) and skill self-pruning (§4.4) continue
-to own the remaining lifecycle of the list.
-
-A `global_stop` Match MUST NOT modify `active_handlers` — the
-cascade affects no single handler in particular, and the
-`ovos.stop` broadcast subscribers handle their own state.
+Other CONVERSE-1 mutation pathways (TTL pruning, size cap,
+activation events) and skill self-pruning (§4.4) continue to own
+the remaining lifecycle of the list outside of stop matches.
 
 ### 6.3 Denylists
 
@@ -335,8 +350,8 @@ session.pipeline: [
 | `ovos.stop.ping` | stop plugin → all | Stoppability ping (broadcast) | §4.2 |
 | `ovos.stop.pong` | skill → stop plugin | Stoppability response (shared) | §4.2 |
 | `<target_skill_id>:stop` | orchestrator → target skill | Skill-directed stop dispatch | §4.3 |
-| `<stop_plugin_id>:global_stop` | orchestrator → stop handler | Global stop dispatch | §5.1 |
-| `ovos.stop` | stop handler → all | Universal stop broadcast | §5.1 |
+| `<stop_plugin_id>:global_stop` | orchestrator → stop handler | Global stop dispatch | §5.2 |
+| `ovos.stop` | stop handler → all | Universal stop broadcast | §5.2 |
 
 Dispatch topics fire the handler-lifecycle trio per PIPELINE-1
 §7; no other topic in this table does.
@@ -357,7 +372,8 @@ Dispatch topics fire the handler-lifecycle trio per PIPELINE-1
 - communicate session mutations exclusively through
   `Match.updated_session`;
 - on a `stop` Match, remove the dispatch target from
-  `session.active_handlers` via `Match.updated_session` (§6.2);
+  `session.active_handlers` via `Match.updated_session`; on a
+  `global_stop` Match, empty `active_handlers` entirely (§6.2);
 - honour `session.blacklisted_skills` and
   `session.blacklisted_intents` (§6.3);
 - subscribe to `<own_pipeline_id>:global_stop` and emit `ovos.stop`
@@ -375,22 +391,30 @@ Dispatch topics fire the handler-lifecycle trio per PIPELINE-1
   `session.pipeline` (§7);
 - configure stop vocabulary for every supported language.
 
+### A skill that participates in stop **MUST**:
+
+- subscribe to **both** `<own_skill_id>:stop` and `ovos.stop`.
+  `<own_skill_id>:stop` carries the skill-directed cascade
+  dispatch (§4.3); `ovos.stop` carries the global broadcast
+  (§5.2). The two subscriptions are not alternatives — a skill
+  receives one or the other depending on the cascade outcome,
+  and must be ready for either;
+- on receiving `<own_skill_id>:stop`, cease only the activity
+  keyed to the inbound `session_id`;
+- on receiving `ovos.stop`, cease all activity keyed to the
+  inbound `session_id`;
+- treat duplicate stop dispatches and `ovos.stop` broadcasts as
+  idempotent.
+
 ### A skill that participates in stop **SHOULD**:
 
 - subscribe to `ovos.stop.ping` and reply on `ovos.stop.pong`
   with its own `skill_id` and `can_handle` reflecting feasibility
   *for the inbound `session_id`* — or remain silent if it has no
   stoppable activity for that session;
-- implement a stop intent handler subscribed to
-  `<own_skill_id>:stop` that ceases only the activity keyed to
-  the inbound `session_id`;
-- subscribe to `ovos.stop` and cease all activity for the
-  inbound `session_id`;
 - remove itself from `session.active_handlers` (via CONVERSE-1's
   mutation pathway) when it cannot be stopped, so that future
-  ping rounds bypass it (§4.4);
-- treat duplicate stop dispatches and `ovos.stop` broadcasts as
-  idempotent.
+  ping rounds bypass it (§4.4).
 
 ### Every non-skill component performing user-visible activity **MUST**:
 
