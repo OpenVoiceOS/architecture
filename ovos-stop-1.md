@@ -250,10 +250,10 @@ A stop plugin MUST honour `session.blacklisted_skills` and
 `session.blacklisted_intents` (PIPELINE-1 §5):
 
 - `blacklisted_skills`: a handler whose `skill_id` appears in this list
-  MUST NOT be pinged or selected as a stop target;
+  MUST NOT be selected as a stop target;
 - `blacklisted_intents`: applies to the dispatched intent_name (`"stop"`
-  or `"global_stop"`). A stop plugin MUST return `None` if the resolved
-  intent_name appears in `blacklisted_intents`. A `stop` utterance that
+  or `"global_stop"`). A stop plugin MUST not resolve a intent_name 
+  that appears in `blacklisted_intents`. A `stop` utterance that
   would resolve to `global_stop` (§4.1 steps 1 or 5) is subject to the
   `global_stop` entry, not the `stop` entry. This list does not affect
   the ping broadcast.
