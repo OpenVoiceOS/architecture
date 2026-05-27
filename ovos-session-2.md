@@ -318,14 +318,20 @@ no in-utterance emission is available.
 **Consumer obligations.**
 
 - The **orchestrator** MUST merge a received
-  `ovos.session.sync` carrying `session_id == "default"` into
-  its default-session store (§5) on receipt. The merge follows
-  §5.1's field-replacement rule: present fields in the synced
-  snapshot replace stored values; absent fields leave stored
-  values unchanged. The orchestrator MUST NOT apply the sync
-  to the session of an utterance already in-flight on that
-  `session_id` — it takes effect on the next inbound
-  utterance.
+  `ovos.session.sync` into its working session snapshot for
+  the affected `session_id`. The merge follows §5.1's
+  field-replacement rule: present fields in the synced
+  snapshot replace current values; absent fields leave current
+  values unchanged. For `session_id == "default"` the working
+  snapshot is the default-session store (§5); for named
+  sessions it is the transient per-utterance session in
+  progress (§2.2). The orchestrator MUST reflect the merged
+  state in any terminal events it subsequently emits for the
+  same utterance — specifically the handler-lifecycle
+  `.complete` event (OVOS-PIPELINE-1 §8) and the universal
+  end-marker `ovos.utterance.handled` (PIPELINE-1 §9.5) —
+  so that clients and observers receive a session snapshot that
+  includes the sync update.
 - **Clients** SHOULD update their local session store when
   they observe `ovos.session.sync` carrying a `session_id`
   matching their own, using the same merge semantics as §3.
@@ -529,10 +535,11 @@ An orchestrator that claims conformance to this specification
 - emit the universal end-marker `ovos.utterance.handled`
   carrying the final round session (PIPELINE-1 §9), as the
   client-side convergence point of §3.3;
-- merge `ovos.session.sync` Messages carrying
-  `session_id == "default"` into its default-session store
-  per §2.7, on receipt, without applying the update to any
-  utterance already in-flight on that session.
+- merge `ovos.session.sync` Messages per §2.7 into the
+  working session snapshot for the affected `session_id` on
+  receipt, and reflect the merged state in the subsequent
+  handler-lifecycle `.complete` and `ovos.utterance.handled`
+  terminal events for the same utterance.
 
 An orchestrator **MUST NOT** require any client to declare
 session-start / session-end / session-id-allocation events
