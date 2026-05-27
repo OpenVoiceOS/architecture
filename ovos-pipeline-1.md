@@ -819,10 +819,11 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
   the polymorphism rule (§7.0) uniformly and does not otherwise
   distinguish skill from pipeline-plugin dispatches; suppression
   is keyed strictly off the reserved-name registry. The push is
-  applied after `Match.updated_session` is committed, so a plugin
-  that wants to remove the target ahead of the dispatch (e.g.,
-  STOP-1's stop cascade) does so via `updated_session` and the
-  suppressed push leaves the removal in effect.
+  applied after `Match.updated_session` is committed: a plugin
+  that mutates `active_handlers` via `updated_session` (e.g.,
+  STOP-1's global stop wiping the list) sees the stamp applied
+  on top, so the dispatched skill_id always lands at the head
+  unless the intent_name is reserved.
 
 The dispatch Message's `data`:
 
@@ -891,7 +892,6 @@ Reservations currently in force:
 | `converse` | OVOS-CONVERSE-1 §4 | a converse plugin's claim that `<skill_id>` (an active handler) wants this utterance — the orchestrator dispatches `<skill_id>:converse` and the owner's converse handler runs |
 | `response` | OVOS-CONVERSE-1 §5 | a converse plugin's signal that `<skill_id>` (the response-mode holder) is to receive the awaited utterance — the orchestrator dispatches `<skill_id>:response` and the owner's response handler runs |
 | `stop` | OVOS-STOP-1 §4 | a stop plugin's claim that `<skill_id>` (an active handler) should cease activity — the orchestrator dispatches `<skill_id>:stop` and the owner's stop handler runs |
-| `global_stop` | OVOS-STOP-1 §5 | a stop plugin's escalation that no specific handler can absorb the stop — the orchestrator dispatches `<stop_plugin_id>:global_stop` and the stop handler emits the `ovos.stop` broadcast |
 
 This specification fixes only the registry mechanism (reservation
 listing); the per-name semantics are owned by the reserving
