@@ -61,10 +61,11 @@ The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 This specification defines:
 
 - the **state-ownership model** (§2) — who holds session state,
-  what is permitted to mutate it, and when components SHOULD
+  what is permitted to mutate it, when components SHOULD
   project their cross-utterance state into session-resident
-  fields vs hold it internally with best-effort resumption
-  semantics;
+  fields vs hold it internally, the session mutation discipline
+  (§2.6), and the explicit out-of-utterance sync mechanism
+  `ovos.session.sync` (§2.7);
 - the **client-side merge rules** (§3) — how a client tracks
   session updates from assistant-emitted Messages, keyed on
   `session_id` alone;
@@ -257,6 +258,18 @@ happen only at these boundaries:
   `response` (OVOS-MSG-1 §5) carry the mutated session
   forward.
 
+**Session mutation discipline.** A handler SHOULD NOT mutate
+session fields unless the mutation is necessary for the
+handler's function or is explicitly prescribed by another
+specification. Incidental mutations add state that clients and
+observers must track, increase the risk of session-state races
+in multi-component deployments, and make session evolution
+harder to reason about. When another spec prescribes a
+mutation (e.g. a handler removing itself from
+`session.active_handlers` per OVOS-STOP-1 §4.4), that
+prescription is the authority; this discipline rule does not
+override it.
+
 Bus events emitted *outside* these boundaries — the
 asynchronous, normal-event-handler kind that any component may
 emit at any time — **MUST NOT** be expected to mutate session
@@ -268,6 +281,54 @@ affect subsequent utterances on that session (its updated
 session is received by the client and merged per §3), but
 **MUST NOT** be expected to affect the utterance during which
 it was emitted.
+
+A component that needs to propagate a session update outside
+the normal utterance lifecycle SHOULD use `ovos.session.sync`
+(§2.7) rather than relying on an unrelated Message to carry
+the update incidentally.
+
+### 2.7 Out-of-utterance session sync — `ovos.session.sync`
+
+When a component needs to broadcast a session update outside
+the utterance lifecycle it MUST do so via the dedicated topic
+`ovos.session.sync`. The Message carries `Message.context.session`
+with the updated snapshot per OVOS-MSG-1; the `session_id`
+within that carrier identifies the session being updated.
+
+`ovos.session.sync` is a plain broadcast — not a PIPELINE-1
+§7 dispatch, not a round-trip. It does not fire the
+handler-lifecycle trio and does not activate any owner.
+
+**When to emit.** A component MAY emit `ovos.session.sync`
+at any time for any reason. It SHOULD do so only when:
+
+- the session update cannot ride on a Message already being
+  emitted in the normal flow (i.e. no `speak`, `forward`, or
+  other emission is available to carry it); or
+- another specification explicitly prescribes using it for a
+  specific state change (opportunistic self-removal from
+  `session.active_handlers`, `session.converse_handlers`,
+  or equivalent).
+
+A component SHOULD NOT emit `ovos.session.sync` gratuitously.
+The normal derivation chain (§2.6) is the preferred
+propagation path; `ovos.session.sync` exists for cases where
+no in-utterance emission is available.
+
+**Consumer obligations.**
+
+- The **orchestrator** MUST merge a received
+  `ovos.session.sync` carrying `session_id == "default"` into
+  its default-session store (§5) on receipt. The merge follows
+  §5.1's field-replacement rule: present fields in the synced
+  snapshot replace stored values; absent fields leave stored
+  values unchanged. The orchestrator MUST NOT apply the sync
+  to the session of an utterance already in-flight on that
+  `session_id` — it takes effect on the next inbound
+  utterance.
+- **Clients** SHOULD update their local session store when
+  they observe `ovos.session.sync` carrying a `session_id`
+  matching their own, using the same merge semantics as §3.
 
 ---
 
@@ -467,7 +528,11 @@ An orchestrator that claims conformance to this specification
   the §2.6 boundaries dictate mutation;
 - emit the universal end-marker `ovos.utterance.handled`
   carrying the final round session (PIPELINE-1 §9), as the
-  client-side convergence point of §3.3.
+  client-side convergence point of §3.3;
+- merge `ovos.session.sync` Messages carrying
+  `session_id == "default"` into its default-session store
+  per §2.7, on receipt, without applying the update to any
+  utterance already in-flight on that session.
 
 An orchestrator **MUST NOT** require any client to declare
 session-start / session-end / session-id-allocation events
@@ -497,6 +562,12 @@ kind that fire outside the utterance lifecycle) to mutate
 session state in the current utterance (§2.6). It MAY emit such
 events to communicate with other components; their effect on
 session, if any, lands on subsequent utterances.
+
+A component **SHOULD NOT** mutate session fields in its handler
+unless the mutation is necessary or prescribed by another
+specification (§2.6 discipline rule). When a session update
+must be propagated outside the normal utterance flow, the
+component MUST use `ovos.session.sync` (§2.7).
 
 ### 6.4 Client
 
@@ -531,10 +602,22 @@ default-session store *is* that state for the local device.
 
 ---
 
-## 7. Non-goals
+## 7. Bus topics
+
+| Topic | Direction | Purpose |
+|-------|-----------|---------|
+| `ovos.session.sync` | component → all | Broadcast an explicit session update outside the utterance lifecycle (§2.7). Carries `Message.context.session` with the updated snapshot. |
+
+No other normative bus topic is defined by this specification.
+The per-utterance session propagation (§2.6) and end-marker
+(§3.3) travel on topics owned by OVOS-PIPELINE-1.
+
+---
+
+## 8. Non-goals
 
 See §1 for the full list of non-goals. This section adds one
 clarification: **default-session persistence across orchestrator
-restart** is not defined here. §5.2 makes restart-loss
+restart** is not defined here. §5.3 makes restart-loss
 explicit and intentional; persistence is deployer policy if
 desired.
