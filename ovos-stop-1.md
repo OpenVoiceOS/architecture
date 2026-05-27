@@ -213,6 +213,13 @@ utterance to that skill as if it were still awaiting a response.
 
 ### 6.2 `active_handlers`
 
+`session.active_handlers` (OVOS-PIPELINE-1 §7.1) is the stop
+cascade's recency input. It is distinct from `session.converse_handlers`
+(OVOS-CONVERSE-1 §2.1), the converse plugin's eligibility list.
+Draining `active_handlers` on stop does **not** affect
+`converse_handlers` — a stopped skill remains eligible for converse
+turns until its TTL expires or it self-removes.
+
 A stop plugin MUST drain `active_handlers` via `Match.updated_session`
 (committed pre-dispatch per PIPELINE-1 §4.2):
 
