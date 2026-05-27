@@ -139,8 +139,11 @@ Inside `match`:
    ignored.
 4. If at least one positive responder exists, select the one
    whose position in `session.active_handlers` is most recent
-   (LIFO head among positives) and return
-   `Match(skill_id=<that_skill_id>, intent_name="stop")`.
+   (LIFO head among positives). Construct `updated_session` by
+   removing that `skill_id` from `active_handlers` and clearing
+   any `response_mode` entry it owns. Return
+   `Match(skill_id=<that_skill_id>, intent_name="stop",
+   updated_session=...)`.
 5. If no positive responder exists, return
    `Match(skill_id=<own_pipeline_id>, intent_name="global_stop")`.
 
@@ -271,9 +274,22 @@ clear is durable even if the handler crashes mid-execution.
 
 ### 6.2 `active_handlers`
 
-A stop plugin MUST NOT modify `session.active_handlers` directly.
-The list is mutated by CONVERSE-1 (TTL pruning, size cap,
-activation events) and by handler self-pruning under §4.4.
+A stop plugin MUST remove the dispatch target from
+`session.active_handlers` via `Match.updated_session` whenever it
+emits a `stop` Match. This propagates the post-stop state through
+the rest of the utterance lifecycle and keeps subsequent reads of
+`active_handlers` (by downstream plugins, the handler trio, or
+the next utterance) accurate without waiting for TTL pruning or
+size-cap eviction.
+
+The plugin MUST NOT modify entries other than the dispatch
+target. Other CONVERSE-1 mutation pathways (TTL pruning, size
+cap, activation events) and skill self-pruning (§4.4) continue
+to own the remaining lifecycle of the list.
+
+A `global_stop` Match MUST NOT modify `active_handlers` — the
+cascade affects no single handler in particular, and the
+`ovos.stop` broadcast subscribers handle their own state.
 
 ### 6.3 Denylists
 
@@ -340,6 +356,8 @@ Dispatch topics fire the handler-lifecycle trio per PIPELINE-1
 - read `session.active_handlers` to drive the cascade (§4.1);
 - communicate session mutations exclusively through
   `Match.updated_session`;
+- on a `stop` Match, remove the dispatch target from
+  `session.active_handlers` via `Match.updated_session` (§6.2);
 - honour `session.blacklisted_skills` and
   `session.blacklisted_intents` (§6.3);
 - subscribe to `<own_pipeline_id>:global_stop` and emit `ovos.stop`
