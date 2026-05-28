@@ -113,16 +113,27 @@ Payload:
 ### 5.1 Language resolution
 
 `data.lang` MUST be set to the language the STT mechanism transcribed
-in. The service resolves the language in this order:
+in. The service selects the STT language from these inputs in order:
 
-1. `session.detected_lang` — if an audio transformer has detected the
-   spoken language and written it to this field, use it.
-2. `session.stt_lang` — the session's explicit STT language preference,
-   if set.
-3. `session.lang` — the session's general language preference.
+1. `session.detected_lang` — the language a language-detection audio
+   transformer classified the audio as (**OVOS-SESSION-1 §3.2.6**).
+   Most specific signal; use it when present.
+2. `session.request_lang` — a hint from the capture mechanism about
+   the expected language (e.g. the wake word that triggered capture,
+   or a UI language selector) (**OVOS-SESSION-1 §3.2.5**). A prior,
+   not a guarantee.
+3. `session.lang` — the session's general language preference
+   (**OVOS-SESSION-1 §3.2.1**).
 
 The first present and non-empty value wins. If none is present the
 service SHOULD use a deployment-configured default language.
+
+After transcription the service SHOULD write the language actually
+used to `session.stt_lang` (**OVOS-SESSION-1 §3.2.4**) so that
+downstream stages (intent matching, dialog transformers) know what
+language the audio was decoded in. `stt_lang` is a result field
+written by the audio input service; it is not an input to language
+selection.
 
 ---
 
@@ -136,6 +147,11 @@ service SHOULD use a deployment-configured default language.
 - emit `ovos.utterance.handle` with `data.utterances` (array of
   strings) and `data.lang` (BCP-47 tag) after transcription (§5);
 - populate `context.session` per OVOS-MSG-1 §4.
+
+### An audio input service **SHOULD**:
+
+- write `session.stt_lang` to the language STT decoded in, after
+  transcription (§5.1).
 
 ### An audio input service **MAY**:
 
