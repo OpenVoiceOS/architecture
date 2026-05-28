@@ -193,7 +193,7 @@ session and persist across utterances.
 | `pipeline` | array of string | OVOS-PIPELINE-1 §5 |
 | `intent_context` | object | OVOS-CONTEXT-1 §2 |
 | `active_handlers` | array of object `{skill_id, activated_at, ...}` | OVOS-PIPELINE-1 §7.1 |
-| `response_mode` | object `{owner_id, expires_at}` | OVOS-CONVERSE-1 §2.2 |
+| `response_mode` | object `{skill_id, expires_at}` | OVOS-CONVERSE-1 §2.2 |
 | `audio_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
 | `utterance_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
 | `metadata_transformers` | array of string | OVOS-TRANSFORM-1 §5 |
