@@ -91,29 +91,29 @@ below). Adoption is voluntary; conformance, once adopted, is not.
 
 | ID | Document | Version | Status |
 |----|----------|---------|--------|
-| OVOS-INTENT-1 | [Sentence Template Grammar](ovos-intent-1.md) | 2 | Draft |
-| OVOS-INTENT-2 | [Locale Resource Formats](ovos-intent-2.md) | 2 | Draft · [v3 in review (PR #4)](https://github.com/OpenVoiceOS/architecture/pull/4) |
-| OVOS-INTENT-3 | [Intent Definition](ovos-intent-3.md) | 1 | Draft |
-| OVOS-INTENT-4 | [Intent and Entity Registration](ovos-intent-4.md) | 2 | [Draft — in review (PR #9)](https://github.com/OpenVoiceOS/architecture/pull/9) |
+| OVOS-INTENT-1 | [Sentence Template Grammar](intent-1.md) | 2 | Draft |
+| OVOS-INTENT-2 | [Locale Resource Formats](intent-2.md) | 2 | Draft · [v3 in review (PR #4)](https://github.com/OpenVoiceOS/architecture/pull/4) |
+| OVOS-INTENT-3 | [Intent Definition](intent-3.md) | 1 | Draft |
+| OVOS-INTENT-4 | [Intent and Entity Registration](intent-4.md) | 2 | [Draft — in review (PR #9)](https://github.com/OpenVoiceOS/architecture/pull/9) |
 
 ### Bus stack — how components talk
 
 | ID | Document | Version | Status |
 |----|----------|---------|--------|
-| OVOS-MSG-1 | [Bus Message](ovos-msg-1.md) | 2 | Draft |
-| OVOS-SESSION-1 | [Session Carrier Wire Shape](ovos-session-1.md) | 1 | Draft |
-| OVOS-SESSION-2 | [Session Lifecycle and State Ownership](ovos-session-2.md) | 1 | Draft |
+| OVOS-MSG-1 | [Bus Message](msg-1.md) | 2 | Draft |
+| OVOS-SESSION-1 | [Session Carrier Wire Shape](session-1.md) | 1 | Draft |
+| OVOS-SESSION-2 | [Session Lifecycle and State Ownership](session-2.md) | 1 | Draft |
 
 ### Orchestrator stack — what processes utterances
 
 | ID | Document | Version | Status |
 |----|----------|---------|--------|
-| OVOS-PIPELINE-1 | [Utterance Lifecycle and Pipeline](ovos-pipeline-1.md) | 2 | Draft |
+| OVOS-PIPELINE-1 | [Utterance Lifecycle and Pipeline](pipeline-1.md) | 2 | Draft |
 | OVOS-TRANSFORM-1 | [Transformer Plugins](transformer.md) | 1 | [Draft — in review (PR #20)](https://github.com/OpenVoiceOS/architecture/pull/20) |
 | OVOS-CONTEXT-1 | [Intent Context](intent-context.md) | 1 | [Draft — in review (PR #18)](https://github.com/OpenVoiceOS/architecture/pull/18) |
 | OVOS-CONVERSE-1 | [Active Handlers and Interactive Response](converse.md) | 1 | [Draft — in review (PR #25)](https://github.com/OpenVoiceOS/architecture/pull/25) |
-| OVOS-STOP-1 | [Stop Pipeline Plugin](ovos-stop-1.md) | 1 | [Draft — in review (PR #33)](https://github.com/OpenVoiceOS/architecture/pull/33) |
-| OVOS-AUDIO-IN-1 | [Audio Input Service](ovos-audio-in-1.md) | 1 | Draft |
+| OVOS-STOP-1 | [Stop Pipeline Plugin](stop-1.md) | 1 | [Draft — in review (PR #33)](https://github.com/OpenVoiceOS/architecture/pull/33) |
+| OVOS-AUDIO-IN-1 | [Audio Input Service](audio-in.md) | 1 | Draft |
 
 Each spec carries its own scope statement, design rationale, and
 conformance section in its header. Open the document for the full
