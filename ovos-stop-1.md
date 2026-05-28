@@ -221,7 +221,7 @@ trio. The namespace `ovos.stop.*` is reserved by this specification.
 ### 6.1 `response_mode`
 
 For `intent_name: "stop"`, a stop plugin MUST clear the
-`session.response_mode` entry whose `owner_id` matches the dispatch
+`session.response_mode` entry whose `skill_id` matches the dispatch
 target, via `Match.updated_session`. If no such entry exists, the
 field is left unchanged. For `intent_name: "global_stop"`,
 `response_mode` is removed entirely as part of the §5.2 Match
