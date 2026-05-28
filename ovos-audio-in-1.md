@@ -11,12 +11,16 @@ How audio is acquired — microphone capture, file playback, remote
 streaming, wake-word gating, voice-activity detection, push-to-talk,
 or any other mechanism — is deployer-defined and out of scope.
 
-It builds on two companion specifications:
+It builds on three companion specifications:
 
 - the *Utterance Lifecycle and Pipeline Specification*
-  (OVOS-PIPELINE-1) — the `ovos.utterance.handle` entry point (§9.1);
+  (OVOS-PIPELINE-1) — the `ovos.utterance.handle` entry point (§9.1)
+  and the utterance lifecycle the emission triggers;
 - the *Transformer Plugins Specification* (OVOS-TRANSFORM-1) — the
-  audio-transformer chain (§3.1) that runs before STT.
+  audio-transformer chain (§3.1) that runs before STT;
+- the *Session Lifecycle and State Ownership Specification*
+  (OVOS-SESSION-2) — the session assignment and state-ownership
+  rules this service must follow as the originator of interactions.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 **MAY**, and **RECOMMENDED** are used as in RFC 2119.
@@ -41,10 +45,12 @@ It does **not** define:
   mechanism;
 - **STT engine selection** — which engine is used or how it is
   configured;
-- **post-STT processing** — utterance transformers
-  (OVOS-TRANSFORM-1 §3.2) and metadata transformers (§3.3) are
-  deployer concerns; the service MAY run them before emission;
-- **session lifecycle** — how sessions are created or identified.
+- **post-STT transformer chains** — utterance transformers and
+  all subsequent transformer stages are owned by the utterance
+  lifecycle (OVOS-PIPELINE-1) and run after the emission;
+- **session persistence and resumption** — owned by
+  OVOS-SESSION-2; this spec defines only which session the
+  emission carries (§5.2).
 
 ---
 
@@ -138,6 +144,30 @@ language and `data.lang` is the transcription's output language.
 Downstream stages that need to know the audio's source language
 (rather than the transcript's language) read `session.stt_lang`.
 
+### 5.2 Session assignment
+
+The audio input service is the **originator** of the interaction —
+it creates the `ovos.utterance.handle` Message that starts the
+utterance lifecycle. It **MUST** assign a session to the Message
+per **OVOS-SESSION-2** before emission.
+
+The appropriate session depends on the deployment:
+
+- **Local device** — the service SHOULD use `session_id: "default"`,
+  the orchestrator-owned default session
+  (**OVOS-SESSION-2 §5**). This is the normal case when the audio
+  input service and the orchestrator run on the same device.
+- **Satellite** — when the audio input service runs on a satellite
+  that communicates with a hub via a bridge
+  (**OVOS-BRIDGE-1 §4.2.1**), the session is assigned by the bridge
+  at the hub boundary. The satellite emits `ovos.utterance.handle`
+  with its own session; the bridge relays it to the hub with the
+  appropriate `session_id` (its own, or NAT-translated per
+  **OVOS-BRIDGE-1 §3.2**).
+
+The session MUST be placed in `context.session` per
+**OVOS-MSG-1 §4**, not in `data`.
+
 ---
 
 ## 6. Conformance
@@ -147,29 +177,35 @@ Downstream stages that need to know the audio's source language
 - have access to a STT mechanism (§3);
 - run the audio-transformer chain (OVOS-TRANSFORM-1 §3.1) before
   passing audio to STT (§4);
+- assign a session to every emission per §5.2, placing it in
+  `context.session` (OVOS-MSG-1 §4);
 - emit `ovos.utterance.handle` with `data.utterances` (array of
-  strings) and `data.lang` (BCP-47 tag) after transcription (§5);
-- populate `context.session` per OVOS-MSG-1 §4.
+  strings) and `data.lang` (BCP-47 tag) after transcription (§5).
 
 ### An audio input service **SHOULD**:
 
-- write `session.stt_lang` to the language STT decoded in, after
-  transcription (§5.1).
+- use `session_id: "default"` when running on the same device as
+  the orchestrator (§5.2);
+- write `session.stt_lang` before or at the point of STT invocation
+  (§5.1).
 
 ### An audio input service **MAY**:
 
 - acquire audio by any mechanism (§2);
-- run the utterance-transformer chain (OVOS-TRANSFORM-1 §3.2) on the
-  transcription before emission;
 - emit multiple candidate transcriptions in `data.utterances`.
 
 ---
 
 ## See also
 
-- **OVOS-PIPELINE-1** — utterance lifecycle entry point (§9.1).
+- **OVOS-PIPELINE-1** — utterance lifecycle entry point (§9.1);
+  post-STT transformer chains are owned here.
 - **OVOS-TRANSFORM-1** — audio-transformer chain (§3.1).
-- **OVOS-SESSION-1** — `session.lang`, `session.stt_lang`,
-  `session.detected_lang`.
+- **OVOS-SESSION-1** — session field registry; `session.lang`,
+  `session.stt_lang`, `session.detected_lang`, `session.request_lang`.
+- **OVOS-SESSION-2** — session assignment, state ownership, and the
+  default-session rule (§5).
 - **OVOS-MSG-1** — session carrier (§4) and envelope.
+- **OVOS-BRIDGE-1** — satellite deployment and session assignment at
+  the bridge boundary (§4.2.1).
 - **OVOS-AUDIO-1** — the audio output service.
