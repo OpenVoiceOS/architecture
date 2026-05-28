@@ -209,7 +209,7 @@ session and persist across utterances.
 | `blacklisted_intent_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `blacklisted_dialog_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `blacklisted_tts_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
-| `site_id` | string | §3.3 (this spec) |
+| `site_id` | string | OVOS-BRIDGE-1 §3.4 |
 
 Every field above is OPTIONAL on the wire. A producer that sets a
 field **MUST** use the wire type listed and the value space defined
@@ -460,31 +460,16 @@ A consumer that needs the payload's content language reads
 
 ### 3.3 `site_id`
 
-`site_id` is an **opaque group identifier** for the session. It
-names the group or physical location the session belongs to; the
-grouping criterion (physical site, room, device cluster,
-organisational unit, deployment tenant) is chosen by the deployer
-and is not fixed by this specification.
+`site_id` is an opaque group identifier. Its full normative
+definition — assignment rules, bridge behaviour, and consumer
+constraints — is owned by **OVOS-BRIDGE-1 §3.4**. This section is
+a registry pointer only.
 
-The primary consumer is **routing and output-locality policy**: a
-component that routes audio, selects a TTS sink, or decides which
-device speaks **MAY** use `site_id` to scope its decision to the
-appropriate physical or logical group. A layer-2 system **MAY**
-enforce that sessions from a given `site_id` are served only by
-components registered to that site.
-
-Constraints:
-
-- **Opaque string.** A consumer **MUST NOT** parse or ascribe
-  structure to `site_id` beyond string equality.
-- **No reserved value.** Unlike `session_id`, no specific string
-  value carries spec-defined meaning. In particular, the value
-  `"unknown"` — a value some implementations use as a placeholder —
-  carries no normative meaning under this specification.
-- **Set by the session origin.** `site_id` SHOULD be populated by
-  the client or device that initiates the session, not by the
-  orchestrator. A component that forwards or derives a Message MUST
-  NOT overwrite an existing `site_id`.
+Consumers of `site_id` within the orchestrator pipeline (audio
+routing, output-locality policy) **MAY** use it to scope decisions
+to a physical or logical group. They **MUST NOT** parse or ascribe
+structure beyond string equality, and **MUST NOT** overwrite a
+`site_id` already present on an inbound Message.
 
 ### 3.4 Wire weight
 
