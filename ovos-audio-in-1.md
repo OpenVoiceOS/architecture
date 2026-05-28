@@ -77,10 +77,20 @@ Before passing audio to the STT mechanism, the audio input service
 The chain is ordered and configured per OVOS-TRANSFORM-1 §4; the
 `context.session` is passed to each transformer.
 
-Audio transformers MAY perform noise reduction, format normalisation,
-acoustic language detection (writing `session.detected_lang`), or any
-other audio-domain processing. A deployment with no audio transformers
-configured passes audio to STT unchanged.
+Canonical audio transformer use cases include:
+
+- **Language identification** — detecting the spoken language from
+  the audio signal and writing it to `session.detected_lang`, so
+  that §5.1 language resolution and the STT engine can use it.
+- **Denoising and normalisation** — background noise reduction, gain
+  normalisation, sample-rate or format conversion before STT.
+- **Speaker recognition** — identifying the speaker from the audio
+  and writing the result into `Message.context` (e.g. a `speaker_id`
+  key) so that downstream pipeline stages and skills can personalise
+  responses without the audio input service knowing their semantics.
+
+A deployment with no audio transformers configured passes audio to
+STT unchanged.
 
 ---
 
