@@ -128,12 +128,15 @@ in. The service selects the STT language from these inputs in order:
 The first present and non-empty value wins. If none is present the
 service SHOULD use a deployment-configured default language.
 
-After transcription the service SHOULD write the language actually
-used to `session.stt_lang` (**OVOS-SESSION-1 §3.2.4**) so that
-downstream stages (intent matching, dialog transformers) know what
-language the audio was decoded in. `stt_lang` is a result field
-written by the audio input service; it is not an input to language
-selection.
+The service SHOULD write the selected input language to
+`session.stt_lang` (**OVOS-SESSION-1 §3.2.4**) before or at the
+point of STT invocation. `stt_lang` records the language the STT
+model was **configured to assume** for the audio, which normally
+matches `data.lang` but may differ when the STT model performs
+speech translation — in that case `stt_lang` is the audio's
+language and `data.lang` is the transcription's output language.
+Downstream stages that need to know the audio's source language
+(rather than the transcript's language) read `session.stt_lang`.
 
 ---
 

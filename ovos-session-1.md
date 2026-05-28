@@ -363,12 +363,17 @@ voices the text correctly.
 
 #### 3.2.4 `stt_lang`
 
-`stt_lang` — string — the BCP-47 tag the speech-to-text stage
-**actually transcribed in**. It records the language the audio was
-decoded as, regardless of what was requested or expected. It is
-typically populated by the component that produced the transcript;
-once set, it travels with the session until overwritten by a later
-stage that re-transcribes.
+`stt_lang` — string — the BCP-47 tag the speech-to-text stage was
+**configured to assume** for the audio (the model's input language).
+It is written by the audio input service before or at the point of
+STT invocation. In a straightforward transcription, `stt_lang`
+matches `data.lang` (the transcript's output language). In a
+speech-translation model, they diverge: `stt_lang` is the audio's
+spoken language; `data.lang` is the language the transcript was
+produced in. Downstream stages that need the audio's source language
+read `stt_lang`; stages that need the transcript's language read
+`data.lang` or `session.lang`. Once set, `stt_lang` travels with
+the session until overwritten by a later transcription stage.
 
 #### 3.2.5 `request_lang`
 
