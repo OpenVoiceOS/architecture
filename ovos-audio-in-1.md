@@ -66,8 +66,10 @@ Canonical use cases:
   §5.1 language resolution and STT engine selection.
 - **Denoising and normalisation** — noise reduction, gain
   normalisation, format conversion.
-- **Speaker recognition** — writes a `speaker_id` (or equivalent)
-  into `Message.context` for downstream personalisation.
+- **Voice-print recognition** — writes an intermediate result to
+  `Message.context` (e.g. `context.voice_match`) for consolidation
+  by a metadata transformer into `session.voice_id` per
+  OVOS-USER-ID-1 §4.1.
 
 ---
 
@@ -152,3 +154,5 @@ placed in `context.session` (**OVOS-MSG-1 §4**).
 - **OVOS-SESSION-2** — session assignment and default-session rule.
 - **OVOS-MSG-1** — session carrier (§4) and envelope.
 - **OVOS-BRIDGE-1** — satellite session assignment (§4.2.1).
+- **OVOS-USER-ID-1** — user identity resolution; voice-print
+  recognition is an audio-transformer use case (§4.1).
