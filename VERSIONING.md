@@ -22,3 +22,12 @@ V2. The classification is part of the spec header. Rules of thumb:
 Within a class, editorial revisions bump the spec's own revision number in
 its header; compatibility class changes (V1 → V2) are a new spec version, not
 a revision.
+
+## The 1.0 definition
+
+The compatibility classes define the project roadmap. The stack starts at V0
+(the undocumented status quo — beta). Each subsystem is formalized as V1, then
+migrated to V2 where the spec demands incompatible change. **OVOS is fully
+spec compliant when every subsystem operates on V2 — that state is the
+"breakthrough" in "from beta to breakthrough", and it is the 1.0 release
+criterion.**
