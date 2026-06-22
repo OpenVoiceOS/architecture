@@ -1,6 +1,6 @@
 # Audio Input Service Specification
 
-**Spec ID:** OVOS-AUDIO-IN-1 · **Version:** 1 · **Status:** Draft
+**Spec ID:** OVOS-AUDIO-IN-1 · **Version:** 2 · **Status:** Draft
 
 This specification defines the **audio input service** — the component
 that acquires audio, runs the pre-STT transformer chain, transcribes
