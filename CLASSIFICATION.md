@@ -52,6 +52,7 @@ a coordinated migration.
 | **OVOS-INTENT-2 v3** (PR #4) | **V1** | Adds `.prompt` role (additive). No existing roles changed. Backward-compatible with any V0 skill loader that ignores unknown extensions. | certain |
 | **OVOS-INTENT-4 §11** (PR #45) | **V1 section within V2 spec** | Session-scoped registration reuses the existing message shapes; session context already rides on every bus message. The addition is purely additive. The parent spec (OVOS-INTENT-4) is V2 due to the registration topic renames. | certain |
 | **OVOS-USER-ID-1** (PR #54) | **V1** | Entirely new spec; adds session fields for identity/auth with no V0 equivalent. Additive: V0 components ignore unknown session fields per SESSION-1 §2.4. No bus topic renames or removals. | certain |
+| **OVOS-GUI-1** (PR #63) | **V1** | Formalizes the existing GUI wire protocol (`gui.value.set` / `gui.page.show`, the per-session namespace lifecycle) already spoken by `ovos-gui`. The closed `SYSTEM_*` template vocabulary is a convention layered on the unchanged wire; raw-passthrough escape hatches keep V0 page names working. No topic renames or removals. | certain |
 
 ---
 
