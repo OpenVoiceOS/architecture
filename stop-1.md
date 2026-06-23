@@ -1,6 +1,6 @@
 # Stop Pipeline Plugin Specification
 
-**Spec ID:** OVOS-STOP-1 · **Version:** 1 · **Status:** Draft
+**Spec ID:** OVOS-STOP-1 · **Version:** 2 · **Status:** Draft
 
 This specification defines the **stop pipeline plugin** — a pipeline
 plugin that matches utterances expressing the user's intention to
