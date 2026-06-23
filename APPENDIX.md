@@ -34,3 +34,4 @@ The appendix content has been split into topic-specific files:
 | [appendix/divergences.md](appendix/divergences.md) | §5 | Where the specs differ from current OVOS code — divergences, renames, topic mapping |
 | [appendix/reference.md](appendix/reference.md) | §6 | Implementer reference — session-field cheat-sheet, stamp rules, introspection patterns |
 | [appendix/gaps.md](appendix/gaps.md) | §7 | Known gaps and planned work — deferred specs, tooling, corpora |
+| [appendix/persona-flow.md](appendix/persona-flow.md) | §8 | Persona lifecycle — annotated bus sequences for summon, conversation, dismiss, and out-of-band query |

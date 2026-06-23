@@ -7,6 +7,19 @@ status quo, `2` once it is not backwards compatible. Entries are grouped under
 the spec's current class. Every pull request that alters normative content adds
 an entry here.
 
+## OVOS-PERSONA-1 — Persona Pipeline Plugin
+
+### 2
+
+- Initial draft. Defines persona as a scoped match+handler layer with
+  its own pipeline position, `persona_id` session field, summon and
+  dismiss bus messages, match contract (MAY return `None` for pass-
+  through), handler contract, no-persona mode, multiple-persona
+  coexistence rules, `fallback_pipeline_id` for escalation, dialog-
+  transformer compatibility, capability-discovery via
+  `ovos.persona.capabilities`, and conformance roles (Persona Plugin,
+  Orchestrator, Skill).
+
 ## OVOS-INTENT-1 — Sentence Template Grammar
 
 ### 2
