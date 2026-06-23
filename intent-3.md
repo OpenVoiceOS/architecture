@@ -186,7 +186,7 @@ excluded — is contradictory and malformed.
 
 The `excluded` role is a keyword intent's built-in **suppression** mechanism.
 A keyword intent therefore needs no separate `.blacklist` artifact and does not
-use one; `.blacklist` is the template-intent counterpart (§5.4).
+use one; `.blacklist` is the template-intent counterpart (§5.5).
 
 ### 4.3 Captured values — each vocabulary is a slot
 
@@ -249,8 +249,9 @@ of the command, written in the grammar of OVOS-INTENT-1, with named slots
 
 The templates are delivered exactly as the OVOS-INTENT-1 training-data contract
 specifies (§6.1): either as inline samples or as a path to a `.intent` resource
-file (OVOS-INTENT-2 §4.1). Every template in one intent **MUST** declare the
-same set of named slots — the slot-consistency rule of OVOS-INTENT-1 §5.5.
+file (OVOS-INTENT-2 §4.1). Templates in one intent MAY declare **different
+sets of named slots**; the engine extracts only the slots declared by the
+template that best matches (OVOS-INTENT-1 §5.5).
 
 Unlike a keyword intent, a template intent is **not** a presence test. The
 templates are *training data*: a capable engine generalizes beyond them and
@@ -273,7 +274,27 @@ a hint is engine-specific: it may augment its training data with the values,
 ignore them, or treat them as a closed set to guarantee matches. A value set is
 always a refinement, never a requirement.
 
-### 5.3 Example
+### 5.3 Required slots
+
+A template intent MAY declare **required slots**: a list of slot names that the
+engine **MUST** extract for a match to be valid. If any required slot is
+absent from the match result, the engine treats the match as if it had not
+occurred — the intent does not fire.
+
+Required slots are an **optional** opt-in guarantee for the handler. When
+present, the handler MAY rely on those slots being populated; when absent,
+the handler must defend against missing slots per §7.1.
+
+A required slot MUST be declared by at least one template in the intent.
+Declaring a required slot that no template mentions is malformed: the intent
+can never match, and a tool MUST reject the definition at registration time.
+
+Required slots do not change how templates are authored. A template that does
+not declare a required slot is still valid training data; the engine simply
+cannot return a match from that template unless the required slot is also
+present (for example, through a separate template that does declare it).
+
+### 5.4 Example
 
 A template intent `play_music`, defined by the templates:
 
@@ -288,7 +309,7 @@ the beatles using spotify` fills `{query}` and `{engine}`. A phrasing not among
 the templates, such as `could you play something relaxing`, is still expected
 to match — the engine generalizes.
 
-### 5.4 Suppression — the `.blacklist`
+### 5.5 Suppression — the `.blacklist`
 
 The OVOS-INTENT-1 template grammar is purely **generative**: a template
 describes utterances the intent *should* match and has no way to express
@@ -416,14 +437,17 @@ command becomes the execution of the developer's code.
 A result **MAY** be accompanied by engine metadata such as a confidence score;
 such metadata is engine-specific and is **not** defined by this specification.
 
-### 7.1 Handlers must cope with missing slots
+### 7.1 Handlers must cope with missing optional slots
 
-A handler **MUST NOT** assume the slots map is complete. The map may be empty
-or partial: an optional slot may simply not have occurred (§4.2, §5.1), and
-classification is never perfect — an engine may extract fewer slots than the
-handler expects, or route a misclassified utterance to it. The intent layer
-guarantees only the label and whatever slots were extracted; it does not
-guarantee that every slot a handler relies on is present or correct.
+A handler **MAY** rely on slots listed in the intent's `required_slots` (§5.3):
+when present, the engine guarantees those slots are populated in every match
+result. For all other slots, a handler **MUST NOT** assume they are present.
+The map may be empty or partial: an optional slot may simply not have occurred
+(§4.2, §5.1), and classification is never perfect — an engine may extract
+fewer slots than the handler expects, or route a misclassified utterance to it.
+The intent layer guarantees only the label and whatever slots were extracted;
+it does not guarantee that every non-required slot a handler relies on is
+present or correct.
 
 Coping with a missing or implausible slot is therefore the **handler's**
 responsibility. A handler **SHOULD** prompt the user for data it needs but did
@@ -455,7 +479,7 @@ requires is only that a handler not assume a complete slots map.
 - for keyword intents, honour the constraint semantics of §4.2 — never
   reporting a match that violates a required, one-of, or excluded constraint;
 - for template intents, honour the training-data contract of OVOS-INTENT-1 §6,
-  and apply any paired `.blacklist` as match suppression (§5.4);
+  and apply any paired `.blacklist` as match suppression (§5.5);
 - report at most one matched intent per utterance (§6.2);
 - produce the match result of §7 and report it for the orchestrator to route to the
   bound handler.

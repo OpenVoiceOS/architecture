@@ -48,7 +48,17 @@ tool does not recognize the token and cannot expand the template.
 
 ### 1
 
-- Initial draft.
+- The intent definition model: keyword and template intents, identity,
+  captured slots, suppression, and the handler contract.
+- §5.1 — a template intent's `.intent` templates MAY declare different slot
+  sets; the engine extracts the slots of the best-matching template
+  (OVOS-INTENT-1 §5.5).
+- §5.3 — `required_slots`: an optional list of slot names the engine MUST
+  extract for a match to be valid; a required slot must be declared by at
+  least one template, otherwise the definition is malformed. §5.4 (Example)
+  and §5.5 (the `.blacklist` suppression) renumber accordingly.
+- §7.1 — a handler MAY rely on `required_slots` being populated; all other
+  slots remain optional and must be defended against.
 
 ## OVOS-MSG-1 — Bus Message
 
