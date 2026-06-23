@@ -79,6 +79,23 @@ tool does not recognize the token and cannot expand the template.
   guarantees, session lifecycle, and the internal shape of `session`
   beyond `session_id` and `lang` are explicitly out of scope.
 
+## OVOS-SESSION-1 — Session Carrier Wire Shape
+
+### 1
+
+- The `context.session` carrier wire shape: the `session_id` and `lang`
+  core fields, the language field family (§3.2), the §2.1 field-registry
+  mechanism by which other specifications claim OPTIONAL session fields,
+  and the propagation and wire-weight rules.
+- §2.1 — registered fields and their owning specifications:
+  `converse_handlers` (OVOS-CONVERSE-1 §2.1), `fallback_handlers`
+  (OVOS-FALLBACK-1 §4), and `persona_id` (OVOS-PERSONA-1 §3).
+- §3.3 — `site_id` is defined by OVOS-BRIDGE-1 §3.3; this section states
+  the consumer constraints that apply within the orchestrator pipeline.
+- See also — each field's owning specification, including
+  `session.active_handlers` (OVOS-PIPELINE-1 §7.1) and
+  `session.converse_handlers` (OVOS-CONVERSE-1 §2.1).
+
 ## OVOS-INTENT-4 — Intent and Entity Registration Bus Contract
 
 ### 1
