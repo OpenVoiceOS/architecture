@@ -130,6 +130,12 @@ pre-spec status quo, `2` for one that is not backwards compatible.
 | OVOS-AUDIO-1 | [Audio Output Service](audio-out.md) | 2 | Draft |
 | OVOS-GUI-1 | [GUI Display Subsystem](gui-1.md) | 1 | Draft |
 
+### Media stack — playback and transport
+
+| ID | Document | Version | Status |
+|----|----------|---------|--------|
+| OVOS-OCP-1 | [OVOS Common Playback: the Virtual Media Player](ocp-1.md) | 1 | Draft |
+
 Each spec carries its own scope statement, design rationale, and
 conformance section in its header. Open the document for the full
 picture — the tables above are an index.

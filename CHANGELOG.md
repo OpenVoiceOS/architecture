@@ -121,3 +121,21 @@ tool does not recognize the token and cannot expand the template.
   consumer-side `ovos.mic.listen` row (defined in OVOS-AUDIO-1 §4.4).
 - See-also — cross-references OVOS-AUDIO-1 §4.4 as the defining spec
   for `ovos.mic.listen`.
+
+## OVOS-OCP-1 — OVOS Common Playback: the Virtual Media Player
+
+### 1
+
+- Initial draft. Formalizes the Virtual Media Player: one logical,
+  session-scoped media player that every media command targets, behind
+  which any number of playback backends, remote devices, or external OS
+  players may serve a track. Defines the player and media state model;
+  the bus surface that requests playback and transport control and
+  reports state; the distinction between playback requests (start
+  something) and control requests (act on what is already playing); and
+  the MPRIS bridge by which the virtual player is exported to the host OS
+  and by which externally-initiated, standards-compliant players become
+  controllable by voice. Media discovery and ranking, URI-to-bytes
+  playback, stream-extraction formats, now-playing rendering, and the
+  NLU that classifies an utterance as media are out of scope — provider,
+  backend, GUI, and pipeline concerns respectively.
