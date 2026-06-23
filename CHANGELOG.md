@@ -86,24 +86,38 @@ tool does not recognize the token and cannot expand the template.
 
 ## OVOS-INTENT-4 — Intent and Entity Registration Bus Contract
 
-### 1
+### 2
 
-- Initial draft. Bus contract for declaring intents and entities, the
-  wire companion to OVOS-INTENT-3. Defines registration topics
-  (`ovos.intent.register.keyword` / `.template`, `ovos.entity.register`),
-  deregistration / enable / disable, and orchestrator-owned manifest
-  introspection (`ovos.intent.list` / `.describe`). Atomic keyword
-  registration with inline `required` / `optional` / `one_of` /
-  `excluded` vocabulary descriptors. Structured identity via the
-  `(skill_id, intent_name, lang)` triple plus a `method` axis for
-  manifest indexing — a single intent MAY be registered under both
-  keyword and template methods as two training-data representations.
-  Fire-and-forget broadcast model: no `.response` acknowledgements;
-  manifest presence is the only success signal. Consuming plugins MUST
-  log malformed-payload rejections at WARN with full identifiers and
-  the rejecting topic. File paths never cross the bus — INTENT-2 locale
-  files are a producer-side authoring convenience expanded inline by
-  the skill loader before emission.
+- Bus contract for declaring intents and entities, the wire companion to
+  OVOS-INTENT-3. Registration topics (`ovos.intent.register.keyword` /
+  `.template`, `ovos.entity.register`), deregistration / enable / disable,
+  and orchestrator-owned manifest introspection (`ovos.intent.list` /
+  `.describe`). Keyword registration carries inline `required` / `optional`
+  / `one_of` / `excluded` vocabulary descriptors. A single intent MAY be
+  registered under both keyword and template methods. Registrations are
+  fire-and-forget broadcasts: no `.response` acknowledgement; manifest
+  presence is the only success signal. Consuming plugins log
+  malformed-payload rejections at WARN with full identifiers and the
+  rejecting topic. File paths never cross the bus — locale files are
+  expanded inline before emission.
+- §6 — `required_slots`: an optional array on the
+  `ovos.intent.register.template` payload listing slot names the engine
+  MUST extract for a match to be valid (OVOS-INTENT-3 §5.3). §6.2 —
+  templates MAY declare different slot sets (OVOS-INTENT-1 §5.5). §6.3 —
+  a `required_slots` entry naming a slot no template declares is malformed.
+- §11 — session-scoped registration. The registration key is the quintuple
+  `(session_id, skill_id, intent_name, lang, method)`, read from
+  `context.session.session_id`; `session_id == "default"` is the global
+  scope every session inherits (§11.2). Deregistration MAY narrow to one
+  `session_id` (§8.4); session teardown removes its session-scoped
+  registrations (§11.3). A plugin that does not implement session scoping
+  treats every registration as global (§11.4). §11.5 — the orchestrator
+  routes a session-scoped intent only to utterances whose session matches
+  the registration's `session_id`.
+- §8.1 — intent replacement is keyed by the quintuple, entity replacement
+  by `(session_id, skill_id, entity_name, lang)`. §12 — the orchestrator
+  keys the manifest by the quintuple and serves session-aware
+  `ovos.intent.list` queries.
 
 ## OVOS-AUDIO-IN-1 — Audio Input Service
 
