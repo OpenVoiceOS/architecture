@@ -121,3 +121,24 @@ tool does not recognize the token and cannot expand the template.
   consumer-side `ovos.mic.listen` row (defined in OVOS-AUDIO-1 §4.4).
 - See-also — cross-references OVOS-AUDIO-1 §4.4 as the defining spec
   for `ovos.mic.listen`.
+
+## OVOS-PIPELINE-1 — Utterance Lifecycle and Pipeline
+
+### 2
+
+- §6.2 — the orchestrator treats a `Match` as declined when any slot
+  listed in the intent's `required_slots` (OVOS-INTENT-3 §5.3) is absent,
+  behind the engine's own enforcement during `match`.
+- §7.3 — reserve the intent_names `fallback` (OVOS-FALLBACK-1 §6.3) and
+  `common_query` (OVOS-COMMON-QUERY-1 §3).
+- §9.6 — the OPTIONAL `listen` field on `ovos.utterance.speak`: when
+  `true`, the output stage re-opens the user input channel after the
+  response is delivered.
+
+### 1
+
+- The utterance lifecycle, the pipeline-plugin `match` contract, the
+  session fields owned by this specification (§5), dispatch (§7), the
+  handler-lifecycle trio (§8), and the utterance-layer topics — the
+  entry point `ovos.utterance.handle` (§9.1) and the response exit point
+  `ovos.utterance.speak` (§9.6).
