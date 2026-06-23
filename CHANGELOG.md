@@ -7,6 +7,31 @@ status quo, `2` once it is not backwards compatible. Entries are grouped under
 the spec's current class. Every pull request that alters normative content adds
 an entry here.
 
+## OVOS-TRANSFORM-1 — Transformer Plugins
+
+### 1
+
+- Initial draft. Defines six transformer chains at six injection
+  points in the OVOS-PIPELINE-1 §6 utterance lifecycle, in lifecycle
+  order: audio (raw audio before STT, §3.1), utterance (post-STT text
+  normalization before intent matching, §3.2), metadata (session
+  enrichment after the utterance text, before the match round, §3.3),
+  intent (match-result adjustment after the match round, before
+  dispatch, §3.4), dialog (response-text transformation after a skill
+  emits `speak()`, before TTS, §3.5), and tts (synthesized-audio
+  transformation after TTS, before playback, §3.6). An orchestrator
+  MAY implement any subset of the six points; an unimplemented chain
+  is a no-op. Chains are ordered; the output of one transformer is the
+  input to the next. Per-session ordering and denylists via the
+  `<type>_transformers` / `blacklisted_<type>_transformers` session
+  fields (§5). Defines session mutation discipline: transformers MAY
+  mutate session fields they own (SESSION-1 §2.1) but MUST NOT mutate
+  fields owned by other specs; and utterance cancellation (§8) as the
+  only sanctioned early short-circuit of the lifecycle, preserving the
+  `ovos.utterance.handled` invariant. Conformance roles: Audio,
+  Utterance, Metadata, Intent, Dialog, and TTS Transformer, plus
+  Orchestrator.
+
 ## OVOS-INTENT-1 — Sentence Template Grammar
 
 ### 2
