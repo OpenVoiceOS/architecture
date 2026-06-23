@@ -121,3 +121,31 @@ tool does not recognize the token and cannot expand the template.
   consumer-side `ovos.mic.listen` row (defined in OVOS-AUDIO-1 §4.4).
 - See-also — cross-references OVOS-AUDIO-1 §4.4 as the defining spec
   for `ovos.mic.listen`.
+
+## OVOS-COMMON-QUERY-1 — Common Query Pipeline Plugin
+
+### 2
+
+- Initial draft. Specifies the common query pipeline plugin: a
+  scatter-gather contest that answers factual questions by
+  broadcasting the utterance, collecting competing answers from
+  skills, ranking them, and speaking the best. Reserves the
+  `common_query` intent_name (PIPELINE-1 §7.3). The full contest runs
+  in the plugin's blocking `match` (a deliberate, documented exception
+  to PIPELINE-1 §4.4 latency discipline, since the answer is the claim
+  decision): a fast `ovos.common_query.ping`/`pong` poll filters
+  skills down to plausible answerers using only cheap local checks,
+  then `<skill_id>:common_query` requests full answers (where network
+  and DB I/O are expected) collected on `<skill_id>.common_query.response`.
+  Filtering and selection (minimum confidence, denylist, fast-win,
+  optional reranker) run against the live session; if no answer
+  survives, `match` returns `None` so the pipeline reaches fallback.
+  A surviving answer is carried in `Match.slots.answer` and spoken by
+  the plugin's trivial handler — skills never speak. Defines an
+  optional question gate (SHOULD, for latency) and an early-start
+  optimisation subscribing to `ovos.utterance.handle` to overlap the
+  contest with upstream pipeline stages, caching only raw responses
+  keyed by `(session_id, utterance)`. All poll/answer messages carry
+  the `utterance` as correlation key and derive via MSG-1 `reply`,
+  with the session in `context.session`. Tunable defaults and
+  confidence-range guidance are collected in appendices.
