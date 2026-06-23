@@ -121,3 +121,17 @@ tool does not recognize the token and cannot expand the template.
   consumer-side `ovos.mic.listen` row (defined in OVOS-AUDIO-1 §4.4).
 - See-also — cross-references OVOS-AUDIO-1 §4.4 as the defining spec
   for `ovos.mic.listen`.
+
+## OVOS-FALLBACK-1 — Fallback Pipeline Plugin
+
+### 2
+
+- The fallback pipeline plugin: the final stage(s) that handle utterances
+  no earlier stage claimed by querying registered fallback skills in
+  priority order and dispatching to the first willing one. Skill
+  registration (`ovos.fallback.register` / `.deregister`) with a priority
+  hint, session-scoped per OVOS-INTENT-4 §11. The `session.fallback_handlers`
+  preference list (§4), pool construction (§5), the sequential unicast
+  ping/pong match contract (`<skill_id>.fallback.ping` / `.pong`, §6),
+  dispatch on the reserved intent_name `fallback` (§7, OVOS-PIPELINE-1 §7.3),
+  and pipeline positioning with multi-stage priority ranges (§8).
