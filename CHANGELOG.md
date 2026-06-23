@@ -33,16 +33,21 @@ tool does not recognize the token and cannot expand the template.
 
 ## OVOS-INTENT-2 — Locale Resource Formats
 
-### 2
-
-- §1, §4.3 — the `.voc` role description is broadened to "a named set of
-  localized phrasings": a `.voc` is consumed as a keyword vocabulary and/or
-  referenced inline via `<name>` (OVOS-INTENT-1 §3.7), and may itself contain
-  such references.
-
 ### 1
 
-- Initial draft.
+- The locale folder layout and the plain-text resource file formats
+  (`.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`).
+- §1, §4.3 — the `.voc` role is a named set of localized phrasings,
+  consumed as a keyword vocabulary and/or referenced inline via `<name>`
+  (OVOS-INTENT-1 §3.7), and may itself contain such references.
+- §4.4 — the `.prompt` resource role: a whole-file verbatim string
+  delivered to a language model. Not a template grammar file: no
+  expansion, no line filtering, every character literal. Author-only
+  HTML-style comments (`<!-- … -->`) are stripped before delivery; a
+  malformed comment (unmatched `<!--`) MUST be reported. Optional
+  `{name}` substitution fills only names the caller provides; unfilled
+  slots remain literal text, and slots inside fenced code blocks are
+  never substituted. Follows the §2.1 locale-override precedence.
 
 ## OVOS-INTENT-3 — Intent Definition
 
