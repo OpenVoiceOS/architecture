@@ -449,3 +449,23 @@ subscribed to `<own_skill_id>:stop`. The pipeline plugin matches
 and selects; the skill stops. Stop is one of the few cases in
 the spec set where the pipeline / skill split is not
 substitutable.
+
+
+### 4.9 Audio output service (AUDIO-1)
+
+**Sentence segmentation as a latency-reduction technique (AUDIO-1 §3.2).**
+When a TTS engine synthesises a long utterance as a single unit, the
+user must wait for the entire synthesis to complete before hearing
+anything. An implementation can reduce perceived latency by splitting
+the utterance at sentence boundaries, synthesising each sentence
+independently, and enqueuing each segment as soon as it is ready —
+so the first sentence begins playing while later sentences are still
+being synthesised.
+
+This is an internal implementation strategy: no other bus participant
+observes whether the TTS engine segments or not. The visible contract
+is unchanged — `ovos.audio.output.started` fires when the first
+audio begins, `ovos.audio.output.ended` fires when the last audio
+completes. The `listen` flag is honoured after all audio for the
+originating utterance has played, regardless of how many internal
+segments were used.

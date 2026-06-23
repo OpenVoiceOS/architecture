@@ -7,6 +7,20 @@ status quo, `2` once it is not backwards compatible. Entries are grouped under
 the spec's current class. Every pull request that alters normative content adds
 an entry here.
 
+## OVOS-AUDIO-1 — Audio Output Service
+
+### 2
+
+- The audio output service: the rendering pipeline (dialog-transformer
+  chain, TTS synthesis, TTS-transformer chain, playback queue), the
+  sequential playback queue shared by speech (`ovos.utterance.speak`) and
+  sound effects (`ovos.audio.queue` / `ovos.audio.play_sound`), the
+  remote-client rendering mode (`ovos.utterance.speak.b64` →
+  `ovos.audio.speech`), output lifecycle signals
+  (`ovos.audio.output.started` / `.ended`), the speaking-status query
+  (`ovos.audio.is_speaking`), stop integration (`ovos.audio.stop`,
+  `ovos.stop`), and the `listen`-triggered `ovos.mic.listen` follow-up.
+
 ## OVOS-INTENT-1 — Sentence Template Grammar
 
 ### 2

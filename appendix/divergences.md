@@ -196,6 +196,21 @@ defined by any spec** and should be removed or replaced:
 - **`ovos.utterance.speak`** (PIPELINE-1 §9.6). The NL output
   exit point; symmetric to `ovos.utterance.handle`. No current
   equivalent — TTS trigger is currently implicit.
+- **`ovos.utterance.speak.b64`** (AUDIO-1 §3.4). Variant of
+  `ovos.utterance.speak` for remote-client delivery: the audio
+  output service runs the same TTS pipeline but emits synthesised
+  audio as base64 via `ovos.audio.speech` instead of queuing for
+  local playback. Used by bridges serving satellites without TTS
+  (BRIDGE-1 §4.2.4).
+- **`ovos.audio.speech`** (AUDIO-1 §4.3). Base64-encoded
+  synthesised audio broadcast; emitted in response to
+  `ovos.utterance.speak.b64`. Carries a `listen` flag. Remote
+  clients (e.g. satellites relayed by a bridge) decode and play
+  the audio themselves.
+- **`ovos.audio.queue`** / **`ovos.audio.play_sound`** (AUDIO-1
+  §4.1, §4.2). Sound-effect playback topics. Payloads accept
+  either a `uri` or inline base64 `audio` field, enabling
+  cross-host audio delivery without shared filesystem access.
 - **`ovos.intent.list` / `ovos.intent.describe`** (INTENT-4
   §10). Introspection topics served from the orchestrator's
   passive registration index.
