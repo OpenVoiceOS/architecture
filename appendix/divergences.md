@@ -271,3 +271,12 @@ a number of legacy names. Implementer migration aid:
 | `add_context` / `remove_context` | Replaced by `ovos.context.set` / `.unset` under CONTEXT-1. |
 | `mycroft.skill.set_cross_context` / `remove_cross_context` | Replaced by `ovos.context.set` / `.unset` with `scope: "shared"` under CONTEXT-1. |
 | `<skill_id>.activate` | Activity-tracking emit currently in `ovos-core`; not part of any spec here. |
+
+#### Listening-lifecycle topics (AUDIO-IN-1)
+
+| Legacy topic | v2 replacement | Notes |
+|--------------|---------------|-------|
+| `recognizer_loop:record_begin` | `ovos.mic.record.started` | Capture start. `:` segment separator and implementation-role prefix dropped; no payload. |
+| `recognizer_loop:record_end` | `ovos.mic.record.ended` | Capture end; pairs with the start signal. |
+| `recognizer_loop:sleep` | `ovos.mic.sleep` | Controller-to-listener sleep request. |
+| `mycroft.awoken` | `ovos.mic.awoken` | Sleep→awake transition; moved into the `ovos.mic.*` namespace. |
