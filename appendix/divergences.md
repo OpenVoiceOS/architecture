@@ -276,7 +276,7 @@ a number of legacy names. Implementer migration aid:
 
 | Legacy topic | v2 replacement | Notes |
 |--------------|---------------|-------|
-| `recognizer_loop:record_begin` | `ovos.mic.record.started` | Capture start. `:` segment separator and implementation-role prefix dropped; no payload. |
-| `recognizer_loop:record_end` | `ovos.mic.record.ended` | Capture end; pairs with the start signal. |
-| `recognizer_loop:sleep` | `ovos.mic.sleep` | Controller-to-listener sleep request. |
-| `mycroft.awoken` | `ovos.mic.awoken` | Sleep→awake transition; moved into the `ovos.mic.*` namespace. |
+| `recognizer_loop:record_begin` | `ovos.listener.record.started` | Capture start. `:` segment separator and implementation-role prefix dropped; no payload. |
+| `recognizer_loop:record_end` | `ovos.listener.record.ended` | Capture end; pairs with the start signal. |
+| `recognizer_loop:sleep` | `ovos.listener.sleep` | Controller-to-listener sleep request. |
+| `mycroft.awoken` | `ovos.listener.awoken` | Sleep→awake transition; moved into the `ovos.listener.*` namespace. |

@@ -129,7 +129,7 @@ capture and sleep mode to notify other components of listener state.
 When voice-command capture begins, the audio input service **MUST**
 emit:
 
-`ovos.mic.record.started`
+`ovos.listener.record.started`
 
 Payload:
 
@@ -140,21 +140,21 @@ of this Message.
 
 When capture ends, the audio input service **MUST** emit:
 
-`ovos.mic.record.ended`
+`ovos.listener.record.ended`
 
 Payload:
 
 No payload. The session is identified by `context.session.session_id`
 of this Message.
 
-This signal pairs with `ovos.mic.record.started` (§6.1); a component
+This signal pairs with `ovos.listener.record.started` (§6.1); a component
 that subscribed to the start signal uses this to restore state.
 
 ### 6.3 Sleep mode
 
 A controller (e.g. a naptime skill) requests sleep mode by emitting:
 
-`ovos.mic.sleep`
+`ovos.listener.sleep`
 
 Payload:
 
@@ -168,7 +168,7 @@ capture until it is awoken (§6.4).
 
 When the audio input service leaves sleep mode, it **MUST** emit:
 
-`ovos.mic.awoken`
+`ovos.listener.awoken`
 
 Payload:
 
@@ -182,10 +182,10 @@ emitted when the service is already awake.
 
 | Topic | Direction | Purpose |
 |-------|-----------|---------|
-| `ovos.mic.record.started` | audio-input → broadcast | Voice-command capture began (§6.1). |
-| `ovos.mic.record.ended` | audio-input → broadcast | Voice-command capture ended (§6.2). |
-| `ovos.mic.sleep` | controller → audio-input | Enter sleep mode and suspend capture (§6.3). |
-| `ovos.mic.awoken` | audio-input → broadcast | Left sleep mode (§6.4). |
+| `ovos.listener.record.started` | audio-input → broadcast | Voice-command capture began (§6.1). |
+| `ovos.listener.record.ended` | audio-input → broadcast | Voice-command capture ended (§6.2). |
+| `ovos.listener.sleep` | controller → audio-input | Enter sleep mode and suspend capture (§6.3). |
+| `ovos.listener.awoken` | audio-input → broadcast | Left sleep mode (§6.4). |
 | `ovos.mic.listen` | any component → audio-input | Re-open the user input channel; consumed here, defined in OVOS-AUDIO-1 §4.4. |
 
 ---
@@ -200,9 +200,9 @@ emitted when the service is already awake.
 - assign a session in `context.session` per §5.2;
 - emit `ovos.utterance.handle` with `data.utterances` and `data.lang`
   (§5);
-- emit `ovos.mic.record.started` when voice-command capture begins and
-  `ovos.mic.record.ended` when it ends (§6.1, §6.2);
-- emit `ovos.mic.awoken` on the sleep→awake transition (§6.4).
+- emit `ovos.listener.record.started` when voice-command capture begins and
+  `ovos.listener.record.ended` when it ends (§6.1, §6.2);
+- emit `ovos.listener.awoken` on the sleep→awake transition (§6.4).
 
 ### An audio input service **SHOULD**:
 

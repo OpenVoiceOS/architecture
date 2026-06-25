@@ -110,9 +110,9 @@ tool does not recognize the token and cannot expand the template.
 ### 2
 
 - §6 (new) — listening lifecycle signals. The audio input service
-  emits `ovos.mic.record.started` / `ovos.mic.record.ended` around
-  voice-command capture, accepts `ovos.mic.sleep` to enter sleep mode
-  and suspend capture, and emits `ovos.mic.awoken` on the sleep→awake
+  emits `ovos.listener.record.started` / `ovos.listener.record.ended` around
+  voice-command capture, accepts `ovos.listener.sleep` to enter sleep mode
+  and suspend capture, and emits `ovos.listener.awoken` on the sleep→awake
   transition. These replace the legacy `recognizer_loop:record_begin`
   / `recognizer_loop:record_end` / `recognizer_loop:sleep` /
   `mycroft.awoken` topics. All carry no payload; the session is
