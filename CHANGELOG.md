@@ -104,3 +104,20 @@ tool does not recognize the token and cannot expand the template.
   the rejecting topic. File paths never cross the bus — INTENT-2 locale
   files are a producer-side authoring convenience expanded inline by
   the skill loader before emission.
+
+## OVOS-AUDIO-IN-1 — Audio Input Service
+
+### 2
+
+- §6 (new) — listening lifecycle signals. The audio input service
+  emits `ovos.listener.record.started` / `ovos.listener.record.ended` around
+  voice-command capture, accepts `ovos.listener.sleep` to enter sleep mode
+  and suspend capture, and emits `ovos.listener.awoken` on the sleep→awake
+  transition. These replace the legacy `recognizer_loop:record_begin`
+  / `recognizer_loop:record_end` / `recognizer_loop:sleep` /
+  `mycroft.awoken` topics. All carry no payload; the session is
+  identified by `context.session.session_id`.
+- §6.5 — bus surface table for the listener role, including the
+  consumer-side `ovos.mic.listen` row (defined in OVOS-AUDIO-1 §4.4).
+- See-also — cross-references OVOS-AUDIO-1 §4.4 as the defining spec
+  for `ovos.mic.listen`.
