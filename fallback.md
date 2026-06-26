@@ -338,9 +338,9 @@ Example:
 session.pipeline: [
   "stop_high",
   "converse",
-  "padatious_high",
+  "intent_high",
   "fallback_high",    ← priority range [0, 49]
-  "adapt",
+  "intent_medium",
   "fallback_medium",  ← priority range [50, 74]
   "persona",
   "fallback_low"      ← priority range [75, 100]
@@ -348,8 +348,8 @@ session.pipeline: [
 ```
 
 A skill registered at `priority: 10` is queried by `fallback_high`
-before `adapt` runs. A skill registered at `priority: 80` is
-queried by `fallback_low` only after both `adapt` and `persona`
+before `intent_medium` runs. A skill registered at `priority: 80` is
+queried by `fallback_low` only after both `intent_medium` and `persona`
 have declined. A single-stage deployment sets no range restriction.
 
 Within any stage, pool construction and session ordering (§5) work
