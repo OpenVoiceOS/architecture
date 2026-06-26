@@ -333,7 +333,7 @@ This specification claims four session fields per OVOS-SESSION-1
 `blacklisted_skills`, §5.4 `blacklisted_intents`). All four are
 session-scoped, propagate with the session under OVOS-SESSION-1 §4,
 and follow the deployment-default-fallback absence rule of
-OVOS-SESSION-1 §2.5: an omitted, empty, or absent field resolves at
+OVOS-SESSION-1 §2.1: an omitted, empty, or absent field resolves at
 consumption to the deployment-configured default.
 
 ### 5.1 `session.pipeline`
@@ -377,7 +377,7 @@ identifier and **MUST NOT** fall back to the deployment default
 merely because one identifier is unknown — the remaining known
 identifiers are the effective ordered set.
 
-If `session.pipeline` is absent or empty (per OVOS-SESSION-1 §2.5),
+If `session.pipeline` is absent or empty (per OVOS-SESSION-1 §2.1),
 the orchestrator falls back to the **default-session pipeline**: the
 pipeline configured for the reserved `session_id == "default"`
 session (OVOS-SESSION-1 §3.1). The default-session pipeline is owned
@@ -415,7 +415,7 @@ Unknown `pipeline_id`s in `blacklisted_pipelines` are harmless and
 nothing.
 
 An empty array (`[]`) is wire-equivalent to omission: both fall
-back to the deployment default per OVOS-SESSION-1 §2.5. A
+back to the deployment default per OVOS-SESSION-1 §2.1. A
 producer with no pipelines to deny **SHOULD** omit the field
 rather than emit `[]`, per the wire-weight guidance of
 OVOS-SESSION-1 §3.4.
