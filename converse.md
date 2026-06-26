@@ -394,9 +394,15 @@ not affect the topic name. The response carries `data`:
 | `result` | boolean | yes | `true` ⇒ the owner claims the utterance; `false` ⇒ the owner declines. |
 | `error_code` | string | no | Optional structured reason (see §4.4) when `result` is `false`. |
 
-Both topics use the dotted skill-emitted form (`<skill_id>.<verb>`)
-established by OVOS-INTENT-4 §3 and OVOS-PIPELINE-1 §7.2 for
-addressed non-dispatch messages.
+Both topics use the **dotted addressed** form (`<skill_id>.<verb>`).
+The poll is **not** a PIPELINE-1 §7 dispatch, so it avoids the `:`
+separator that OVOS-MSG-1 §2.1.1 reserves for the dispatch shape
+`<skill_id>:<intent_name>` and uses `.` instead. The owner subscribes
+to its own `<own_skill_id>.converse.ping` and replies on
+`<own_skill_id>.converse.pong`; the plugin emits the identical strings.
+Because each topic is built from a known `skill_id` and delivered by
+**exact subscription** — never parsed back into components — it stays
+unambiguous even when `skill_id` itself contains `.` (OVOS-MSG-1 §2.1.1).
 
 The poll is the **handler's decision point**. The owner MUST
 inspect `data.utterances` and `data.lang` — including any NLU
