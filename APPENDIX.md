@@ -5,10 +5,8 @@ specifications. It records design rationale, comparisons with other
 systems, the catalogue of *deliberate* divergences from current OVOS
 code, and implementer-facing reference material that does not belong
 in a normative specification body. Nothing here is binding — the
-normative documents are OVOS-INTENT-1, OVOS-INTENT-2,
-OVOS-INTENT-3, OVOS-INTENT-4, OVOS-MSG-1, OVOS-SESSION-1,
-OVOS-PIPELINE-1, OVOS-CONTEXT-1, OVOS-CONVERSE-1, OVOS-STOP-1,
-OVOS-COMMON-QUERY-1, and OVOS-TRANSFORM-1.
+normative documents are the specifications listed in the
+[README spec registry](README.md#specifications).
 
 Pointers to specific OVOS code (file paths, class names, function
 names) and to specific real projects (HiveMind, Adapt,
