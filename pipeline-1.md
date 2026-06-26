@@ -670,7 +670,7 @@ every utterance, and the first claim wins. This is what makes
 **stateful interception** possible. A plugin's decision to claim may
 depend not only on the utterance but on **session state** — a converse
 plugin claims only when there is an active handler or an open
-`response_mode` (a skill awaiting `get_response`); a persona plugin
+`response_mode` (a skill in response mode awaiting a reply); a persona plugin
 only while a persona is active; a media plugin claims *resume* only
 while it holds paused media; a stop plugin only when there is something
 to stop. The same utterance ("yes", "next", "stop", "resume")
@@ -757,7 +757,7 @@ more follow-up questions. This is not a timeout condition and
 **MUST NOT** be treated as one.
 
 When a handler asks the user a question and waits for the reply
-(the `get_response` pattern defined by OVOS-CONVERSE-1 §5), the
+(entering response mode, OVOS-CONVERSE-1 §5), the
 following happens on the bus:
 
 ```
@@ -793,7 +793,7 @@ end-markers are conformant and expected.
 `ovos.utterance.handle` messages while a handler is running.**
 An orchestrator that blocks the utterance-entry subscription for
 the duration of a handler invocation will deadlock the first time
-any handler calls `get_response`. Concurrent utterance processing
+any handler waits for a user reply. Concurrent utterance processing
 is a structural requirement, not an optimisation.
 
 The session is the correlation key for nested lifecycles: the
