@@ -624,7 +624,7 @@ OVOS-SESSION-1 §2.1: six **preference** fields naming a per-type
 chain ordering (§5.1) and six **policy** fields naming a per-type
 denylist (§5.2). The composition rule of §5.3 layers them.
 
-All six preference fields propagate unchanged per OVOS-MSG-1 §4.3
+All six preference fields propagate unchanged per OVOS-MSG-1 §4.1
 and are session-scoped; in the absence of a field, the
 deployer-configured default chain for that type is used.
 
