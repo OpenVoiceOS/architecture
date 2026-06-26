@@ -663,6 +663,36 @@ For each utterance, the orchestrator **MUST**:
 - if no plugin returns a `Match`, emit `ovos.intent.unmatched`
   (§9.3).
 
+**Evaluation order is the arbitration model.** The orchestrator
+deliberately does not compare confidence across plugins: a plugin
+positioned earlier in `session.pipeline` gets **first refusal** on
+every utterance, and the first claim wins. This is what makes
+**stateful interception** possible. A plugin's decision to claim may
+depend not only on the utterance but on **session state** — a converse
+plugin claims only when there is an active handler or an open
+`response_mode` (a skill awaiting `get_response`); a persona plugin
+only while a persona is active; a media plugin claims *resume* only
+while it holds paused media; a stop plugin only when there is something
+to stop. The same utterance ("yes", "next", "stop", "resume")
+therefore routes to a different handler depending on the session, and
+only ordering can guarantee that the stateful interceptor sees it
+*before* the general intent engines that would otherwise match the bare
+words; a ranked model could let a higher-scoring general match steal a
+turn that belongs to an active handler.
+
+A **selective** plugin — one with a strict false-positive budget that
+expects to decline most utterances — is correspondingly expected to be
+**conservative**: claim only when both the utterance and its state
+warrant it, return `None` otherwise, and trust its position rather than
+compete on a score. Cross-plugin ranking is not merely omitted:
+heterogeneous engines (a keyword matcher, a neural classifier, a
+language model) share no calibrated score space, and a state-derived
+certainty ("I hold paused media, so *resume* is mine") is not a
+quantity a text-similarity score can outbid. Deployers express policy
+by **ordering** `session.pipeline` (§5.1); each plugin decides its own
+claim from the utterance and the session it was handed (§4.1, §4.2).
+The two concerns stay separate.
+
 A plugin that raises an exception during `match` is treated as if
 it returned `None`. The orchestrator **MUST** continue to the next
 plugin and **SHOULD** log the exception. A single plugin's bug
