@@ -26,6 +26,11 @@ tool does not recognize the token and cannot expand the template.
 - §3.6 — new malformed forms: a reference to an undefined vocabulary, and a
   cyclic reference chain; `<` and `>` join the unbalanced-metacharacter rule.
 - §7 — the Expander conformance role MUST resolve inline vocabulary references.
+- §3.4, §3 — a named slot MAY be written either `{name}` or `{{name}}`; the two
+  forms are exactly equivalent, with a conformant tool folding `{{name}}` to
+  `{name}`. The slot-name charset and whitespace rules apply to both. The
+  double-brace spelling is a slot, not a brace-escaping form; the grammar still
+  provides no escape.
 
 ### 1
 
