@@ -758,8 +758,8 @@ specification MUST:
 - emit `ovos.utterance.handled` per §8 (PIPELINE-1 §9.5) on
   every terminal dispatch this spec produces;
 - **reject** registrations under OVOS-INTENT-4 that name an
-  intent `converse` or `response` (PIPELINE-1 §7.3 registry +
-  OVOS-INTENT-4 §3.5 error_code `reserved_name`);
+  intent `converse` or `response` (PIPELINE-1 §7.3 registry;
+  such registrations are malformed under OVOS-INTENT-4 §5.3/§6.3);
 - answer the introspection request of §6.1 from its own
   session-state index, after running the pre-list prune of
   §3.2 (when a TTL is configured).
