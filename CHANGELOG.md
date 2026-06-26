@@ -26,6 +26,11 @@ tool does not recognize the token and cannot expand the template.
 - §3.6 — new malformed forms: a reference to an undefined vocabulary, and a
   cyclic reference chain; `<` and `>` join the unbalanced-metacharacter rule.
 - §7 — the Expander conformance role MUST resolve inline vocabulary references.
+- §3.4, §3 — a named slot MAY be written either `{name}` or `{{name}}`; the two
+  forms are exactly equivalent, with a conformant tool folding `{{name}}` to
+  `{name}`. The slot-name charset and whitespace rules apply to both. The
+  double-brace spelling is a slot, not a brace-escaping form; the grammar still
+  provides no escape.
 
 ### 1
 
@@ -33,16 +38,21 @@ tool does not recognize the token and cannot expand the template.
 
 ## OVOS-INTENT-2 — Locale Resource Formats
 
-### 2
-
-- §1, §4.3 — the `.voc` role description is broadened to "a named set of
-  localized phrasings": a `.voc` is consumed as a keyword vocabulary and/or
-  referenced inline via `<name>` (OVOS-INTENT-1 §3.7), and may itself contain
-  such references.
-
 ### 1
 
-- Initial draft.
+- The locale folder layout and the plain-text resource file formats
+  (`.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`).
+- §1, §4.3 — the `.voc` role is a named set of localized phrasings,
+  consumed as a keyword vocabulary and/or referenced inline via `<name>`
+  (OVOS-INTENT-1 §3.7), and may itself contain such references.
+- §4.4 — the `.prompt` resource role: a whole-file verbatim string
+  delivered to a language model. Not a template grammar file: no
+  expansion, no line filtering, every character literal. Author-only
+  HTML-style comments (`<!-- … -->`) are stripped before delivery; a
+  malformed comment (unmatched `<!--`) MUST be reported. Optional
+  `{name}` substitution fills only names the caller provides; unfilled
+  slots remain literal text, and slots inside fenced code blocks are
+  never substituted. Follows the §2.1 locale-override precedence.
 
 ## OVOS-INTENT-3 — Intent Definition
 
@@ -92,6 +102,22 @@ tool does not recognize the token and cannot expand the template.
   does not reflect handler-side changes, so a handler whose mutations
   must appear in terminal events emits at least one Message
   (`ovos.utterance.speak` or `ovos.session.sync`).
+## OVOS-SESSION-1 — Session Carrier Wire Shape
+
+### 1
+
+- The `context.session` carrier wire shape: the `session_id` and `lang`
+  core fields, the language field family (§3.2), the §2.1 field-registry
+  mechanism by which other specifications claim OPTIONAL session fields,
+  and the propagation and wire-weight rules.
+- §2.1 — registered fields and their owning specifications:
+  `converse_handlers` (OVOS-CONVERSE-1 §2.1), `fallback_handlers`
+  (OVOS-FALLBACK-1 §4), and `persona_id` (OVOS-PERSONA-1 §3).
+- §3.3 — `site_id` is defined by OVOS-BRIDGE-1 §3.3; this section states
+  the consumer constraints that apply within the orchestrator pipeline.
+- See also — each field's owning specification, including
+  `session.active_handlers` (OVOS-PIPELINE-1 §7.1) and
+  `session.converse_handlers` (OVOS-CONVERSE-1 §2.1).
 
 ## OVOS-INTENT-4 — Intent and Entity Registration Bus Contract
 
@@ -113,3 +139,20 @@ tool does not recognize the token and cannot expand the template.
   the rejecting topic. File paths never cross the bus — INTENT-2 locale
   files are a producer-side authoring convenience expanded inline by
   the skill loader before emission.
+
+## OVOS-AUDIO-IN-1 — Audio Input Service
+
+### 2
+
+- §6 (new) — listening lifecycle signals. The audio input service
+  emits `ovos.listener.record.started` / `ovos.listener.record.ended` around
+  voice-command capture, accepts `ovos.listener.sleep` to enter sleep mode
+  and suspend capture, and emits `ovos.listener.awoken` on the sleep→awake
+  transition. These replace the legacy `recognizer_loop:record_begin`
+  / `recognizer_loop:record_end` / `recognizer_loop:sleep` /
+  `mycroft.awoken` topics. All carry no payload; the session is
+  identified by `context.session.session_id`.
+- §6.5 — bus surface table for the listener role, including the
+  consumer-side `ovos.mic.listen` row (defined in OVOS-AUDIO-1 §4.4).
+- See-also — cross-references OVOS-AUDIO-1 §4.4 as the defining spec
+  for `ovos.mic.listen`.

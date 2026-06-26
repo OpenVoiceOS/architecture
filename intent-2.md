@@ -1,6 +1,6 @@
 # Locale Resource Formats Specification
 
-**Spec ID:** OVOS-INTENT-2 · **Version:** 2 · **Status:** Draft
+**Spec ID:** OVOS-INTENT-2 · **Version:** 1 · **Status:** Draft
 
 This document defines the **locale folder layout** and the **plain-text resource
 file formats** a skill ships so a voice assistant can recognize what the user
@@ -28,7 +28,7 @@ permitted:
 - **slot-bearing** — expansion *and* named slots;
 - **slot-free** — expansion only.
 
-These two formats are realized as **five resource roles**, identified by file
+These two formats are realized as **six resource roles**, identified by file
 extension. The role tells a consumer how to use the file; the format tells a
 loader how to parse it.
 
@@ -39,6 +39,7 @@ loader how to parse it.
 | Entity | `.entity` | slot-free | Example values that can fill a named slot |
 | Vocabulary | `.voc` | slot-free | A named set of localized phrasings |
 | Blacklist | `.blacklist` | slot-free | Words that suppress an intent |
+| Prompt | `.prompt` | whole-file verbatim | A localized language-model prompt (§4.4) |
 
 The slot-bearing roles map onto the data path of a voice interaction:
 
@@ -52,7 +53,7 @@ developer encodes a set of natural-language phrasings for the assistant to use, 
 differ only in *which component consumes them* (§4.3).
 
 This specification covers the **folder layout**, the **common parsing rules**,
-and the **two file formats** across their **five roles**. It does not cover
+and the **two file formats** across their **six roles**. It does not cover
 intent scoring, matching, or skill runtime behaviour.
 
 ---
@@ -229,7 +230,7 @@ templates using expansion `(a|b)` / `[x]` only, **no named slots**. They are
 syntactically and semantically identical, and a loader parses all three the same
 way — each **loads as** the union of the sample sets of all its lines
 (OVOS-INTENT-1 §4). They are how a developer encodes a set of natural-language
-phrasings for OVOS to consume.
+phrasings for the assistant to consume.
 
 They differ **only in role** — which component reads the file and what it does
 with the expanded phrase set:
@@ -274,6 +275,86 @@ yeah
 trailer
 ```
 
+### 4.4 `.prompt` — language-model prompt
+
+**Format.** Prompt: the **whole file**, verbatim, is one prompt. It is plain
+text — **not** a template in the OVOS-INTENT-1 grammar — so `(`, `)`, `[`,
+`]`, `<`, `>`, `|`, every newline, and all other characters are literal. There
+is no expansion and no line filtering: a `.prompt` is read whole (§3), `#`
+lines and blank lines included, because every character is part of the prompt.
+
+**Author-only comments.** The one exception to "every character is part of
+the prompt" is **HTML-style comments**: a substring matching `<!-- … -->` is
+**stripped** before the file is handed to a language model. Comments may
+span multiple lines; nesting is not supported. A `<!--` without a matching
+`-->` in the same file is malformed — loaders **MUST** report it and
+**SHOULD** treat the whole file as literal text (skipping comment
+processing) rather than rendering a half-stripped prompt. Comments are
+author-only notes (titling, attribution, reviewer cues) that never reach
+the model.
+
+**Role.** The localized prompt a skill feeds to a language model. Like every
+other resource it is shipped per language under `locale/<lang>/` and resolved
+through the override precedence of §2.1, so a prompt can be translated,
+adjusted per region, or overridden by a user.
+
+**Substitution.** The one special construct is the **`{name}`** substitution
+point. A slot **name** consists of lowercase ASCII letters, digits, and
+underscores, and MUST NOT begin with a digit. At render time a caller supplies
+values keyed by name; an occurrence of `{name}` is replaced by the
+caller-supplied value **only when all three hold**:
+
+1. it forms a complete, well-formed `{name}` (a `{` not followed by a valid
+   name and a closing `}` is literal text — so `{}`, `{ }`, and JSON such as
+   `{"key": 1}` pass through untouched);
+2. the caller supplied a value for that name;
+3. it does **not** lie inside a fenced code block — text between a pair of
+   ```` ``` ```` fences (CommonMark fenced code block) is literal, so a
+   `{name}` shown as an example inside a code block is never substituted.
+   Fence detection follows CommonMark: a line whose first non-whitespace
+   content is three or more backticks opens or closes a fence; an open
+   fence with no closing fence in the file extends to end-of-file.
+   Implementations **MAY** use simpler heuristics (counting triple
+   backticks) so long as the well-formed cases of §4.4 render identically;
+   pathological inputs (nested fences, indented fences) are
+   implementation-defined.
+
+**Slots are optional.** A `{name}` for which the caller supplied no value is
+left **as literal text** — an unfilled slot is not an error. This is the
+deliberate opposite of `.dialog` (§4.2), where the caller MUST fill every slot
+and an unfilled one MUST NOT be rendered. A prompt is free-form text that may
+legitimately contain brace characters the author never intended as slots, so
+substitution is conservative: it touches only the names the caller explicitly
+provides.
+
+**Loads as.** The single whole-file string, with substitution applied per the
+rules above.
+
+The full content of a file `weather_report.prompt`, rendered with the caller
+value `{"query": "weather in Lisbon"}` (a `#` line is ordinary prompt text
+here — it is **not** stripped):
+
+````
+# Weather assistant
+
+You are a concise weather assistant. Answer the user's question.
+
+User asked: {query}
+
+Reply as JSON shaped like {"summary": "...", "temp_c": 0}. The {response}
+placeholder shown in the code block below is illustrative only:
+
+```
+{"summary": "{response}", "temp_c": 18}
+```
+````
+
+`{query}` is substituted; the `# Weather assistant` heading is kept, the
+literal JSON braces are left untouched, and the `{response}` inside the fenced
+block is not substituted. A `{tone}` slot the caller passed no value for would
+likewise stay literal.
+
+
 ---
 
 ## 5. Authoring a conformant loader
@@ -307,6 +388,7 @@ specification.
 
 - *Sentence Template Grammar Specification* (OVOS-INTENT-1) — the template
   grammar, its two facets (expansion and named slots), expansion semantics, and
-  the slot fill modes. All five resource roles — `.intent`, `.dialog`,
+  the slot fill modes. Five resource roles — `.intent`, `.dialog`,
   `.entity`, `.voc`, `.blacklist` — are lists of templates written in this
-  grammar.
+  grammar. The `.prompt` role (§4.4) is not a template file; it is verbatim
+  text with optional `{name}` substitution only.
