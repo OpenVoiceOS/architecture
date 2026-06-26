@@ -195,6 +195,18 @@ the normative sections.
   when `data.lang` is absent. Absence is a faithful
   "unknown" signal; consumer-side fallback policy is the
   consumer's.
+- **First-match-wins is the arbitration model, not the
+  absence of one** (PIPELINE-1 §6.2). Evaluation order is the
+  policy surface: an earlier plugin gets first refusal, which is
+  the only way to guarantee that a stateful interceptor —
+  converse with an open `response_mode`, an active persona, a
+  media plugin holding paused media to *resume* — claims an
+  utterance before the general engines. Heterogeneous plugins
+  share no calibrated score space, and a state-derived certainty
+  is not a quantity a text score can outbid, so cross-plugin
+  ranking is both unworkable and would defeat interception;
+  selective plugins are expected to be conservative and trust
+  their position.
 - **Tier conventions are out of scope.** The current
   high / medium / low suffix is implementation strategy:
   from the bus, each tier is already a distinct
