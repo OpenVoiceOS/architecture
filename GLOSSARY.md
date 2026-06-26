@@ -36,3 +36,7 @@ open a PR adding it.
 | **Message** | The unit of communication on the bus: a JSON object with `type`, `data`, `context` ([MSG-1 §2](msg-1.md)). |
 | **Context** | The assistant-metadata object on a Message; an extensible JSON object whose keys are defined by companion specs ([MSG-1 §2.3](msg-1.md)). |
 | **Session** | The per-conversation carrier in `context.session`; carries `session_id` (with `"default"` reserved for "originates from the device itself") and `lang` (the user's preferred language, distinct from any `data.lang` describing the payload's own language) ([MSG-1 §4](msg-1.md)). |
+| **Listening lifecycle signal** | A payload-free bus signal the audio input service emits or consumes around voice-command capture and sleep mode — `ovos.listener.record.started` / `.record.ended`, `ovos.listener.sleep`, `ovos.listener.awoken` ([AUDIO-IN-1 §6](audio-in.md)). |
+| **Common query** | A pipeline plugin that answers factual questions by holding a timed contest among skills — broadcast, collect competing answers, rank, speak the best ([COMMON-QUERY-1 §2](common-query.md)). |
+| **Scatter-gather** | The contest pattern: one broadcast fans out to many skills (scatter), their answers are collected and ranked (gather) ([COMMON-QUERY-1 §2](common-query.md)). |
+| **Wants-to-answer poll** | Common query's fast ping/pong phase — a cheap local filter where skills self-nominate before the expensive full-answer phase ([COMMON-QUERY-1 §6](common-query.md)). |

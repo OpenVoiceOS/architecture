@@ -181,3 +181,42 @@ architecture:
   (OVOS-INTENT-3 §1) rather than HA-style curated vocabulary.
   The trade-off: skill author freedom vs. cross-integration
   vocabulary sharing.
+
+### 2.6 Mycroft CommonQuerySkill — the direct ancestor
+
+COMMON-QUERY-1's closest comparator is not another assistant but
+OVOS's own lineage: Mycroft's `CommonQuerySkill` base class, from
+which the scatter-gather question-answering pattern is inherited.
+The shapes rhyme — broadcast a query, let skills self-nominate,
+collect answers, speak the best — but the formalization diverges in
+three ways worth recording.
+
+**Two phases, different reason.** Mycroft's CommonQuery was also
+two-phase (a query broadcast, then answer collection), but the split
+was driven by **message-bus timeout management** — the framework
+needed a bounded window to gather responses from skills that might
+never reply. COMMON-QUERY-1 keeps a two-phase poll for a different,
+sharper reason (§6): the ping is a *cheap local filter* that exists
+to keep I/O-heavy skills from querying their backends on every
+utterance. The window is incidental; the filtering is the point.
+
+**Where the contest lives.** Mycroft ran the gather inside a skill
+handler — common query was itself a skill. COMMON-QUERY-1 lifts it
+into a pipeline plugin and runs the entire contest in `match`, so
+the no-answer case returns `None` and the pipeline reaches fallback
+(rationale §4.9). A skill-layer implementation cannot do this: by
+the time a skill handler runs, the claim is already made and
+fallback is foreclosed — the same layering argument that puts STOP-1
+in the pipeline (rationale §4.8).
+
+**Single speaker.** In COMMON-QUERY-1 the plugin is the only voice:
+skills return answer *strings* and the plugin speaks the winner
+(§10). This removes the ambiguity, present in the original, about
+which component renders speech, and lets the plugin re-rank or
+suppress answers without a skill having already spoken.
+
+No mainstream closed stack (Alexa, Google) exposes a comparable
+mechanism, because answer resolution there happens centrally in the
+cloud rather than as an open contest among independently authored
+local skills. The scatter-gather-over-a-bus shape is specific to the
+open-ecosystem voice OS.
