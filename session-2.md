@@ -255,7 +255,16 @@ happen only at these boundaries:
   plugin-bundled handler per PIPELINE-1 §7.0) MAY mutate
   session in-place; its emissions via `forward` / `reply` /
   `response` (OVOS-MSG-1 §5) carry the mutated session
-  forward.
+  forward. **A handler that emits no Message has no
+  bus-visible way to propagate its session mutations.** The
+  handler-lifecycle trio `.complete` (PIPELINE-1 §8) is
+  orchestrator-emitted from the dispatch context the
+  orchestrator holds — it does not reflect handler-side
+  in-place changes, particularly for handlers running
+  out-of-process. A handler that mutates session and needs
+  that state visible in terminal events MUST emit at least
+  one Message (typically `ovos.utterance.speak` or
+  `ovos.session.sync` per §2.7).
 
 **Session mutation discipline.** A handler SHOULD NOT mutate
 session fields unless the mutation is necessary for the

@@ -63,19 +63,18 @@ and needs no implementation change:
 The following topics exist in current ovos-core but are **not
 defined by any spec** and should be removed or replaced:
 
-- **`ovos.session.sync` / `ovos.session.update_default`** —
-  emitted by `SessionManager` to broadcast the current default
-  session to interested components. SESSION-2 §6.4 acknowledges
-  that an orchestrator MAY emit default-session state on a
-  deployer-defined topic but assigns no normative name. These
-  ad-hoc topics should be retired: any component that needs the
-  default-session state can subscribe to `ovos.utterance.handled`
-  (PIPELINE-1 §9.5) and read the session it carries, or listen
-  to any other assistant-emitted Message on the default session.
-  A named sync topic adds an implicit state-broadcast contract
-  that the specs deliberately avoid; clients are expected to
-  track session from Message flow, not from dedicated sync
-  broadcasts.
+- **`ovos.session.update_default`** —
+  emitted by `SessionManager` in legacy code to broadcast the
+  current default session. SESSION-2 §5.4 acknowledges that an
+  orchestrator MAY emit default-session state on a deployer-defined
+  topic but assigns no normative name. This ad-hoc topic should be
+  retired: any component that needs the default-session state can
+  subscribe to `ovos.utterance.handled` (PIPELINE-1 §9.5) and read
+  the session it carries, or listen to any other assistant-emitted
+  Message on the default session. See §5.7 for the migration mapping.
+  Note: `ovos.session.sync` serves a distinct purpose — explicit
+  out-of-utterance state sync — and is now formalized by
+  SESSION-2 §2.7; see §5.5 for its entry as a new topic.
 
 ### 5.3 Prescriptive shape changes
 
@@ -209,6 +208,13 @@ defined by any spec** and should be removed or replaced:
   `reply` / `response` (MSG-1 §4.3). Formalizes a "MAY"
   convenience for in-process subsystems; not currently
   implemented but compatible with current behaviour.
+- **`ovos.session.sync`** (SESSION-2 §2.7). Explicit
+  out-of-utterance session-state sync emitted by a component that
+  has mutated session state outside the normal utterance lifecycle
+  and needs the change propagated. No current spec-conformant
+  equivalent — `ovos.session.update_default` (now retired, see
+  §5.2.1) served an overlapping purpose for the default session
+  only. `ovos.session.sync` is generalised to any session.
 
 ### 5.6 Things the specs do *not* change
 
@@ -263,6 +269,7 @@ a number of legacy names. Implementer migration aid:
 | `ovos.utterance.handled` | **unchanged** — kept as the universal end-marker. |
 | `<skill_id>:<intent_name>` | **unchanged** — dispatch topic; a plugin-bundled handler has `skill_id == pipeline_id`. |
 | `mycroft.skill.handler.start` / `.complete` / `.error` | renamed to `ovos.intent.handler.start` / `.complete` / `.error` |
+| `ovos.session.update_default` | **retire** — subscribe to `ovos.utterance.handled` (PIPELINE-1 §9.5) to read updated default-session state; or to any assistant-emitted Message on the default session. See §5.2.1. |
 
 #### Out of scope
 
@@ -271,3 +278,31 @@ a number of legacy names. Implementer migration aid:
 | `add_context` / `remove_context` | Replaced by `ovos.context.set` / `.unset` under CONTEXT-1. |
 | `mycroft.skill.set_cross_context` / `remove_cross_context` | Replaced by `ovos.context.set` / `.unset` with `scope: "shared"` under CONTEXT-1. |
 | `<skill_id>.activate` | Activity-tracking emit currently in `ovos-core`; not part of any spec here. |
+
+#### Listening-lifecycle topics (AUDIO-IN-1)
+
+| Legacy topic | v2 replacement | Notes |
+|--------------|---------------|-------|
+| `recognizer_loop:record_begin` | `ovos.listener.record.started` | Capture start. `:` segment separator and implementation-role prefix dropped; no payload. |
+| `recognizer_loop:record_end` | `ovos.listener.record.ended` | Capture end; pairs with the start signal. |
+| `recognizer_loop:sleep` | `ovos.listener.sleep` | Controller-to-listener sleep request. |
+| `mycroft.awoken` | `ovos.listener.awoken` | Sleep→awake transition; moved into the `ovos.listener.*` namespace. |
+
+### 5.8 Bus bridge (BRIDGE-1)
+
+- **BRIDGE-1 defines source-stamping and destination-based routing;
+  current HiveMind bridges route primarily by session_id.**
+  HiveMind groups messages by `session_id` and delivers them to the
+  peer that owns that session. BRIDGE-1 prescribes `destination` as
+  the primary signal because two peers sharing the same `session_id`
+  (including `"default"`) cannot be distinguished by session_id
+  alone. HiveMind deployments that use per-peer `session_id`s are
+  conformant with either model; deployments that share the
+  `"default"` session across multiple peers must migrate to
+  destination-based routing for client isolation.
+- **OVOS-BRIDGE-1 is new — no existing implementation fully
+  conforms.** The bridge spec formalizes a role that exists today
+  (the HiveMind gateway, the bus client, any inbound message
+  fan-in) but with a tighter normative core. Current
+  implementations are expected to adopt the source-stamping and
+  session-preservation requirements incrementally.
