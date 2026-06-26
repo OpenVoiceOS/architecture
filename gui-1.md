@@ -386,7 +386,7 @@ A GUI Message is routed by **one** identifier: the `session_id` in its
 `context.session` (OVOS-SESSION-1 §3.1). There is no separate site,
 room, location, or audience dimension in this specification. The GUI
 service reads the `session_id`, defaulting an absent or empty session
-to the reserved value `"default"` per OVOS-SESSION-1 §2.1, and:
+to the reserved value `"default"` per OVOS-SESSION-1 §3.1, and:
 
 - maintains an independent namespace stack per `session_id` (§4.3);
 - carries the `session_id` to every adapter on every per-session event
