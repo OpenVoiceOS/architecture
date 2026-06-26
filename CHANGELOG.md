@@ -7,6 +7,22 @@ status quo, `2` once it is not backwards compatible. Entries are grouped under
 the spec's current class. Every pull request that alters normative content adds
 an entry here.
 
+## OVOS-CONTEXT-1 — Intent Context
+
+### 2
+
+- Initial draft. Defines `session.intent_context` as a flat map of
+  key → entry carried inside the SESSION-1 session carrier. Covers
+  context entries (key, value, TTL, owner `skill_id`), private vs.
+  shared scopes (`:` discriminator in the key), decay (TTL counts down
+  per utterance; entries without TTL are session-persistent), three
+  mutation pathways (skill bus events; engine auto-population on match;
+  orchestrator sweep on session close), the `requires_context` and
+  `excludes_context` intent declaration fields, interaction with the
+  match result (context values MAY be injected into `Match.slots`),
+  and conformance roles (Orchestrator, Pipeline Plugin, Skill).
+  Non-goals: trust enforcement and replay prevention are explicitly
+  out of scope.
 ## OVOS-TRANSFORM-1 — Transformer Plugins
 
 ### 1
