@@ -320,6 +320,21 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   discouraged escape hatches. Builds on OVOS-MSG-1 (envelope),
   OVOS-SESSION-1 (the `session_id` routing key and reserved
   `"default"`), and OVOS-SESSION-2 (lifecycle / client authority).
+
+## OVOS-STOP-1 — Stop Pipeline Plugin
+
+### 2
+
+- The stop pipeline plugin: matches utterances expressing the intent to
+  interrupt the assistant and either cascades a stop across the
+  recency-ordered active handlers or broadcasts a global stop. The
+  ping/pong discovery exchange (`ovos.stop.ping` / `.pong`, §4) that
+  selects the most recently activated handler able to stop, per-handler
+  dispatch on the reserved intent_name `stop` (`<skill_id>:stop`,
+  OVOS-PIPELINE-1 §7.3), the global-stop path (`global_stop` →
+  `ovos.stop` broadcast), and the session-scoping obligations over
+  `session.active_handlers`.
+
 ## OVOS-COMMON-QUERY-1 — Common Query Pipeline Plugin
 
 ### 2
