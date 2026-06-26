@@ -89,6 +89,19 @@ tool does not recognize the token and cannot expand the template.
   guarantees, session lifecycle, and the internal shape of `session`
   beyond `session_id` and `lang` are explicitly out of scope.
 
+## OVOS-SESSION-2 — Session Lifecycle and State Ownership
+
+### 1
+
+- The state-ownership model (stateless bus, stateless orchestrator for
+  named sessions, orchestrator-owned default session), the mutation
+  boundaries, `ovos.session.sync` (§2.7), client-side merge rules,
+  resumption semantics, and conformance.
+- §2.4 — a handler that emits no Message cannot propagate in-place
+  session mutations: the orchestrator-emitted handler-lifecycle trio
+  does not reflect handler-side changes, so a handler whose mutations
+  must appear in terminal events emits at least one Message
+  (`ovos.utterance.speak` or `ovos.session.sync`).
 ## OVOS-SESSION-1 — Session Carrier Wire Shape
 
 ### 1
