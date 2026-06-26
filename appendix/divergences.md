@@ -127,7 +127,7 @@ defined by any spec** and should be removed or replaced:
   `sess = match.updated_session or SessionManager.get(message)`
   to a normative Match field. The plugin that produces a
   claiming match composes any session mutations it needs
-  (decrementing a response-mode counter, pre-promoting an
+  (clearing or setting `session.response_mode`, pre-promoting an
   active-handler to the head, setting intent_context
   alongside the match) into a fresh snapshot returned in
   `Match.updated_session`. The orchestrator uses that

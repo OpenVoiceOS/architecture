@@ -251,6 +251,20 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 - See-also — cross-references OVOS-AUDIO-1 §4.4 as the defining spec
   for `ovos.mic.listen`.
 
+## OVOS-CONVERSE-1 — Active Handlers and Interactive Response
+
+### 2
+
+- The imperative continuous-dialog surface. Two session fields:
+  `converse_handlers` (§2.1), a recency-ordered list of active handlers,
+  and `response_mode` (§2.2), the single entry holding the next utterance
+  exclusively. The converse plugin as a pure matcher (§3) that checks
+  `response_mode` first, then polls `converse_handlers` via sequential
+  unicast ping/pong (`<skill_id>.converse.ping` / `.pong`, §4). Response
+  mode (§5): single-shot delivery via the reserved `response` intent_name.
+  Activation lifecycle (§6), stop integration (§7), and the bus surface
+  (§8). Dispatch on the reserved intent_names `converse` and `response`
+  (OVOS-PIPELINE-1 §7.3) follows ordinary §7 routing.
 ## OVOS-PIPELINE-1 — Utterance Lifecycle and Pipeline
 
 ### 2
