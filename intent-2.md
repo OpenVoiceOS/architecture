@@ -28,7 +28,7 @@ permitted:
 - **slot-bearing** — expansion *and* named slots;
 - **slot-free** — expansion only.
 
-These two formats are realized as **five resource roles**, identified by file
+These two formats are realized as **six resource roles**, identified by file
 extension. The role tells a consumer how to use the file; the format tells a
 loader how to parse it.
 
@@ -39,6 +39,7 @@ loader how to parse it.
 | Entity | `.entity` | slot-free | Example values that can fill a named slot |
 | Vocabulary | `.voc` | slot-free | A named set of localized phrasings |
 | Blacklist | `.blacklist` | slot-free | Words that suppress an intent |
+| Prompt | `.prompt` | whole-file verbatim | A localized language-model prompt (§4.4) |
 
 The slot-bearing roles map onto the data path of a voice interaction:
 
@@ -52,7 +53,7 @@ developer encodes a set of natural-language phrasings for the assistant to use, 
 differ only in *which component consumes them* (§4.3).
 
 This specification covers the **folder layout**, the **common parsing rules**,
-and the **two file formats** across their **five roles**. It does not cover
+and the **two file formats** across their **six roles**. It does not cover
 intent scoring, matching, or skill runtime behaviour.
 
 ---
@@ -165,9 +166,11 @@ grammar — expansion `(a|b)` / `[x]` and named slots `{name}`.
 **Role.** Defines an intent: the templates whose expanded samples train the
 engine to recognize one skill action. Matched against **ASR input**; named slots
 are filled by the engine at match time (OVOS-INTENT-1 §5.1). The file base name
-is the intent name. Every line in the file MUST declare the **same set of named
-slots** (OVOS-INTENT-1 §5.5); a phrasing that needs different slots belongs in a
-separate `.intent` file.
+is the intent name. Lines in the file **MAY** declare **different sets of named
+slots** (OVOS-INTENT-1 §5.5); the intent's slot set is the **union** of the
+slots declared across its templates, and the engine extracts only the slots of
+the template that matched (OVOS-INTENT-1 §5.5, OVOS-INTENT-3 §5.1). A phrasing
+that needs different slots therefore MAY live in the same `.intent` file.
 
 **Loads as.** The union of the sample sets of all lines (OVOS-INTENT-1 §4) —
 training data for the intent, with named slots intact. The engine generalizes
@@ -202,8 +205,9 @@ a dialog slot, though an implementation MAY consult one.
 **Limitation.** A `.dialog` phrase uses the metacharacters `( ) [ ] { } |`
 structurally and therefore cannot contain any of them as literal spoken text.
 This is an accepted constraint; spoken responses rarely require them. A
-`.dialog` file recognizes only the single-brace slot form `{name}` (§4.1);
-there is no `{{ }}` double-brace form.
+`.dialog` file recognizes **both** named-slot forms defined by OVOS-INTENT-1
+§3.4 — `{name}` and the equivalent double-brace `{{name}}` — and treats them
+identically, since the two forms denote the same slot.
 
 **Rendering.** To render a dialog, an implementation selects one phrase, fills
 its named slots with caller-supplied values, and expands its `(a|b)` / `[x]`
@@ -229,7 +233,7 @@ templates using expansion `(a|b)` / `[x]` only, **no named slots**. They are
 syntactically and semantically identical, and a loader parses all three the same
 way — each **loads as** the union of the sample sets of all its lines
 (OVOS-INTENT-1 §4). They are how a developer encodes a set of natural-language
-phrasings for OVOS to consume.
+phrasings for the assistant to consume.
 
 They differ **only in role** — which component reads the file and what it does
 with the expanded phrase set:
@@ -274,6 +278,82 @@ yeah
 trailer
 ```
 
+### 4.4 `.prompt` — language-model prompt
+
+**Format.** Prompt: the **whole file**, verbatim, is one prompt. It is plain
+text — **not** a template in the OVOS-INTENT-1 grammar — so `(`, `)`, `[`,
+`]`, `<`, `>`, `|`, every newline, a single `{` or `}`, and all other
+characters are literal. There is no expansion and no line filtering: a
+`.prompt` is read whole (§3), `#` lines and blank lines included, because every
+character is part of the prompt. The **only** special handling a `.prompt`
+receives is the **`{{name}}`** substitution described below; nothing else in
+the file is interpreted. In particular there is **no comment handling**: an
+HTML-style `<!-- … -->` sequence is ordinary literal text and reaches the
+language model unchanged.
+
+**Role.** The localized prompt a skill feeds to a language model. Like every
+other resource it is shipped per language under `locale/<lang>/` and resolved
+through the override precedence of §2.1, so a prompt can be translated,
+adjusted per region, or overridden by a user.
+
+**Substitution.** The one special construct is the **`{{name}}`** substitution
+point — the **double-brace** form only. A slot **name** consists of lowercase
+ASCII letters, digits, and underscores, and MUST NOT begin with a digit. At
+render time a caller supplies values keyed by name; an occurrence of
+`{{name}}` is replaced by the caller-supplied value **only when both hold**:
+
+1. it forms a complete, well-formed `{{name}}` — a double-brace pair enclosing
+   a valid name;
+2. the caller supplied a value for that name.
+
+A **single** `{name}`, a lone `{` or `}`, and literal JSON or markup such as
+`{}`, `{ }`, or `{"key": 1}` are **never** substitution points — they pass
+through unchanged. This single-brace pass-through is precisely **why** a
+`.prompt` requires the double-brace form: prompts routinely contain literal
+single braces (JSON examples, code, set notation), and reserving substitution
+to `{{name}}` lets that literal text survive untouched. (This is the opposite
+convention to `.intent` / `.dialog`, where `{name}` and `{{name}}` are
+equivalent per OVOS-INTENT-1 §3.4, because those templates cannot contain a
+literal brace at all.)
+
+**Slots are optional.** A `{{name}}` for which the caller supplied no value is
+left **as literal text** — an unfilled slot is not an error. This is the
+deliberate opposite of `.dialog` (§4.2), where the caller MUST fill every slot
+and an unfilled one MUST NOT be rendered. A prompt is free-form text that may
+legitimately contain brace sequences the author never intended as slots, so
+substitution is conservative: it touches only the `{{name}}` occurrences whose
+names the caller explicitly provides.
+
+**Loads as.** The single whole-file string, with substitution applied per the
+rules above.
+
+The full content of a file `weather_report.prompt`, rendered with the caller
+value `{"query": "weather in Lisbon"}` (a `#` line and an `<!-- … -->`
+sequence are both ordinary prompt text here — neither is stripped):
+
+````
+# Weather assistant
+<!-- author note: keep this terse -->
+
+You are a concise weather assistant. Answer the user's question.
+
+User asked: {{query}}
+
+Reply as JSON shaped like {"summary": "...", "temp_c": 0}. The {response}
+single-brace placeholder below is illustrative only:
+
+```
+{"summary": "{response}", "temp_c": 18}
+```
+````
+
+`{{query}}` is substituted; the `# Weather assistant` heading and the
+`<!-- … -->` line are kept verbatim, the literal single-brace JSON is left
+untouched, and the single-brace `{response}` is not a substitution point and so
+is unchanged (whether or not it sits in a code block). A `{{tone}}` slot the
+caller passed no value for would likewise stay literal.
+
+
 ---
 
 ## 5. Authoring a conformant loader
@@ -307,6 +387,7 @@ specification.
 
 - *Sentence Template Grammar Specification* (OVOS-INTENT-1) — the template
   grammar, its two facets (expansion and named slots), expansion semantics, and
-  the slot fill modes. All five resource roles — `.intent`, `.dialog`,
+  the slot fill modes. Five resource roles — `.intent`, `.dialog`,
   `.entity`, `.voc`, `.blacklist` — are lists of templates written in this
-  grammar.
+  grammar. The `.prompt` role (§4.4) is not a template file; it is verbatim
+  text with optional `{{name}}` double-brace substitution only.

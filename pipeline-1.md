@@ -593,6 +593,7 @@ ovos.utterance.handle                    ← entry (§9.1)
    │         continue   # any plugin-side updated_session is discarded
    │
    │     orchestrator-backstop denylist check (§5.3/§5.4)
+   │     orchestrator-backstop required_slots check (§6.2)
    │     if filtered:  continue
    │
    │     session = match.updated_session or session   # §4.1, §4.2
@@ -672,6 +673,24 @@ drop a plugin from the effective pipeline after a deployer-tunable
 consecutive-exception threshold. A dropped plugin behaves as if
 absent; recovery is a deployment concern. The threshold and scope
 (per-session or process-wide) are deployer-configurable.
+
+**Orchestrator backstop for `required_slots`.** After a plugin
+returns a `Match`, the orchestrator **MUST** verify that the match's
+slot map contains every slot listed in the intent's `required_slots`
+(INTENT-3 §5.3). The orchestrator obtains this information from the
+same registration data the plugin consumed — in-process, this is
+available from the plugin's compiled state or from the orchestrator's
+own manifest (INTENT-4 §10). If any required slot is absent, the
+orchestrator **MUST** treat the match as if the plugin had declined
+and continue iteration to the next plugin. This check operates
+after the `blacklisted_skills` / `blacklisted_intents` backstop
+(§5.3, §5.4) and uses the same observable semantics: no bus event
+is emitted; it is observable only as a non-match.
+
+The primary obligation to enforce `required_slots` still lies with
+the engine during `match()`. The orchestrator backstop is a
+second line of defense against engine bugs or plugins that do not
+implement the rule.
 
 ### 6.3 Plugins do not see each other's matches
 
@@ -895,6 +914,8 @@ Reservations currently in force:
 | `converse` | OVOS-CONVERSE-1 §4 | a converse plugin's claim that `<skill_id>` (an active handler) wants this utterance — the orchestrator dispatches `<skill_id>:converse` and the owner's converse handler runs |
 | `response` | OVOS-CONVERSE-1 §5 | a converse plugin's signal that `<skill_id>` (the response-mode holder) is to receive the awaited utterance — the orchestrator dispatches `<skill_id>:response` and the owner's response handler runs |
 | `stop` | OVOS-STOP-1 §4 | a stop plugin's claim that `<skill_id>` (an active handler) should cease activity — the orchestrator dispatches `<skill_id>:stop` and the owner's stop handler runs |
+| `fallback` | OVOS-FALLBACK-1 §6.3 | a fallback plugin's claim that `<skill_id>` (a registered fallback handler) is willing to handle the utterance — the orchestrator dispatches `<skill_id>:fallback` and the handler runs |
+| `common_query` | OVOS-COMMON-QUERY-1 §3 | a common-query plugin's self-addressed match (`Match.skill_id` is the plugin's own `pipeline_id`) — the orchestrator dispatches `<pipeline_id>:common_query` and the plugin's bundled handler speaks the answer it selected during `match` |
 
 This specification fixes only the registry mechanism (reservation
 listing); the per-name semantics are owned by the reserving
@@ -1130,6 +1151,7 @@ audio-capable deployment.
 |-------|------|----------|---------|
 | `utterance` | string | yes | The natural-language response string. |
 | `lang` | string | no | BCP-47 tag of the response language. When absent, the output stage resolves language from the session per OVOS-SESSION-1 §3.2. |
+| `listen` | bool | no | When `true`, the handler expects a follow-up utterance after this response is delivered; the output stage re-opens the user input channel once delivery completes. Absent or `false` means no follow-up is expected. The output-side behaviour this triggers is defined by the output-path companion specification. |
 
 **Derivation and session propagation.** A handler **MUST** derive each
 `ovos.utterance.speak` emission from the dispatch Message (§7) it

@@ -1,6 +1,6 @@
 # Intent and Entity Registration Bus Contract
 
-**Spec ID:** OVOS-INTENT-4 · **Version:** 1 · **Status:** Draft
+**Spec ID:** OVOS-INTENT-4 · **Version:** 2 · **Status:** Draft
 
 This document defines the **bus messages** a skill uses to declare its
 intents and entities. It is the wire format for intent registration —
@@ -47,7 +47,11 @@ and the orchestrator-provided introspection interface:
 - the **enable** and **disable** messages — temporary suppression of a
   registered intent without losing its definition;
 - the **introspection** messages — list and describe registrations,
-  served by the orchestrator's passive registration index (§10).
+  served by the orchestrator's passive registration index (§10);
+- the **session-scoped registration** model (§11) — how every
+  registration is automatically keyed to the registering session,
+  enabling per-session skill sets and distributed satellite
+  deployments.
 
 It does **not** define:
 
@@ -300,7 +304,7 @@ malformed as template (or vice versa, §3.2). Structured logging is
 ### 5.4 No `.blacklist`
 
 A `.blacklist` is **not** used with keyword intents. The `excluded` role is
-the keyword-intent suppression mechanism (INTENT-3 §4.2, §5.4).
+the keyword-intent suppression mechanism (INTENT-3 §4.2, §5.5).
 
 ---
 
@@ -323,7 +327,8 @@ INTENT-1 §3).
     "(play|put on) {query} (on|using) {engine}",
     "i want to listen to {query}"
   ],
-  "blacklist": ["trailer", "music video"]
+  "blacklist": ["trailer", "music video"],
+  "required_slots": ["query"]
 }
 ```
 
@@ -332,13 +337,15 @@ Field reference:
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `samples` | array of strings | yes | OVOS-INTENT-1 templates with named slots (INTENT-1 §3, §5). |
-| `blacklist` | array of strings | no | Slot-free phrases (INTENT-2 §4.3) whose occurrence suppresses the match (INTENT-3 §5.4). |
+| `blacklist` | array of strings | no | Slot-free phrases (INTENT-2 §4.3) whose occurrence suppresses the match (INTENT-3 §5.5). |
+| `required_slots` | array of strings | no | Slot names the engine MUST extract for a match to be valid (INTENT-3 §5.3). |
 
-### 6.2 Slot-consistency
+### 6.2 Slot sets
 
-Every template in `samples` **MUST** declare the same set of named slots —
-the slot-consistency rule of INTENT-1 §5.5. A consuming plugin **MUST NOT**
-index a registration that violates the slot-consistency rule.
+Templates in `samples` MAY declare **different sets of named slots**;
+the engine extracts only the slots declared by the template that best
+matches (INTENT-1 §5.5, INTENT-3 §5.1). A consuming plugin MUST accept
+registrations with differing slot sets across templates.
 
 ### 6.3 Malformed payloads
 
@@ -348,7 +355,8 @@ A consuming plugin **MUST NOT** index a template registration in which:
 - `samples` is missing or empty;
 - a template is not parsable as OVOS-INTENT-1 §3 grammar;
 - a template expands to zero non-empty samples (OVOS-INTENT-1 §3.6);
-- the slot sets of the templates differ (§6.2).
+- `required_slots` names a slot that is not declared by any template in
+  `samples` (INTENT-3 §5.3).
 
 The §5.3 WARN-log rule applies: the rejecting plugin **MUST** log
 the rejection with `skill_id`, `intent_name`, `lang`, and a
@@ -396,11 +404,14 @@ rejecting plugin **MUST** log the rejection with `skill_id`,
 
 ### 8.1 Replacement is implicit
 
-Registering an intent whose `(skill_id, intent_name, lang)` triple
-matches an existing registration **replaces** it (INTENT-3 §6.1) —
-no prior deregister needed. Replacement preserves enabled/disabled
-state (§8.5); a producer that wants to reset that state deregisters
-first. Same rule for entities keyed on `(skill_id, entity_name, lang)`.
+Registering an intent whose `(session_id, skill_id, intent_name, lang, method)`
+quintuple matches an existing registration **replaces** it
+(INTENT-3 §6.1) — no prior deregister needed. Replacement preserves
+enabled/disabled state (§8.5); a producer that wants to reset that
+state deregisters first. The same rule applies to entities, keyed on
+the quadruple `(session_id, skill_id, entity_name, lang)` — entities
+have no `method` axis. The `session_id` is read from
+`context.session.session_id` (§11.1) — never from `Message.data`.
 
 ### 8.2 `ovos.intent.deregister`
 
@@ -438,8 +449,18 @@ registered under that `skill_id`. Payload:
 { "skill_id": "music.skill" }
 ```
 
-This is the message an orchestrator emits, or that a skill sends to the orchestrator, when a
-skill is unloaded (INTENT-3 §6.1).
+An optional `session_id` field narrows the removal to registrations
+scoped to that session (§11):
+
+```json
+{ "skill_id": "music.skill", "session_id": "satellite-abc" }
+```
+
+This is the message an orchestrator emits, or that a skill sends to
+the orchestrator, when a skill is unloaded (INTENT-3 §6.1). A bridge
+SHOULD emit `ovos.skill.deregister` with the satellite's `session_id`
+for every skill the satellite registered when the satellite
+disconnects (OVOS-BRIDGE-1 §3).
 
 Deregistering an intent, entity, or skill that is not currently
 registered is a **no-op**: registrations are fire-and-forget, every
@@ -521,11 +542,15 @@ Two read-only topics:
 Lists registered intents. Request payload:
 
 ```json
-{ "skill_id": "music.skill", "lang": "en-US" }
+{ "skill_id": "music.skill", "lang": "en-US", "session_id": "satellite-abc" }
 ```
 
-Both fields are **optional filters**: omitting `skill_id` returns every
-skill's intents; omitting `lang` returns every language. An intent
+All fields are **optional filters**: omitting `skill_id` returns every
+skill's intents; omitting `lang` returns every language; omitting
+`session_id` returns intents from all sessions (global view). When
+`session_id` is provided the response returns the **effective pool**
+for that session: `"default"` intents plus session-specific intents
+(§11.2), not the raw index for that session alone. An intent
 registered under both methods (§3.2) appears as two entries
 distinguished by `method`.
 
@@ -540,16 +565,18 @@ Response (`ovos.intent.list.response`):
       "intent_name": "play_music",
       "lang": "en-US",
       "method": "template",
-      "enabled": true
+      "enabled": true,
+      "session_id": "default"
     }
   ]
 }
 ```
 
 Each entry carries `skill_id`, `intent_name`, `lang`, a `method` of
-`"keyword"` or `"template"` (INTENT-3 §2), and an `enabled` boolean
-(§8.5). Reserved-name registrations are malformed (§3.2) and do not
-appear in the manifest.
+`"keyword"` or `"template"` (INTENT-3 §2), an `enabled` boolean
+(§8.5), and the `session_id` under which the intent was registered.
+Reserved-name registrations are malformed (§3.2) and do not appear
+in the manifest.
 
 ### 10.2 `ovos.intent.describe`
 
@@ -578,7 +605,98 @@ authorization is out of scope.
 
 ---
 
-## 11. Conformance
+## 11. Session-scoped registration
+
+### 11.1 Every registration is session-keyed
+
+The orchestrator keys every registration by the `session_id` it
+reads from `context.session.session_id` — the
+`context` field of the bus Message envelope, never from
+`Message.data`. This is a strict requirement: `session_id` in
+`data` would allow a producer to register intents under an arbitrary
+session it does not own. Reading from `context` means the
+`session_id` is set by the session the producer is running under,
+not by anything the producer chooses to assert in its payload.
+
+No change to the registration message shape is required — every bus
+Message already carries a session in `context` (OVOS-MSG-1). The
+full registration key becomes the quintuple
+`(session_id, skill_id, intent_name, lang, method)`; the prior
+quadruple `(skill_id, intent_name, lang, method)` is the special
+case where `session_id == "default"`.
+
+Skills running on the local device register under `"default"` because
+the local device uses the default session (OVOS-SESSION-2 §5). Skills
+running on a remote satellite register under whatever `session_id`
+the satellite's session carries. No new message, no new field, no
+coordination protocol.
+
+### 11.2 Inheritance — `"default"` is the global scope
+
+The **effective intent pool** for a session X is:
+
+```
+pool(X) = { intents registered under "default" }
+        ∪ { intents registered under session_id == X }
+        − { entries blacklisted by session X's blacklist fields }
+```
+
+Every session implicitly inherits the full `"default"` set.
+Session-scoped registrations extend the pool — they never narrow it.
+Narrowing is the exclusive job of the `blacklisted_skills`,
+`blacklisted_intents`, and `blacklisted_pipelines` session fields
+(OVOS-PIPELINE-1 §5, OVOS-SESSION-1 §3).
+
+If the same `(skill_id, intent_name, lang, method)` exists in both
+`"default"` and session X, both index entries are retained and both
+appear in the matching pool. The existing first-match-wins iteration
+(OVOS-PIPELINE-1 §6) determines which is used; the blacklist is the
+explicit suppression mechanism if the satellite wants to shadow a
+default intent.
+
+### 11.3 Deregistration and session teardown
+
+`ovos.intent.deregister` and `ovos.entity.deregister` remove the
+entry whose full key matches, including `session_id`. An omitted
+`session_id` in the deregistration payload removes the entry from
+`"default"` only — it does not remove session-scoped registrations
+with the same `(skill_id, intent_name, lang)`.
+
+`ovos.skill.deregister` with an optional `session_id` field (§8.4)
+removes all registrations for that skill scoped to that session. A
+bridge SHOULD emit `ovos.skill.deregister` with the satellite's
+`session_id` for each satellite skill when the satellite disconnects,
+to clean up the satellite's session-scoped registrations from the
+orchestrator's index.
+
+### 11.4 Pipeline plugin visibility
+
+A pipeline plugin that wishes to support session-scoped matching
+SHOULD receive the effective pool for the current session's
+`session_id` when performing a match, i.e. the union described in
+§11.2. Plugins that do not implement session-scoped matching
+continue to operate against the `"default"` pool only and remain
+conformant; they simply cannot match session-specific intents.
+
+How the orchestrator communicates the effective pool to a plugin is
+an implementation concern outside this specification. The normative
+requirement is that the pool delivered to a matching plugin for
+session X MUST include all entries satisfying §11.2.
+
+### 11.5 Dispatch routing for session-scoped skills
+
+When the orchestrator dispatches a session-scoped intent — one
+registered under a non-default `session_id` — the dispatch Message
+is a `.reply()` of the inbound utterance, which sets
+`context.destination` to the originating participant's `source`. A
+bridge conformant with OVOS-BRIDGE-1 §3.2 will route that dispatch
+back to the satellite that owns the session. No special routing
+protocol is needed; the existing destination-based routing
+(OVOS-MSG-1 §3, OVOS-BRIDGE-1 §3.2) handles it transparently.
+
+---
+
+## 12. Conformance
 
 ### A **skill** (producer of registration messages) **MUST**:
 
@@ -619,15 +737,23 @@ OVOS-PIPELINE-1's concern.
 
 - subscribe to every registration topic (§§5–8) and maintain the
   **manifest** — a passive index built from observed broadcasts;
+- key every manifest entry by the quintuple
+  `(session_id, skill_id, intent_name, lang, method)`, reading
+  `session_id` from `context.session.session_id` of the registration
+  message (§11.1);
 - serve `ovos.intent.list` and `ovos.intent.describe` queries
   against the manifest, returning the shape of §10.1 / §10.2;
-- treat a re-registration with the same key as replacement of the
-  prior manifest entry (§8.1); the key is the quadruple
-  `(skill_id, intent_name, lang, method)`, so other languages and
-  the other-method entry for the same intent are unaffected;
+  when the query includes a `session_id`, return the effective pool
+  for that session per §11.2;
+- treat a re-registration with the same quintuple as replacement of
+  the prior manifest entry (§8.1); other `session_id`s, languages,
+  and methods for the same intent are unaffected;
 - honour `ovos.intent.enable` / `ovos.intent.disable` in the
   manifest (§8.5) — the `enabled` field of §10.1 reflects the
   latest state;
+- on receiving `ovos.skill.deregister` with a `session_id` field,
+  remove all manifest entries for that `(session_id, skill_id)` pair
+  (§8.4, §11.3);
 - **NOT** validate, reject, route, or gate any registration message.
   The orchestrator is a passive listener for the manifest, not a
   routing party.
