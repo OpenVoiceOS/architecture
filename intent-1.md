@@ -107,11 +107,13 @@ A template is literal text interspersed with the tokens below.
 | Literal word | `word` | — | Matched or spoken verbatim. |
 | Alternatives | `(a\|b\|c)` | expansion | A choice of branches (§3.2). |
 | Optional | `[x]` | expansion | An optional segment; equivalent to `(x\|)`. |
-| Named slot | `{name}` | slot | A placeholder filled with a value (§5). |
+| Named slot | `{name}` or `{{name}}` | slot | A placeholder filled with a value; the two forms are equivalent (§3.4, §5). |
 | Vocabulary reference | `<name>` | expansion | Expands to a named vocabulary (§3.7). |
 
-There is no slot-typing syntax, no digit token, no legacy wildcard, and no
-brace-escaping form.
+There is no slot-typing syntax, no digit token, and no legacy wildcard. A
+named slot has two equivalent spellings, `{name}` and `{{name}}` (§3.4); the
+double-brace spelling is a slot, not a brace-escaping form — the grammar
+provides no way to write a literal brace, and none is needed (§2).
 
 ### 3.1 Literal words
 
@@ -150,17 +152,31 @@ turn on [the] lights
 ### 3.4 Named slots `{ }`
 
 A curly-brace token is a **named slot** — a placeholder that is not written out
-but *filled* with a value. The same `{name}` syntax is used everywhere a slot
+but *filled* with a value. The same slot syntax is used everywhere a slot
 appears; only *who fills it and when* differs by file type (§5.1).
 
-A slot **name** MUST consist only of lowercase ASCII letters, digits, and
-underscores (`a`–`z`, `0`–`9`, `_`), MUST NOT begin with a digit, and MUST NOT
-contain whitespace inside the braces. A slot MAY appear anywhere
-a literal word may, including inside an alternative or optional group:
+A named slot MAY be written in **either** of two equivalent forms:
+
+- single-brace — `{name}`;
+- double-brace — `{{name}}`.
+
+The two forms are **exactly equivalent**: a conformant tool folds `{{name}}`
+to `{name}` and treats them identically thereafter. They denote the same slot,
+fill the same way, and obey the same rules; there is no behavioural difference
+between them. The double-brace form is a slot, **not** an escape: `{{` … `}}`
+never produces a literal brace, and the grammar provides no brace-escaping form
+(§2 makes brace characters impossible as literal input, so none is needed).
+
+A slot **name** — the text inside the braces in either form — MUST consist only
+of lowercase ASCII letters, digits, and underscores (`a`–`z`, `0`–`9`, `_`),
+MUST NOT begin with a digit, and MUST NOT contain whitespace inside the braces.
+These rules apply identically to `{name}` and `{{name}}`. A slot MAY appear
+anywhere a literal word may, including inside an alternative or optional group:
 
 ```
 (buy|sell) {item}
 it is currently {temperature} degrees
+(buy|sell) {{item}}
 ```
 
 Slots are used only by `.intent` and `.dialog` files (§1.1).
