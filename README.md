@@ -95,7 +95,7 @@ pre-spec status quo, `2` for one that is not backwards compatible.
 
 | ID | Document | Version | Status |
 |----|----------|---------|--------|
-| OVOS-INTENT-1 | [Sentence Template Grammar](intent-1.md) | 1 | Draft |
+| OVOS-INTENT-1 | [Sentence Template Grammar](intent-1.md) | 2 | Draft |
 | OVOS-INTENT-2 | [Locale Resource Formats](intent-2.md) | 1 | Draft |
 | OVOS-INTENT-3 | [Intent Definition](intent-3.md) | 1 | Draft |
 | OVOS-INTENT-4 | [Intent and Entity Registration](intent-4.md) | 2 | Draft |
