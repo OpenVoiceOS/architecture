@@ -380,6 +380,173 @@ the normative sections.
   transformer types are natural producers of which
   signals; consolidation is the consumer's decision per
   SESSION-1 §3.2.7.
+- **Why each injection point is the only point.**
+  Each of the six transformer chains exists at the *only*
+  lifecycle stage where its input artifact is available and
+  its class of mutation is possible:
+  - **Audio (§3.1)** — the only stage where unprocessed
+    audio exists. STT is information-lossy by design; it
+    preserves *what was said* and discards almost everything
+    about *how it was said*: prosody, acoustic language cues,
+    speaker characteristics, ambient context, sub-vocal
+    signals. Any concern that depends on the audio signal
+    itself — voice activity, acoustic language detection,
+    speaker identification, acoustic-event detection, noise
+    reduction for downstream STT accuracy — has exactly one
+    place to live.
+  - **Utterance (§3.2)** — the only stage where the user's
+    utterance exists as text but no semantic interpretation
+    has been committed to yet. Once intent matching runs,
+    the utterance is bound to a specific intent's
+    slot-and-vocabulary shape; any cross-cutting text
+    manipulation after that point would have to be
+    intent-aware. Mutations here therefore ripple uniformly
+    through every downstream stage and every intent engine —
+    normalize contractions once and every engine sees the
+    normalized form; translate Spanish to English once and
+    every English-trained engine becomes reachable.
+  - **Metadata (§3.3)** — the only stage where the joint
+    audio-plus-text signal is fully available, intent
+    matching has not yet committed, and the full
+    `Message.context` is in flight and mutable. Audio
+    transformers had no text and no session; utterance
+    transformers primarily mutate the utterance list; intent
+    transformers operate after match. Here a metadata
+    transformer can derive cross-cutting signals from the
+    joint audio+text material and make them available *once*
+    to every downstream stage, by writing wherever in
+    `Message.context` the consumers will look.
+  - **Intent (§3.4)** — the only stage that holds *both* the
+    resolved intent identity and the user's free-text capture
+    values. Before match, the intent is unknown — there's
+    nothing to enrich. After dispatch, the handler has
+    already been called — too late to add typed equivalents
+    or contextual fallbacks. The capture map is the universal
+    interface every engine produces (OVOS-INTENT-3 §7), so
+    enrichment here is engine-agnostic.
+  - **Dialog (§3.5)** — the only stage where the assistant's
+    response exists as *final text* — the skill has committed
+    to what to say but TTS has not committed to how it
+    sounds. Mutations here are language-aware, persona-aware,
+    and content-policy-aware in ways no later stage can be:
+    once the text is synthesized into audio, the
+    modifications available are audio-domain only.
+  - **TTS (§3.6)** — the only stage where the final response
+    exists as *synthesized audio bytes* — speech text has
+    been rendered to a waveform, but the waveform hasn't been
+    played yet. Audio-domain modifications belong here for
+    the same reason audio transformers belong pre-STT: this
+    is where the acoustic dimension exists and is mutable.
+
+- **Canonical use cases, per injection point.**
+  - **Audio §3.1:** voice activity detection; audio language
+    detection (writing detected language into metadata for
+    downstream STT and intent stages to read); acoustic noise
+    reduction; format/sample-rate normalization.
+  - **Utterance §3.2:** text normalization (contractions,
+    casing, common typo correction); STT transcription
+    validation — dropping garbled candidates;
+    cancellation/stop-word detection; source-language
+    translation into the matching language; code-switching
+    cleanup.
+  - **Metadata §3.3:** caller/speaker identification written
+    to a top-level context key; mood/urgency/formality
+    classification from the joint signal; per-utterance
+    language override (combining audio-language detection with
+    utterance-language hint, writing the resolved language to
+    `session.lang`); per-utterance pipeline switch (detecting a
+    sensitive-query signal and swapping `session.pipeline`);
+    system context injection (writing entries to
+    `session.intent_context` for downstream pipeline plugins
+    and skills to read as gates, without round-tripping
+    through CONTEXT-1 §5 bus events).
+  - **Intent §3.4:** system entity injection — the canonical
+    use. Parse free-text capture values into typed system
+    entities (dates, numbers, durations, named locations,
+    ordinals) and add typed equivalents under
+    conventionally-named keys for skill handlers to consume
+    uniformly. This is OVOS-INTENT-1 §5.3's deferred value
+    typing; this chain is the agreed home for applying that
+    normalization globally so individual skills do not each
+    implement it. Also: named-entity recognition over capture
+    values; per-skill enrichment a deployer wants applied
+    without each skill re-implementing it.
+  - **Dialog §3.5:** translation to the user's preferred
+    language when it differs from the rendering language;
+    persona/tone rewriting; content moderation (profanity
+    filtering, sensitive-topic rephrasing); length
+    normalization for voice responses.
+  - **TTS §3.6:** voice effects (character voices, pitch
+    shifting, post-processing EQ); cross-fade or jingle
+    injection for branded assistants; format conversion for
+    downstream playback constraints.
+
+- **Where LLMs fit, per injection point.**
+  - **Audio §3.1:** language identification is the typical
+    model-backed audio transformer; full LLMs do not run at
+    this stage in any practical deployment.
+  - **Utterance §3.2:** a natural injection point for
+    language models — a small local model validating STT
+    plausibility, a translation model producing a candidate
+    string in the assistant's primary language, a paraphrase
+    model adding alternative candidates so a downstream intent
+    engine has more material to match against.
+  - **Metadata §3.3:** a small classifier (LLM-backed or
+    otherwise) inferring conversational metadata from the
+    utterance and feeding the result into `Message.context` —
+    useful when several pipeline plugins or skills want to
+    read the same derived signal without each computing it
+    themselves. Also: an LLM that reads the utterance text
+    and decides per-utterance which `session.pipeline`
+    configuration to apply.
+  - **Intent §3.4:** the strongest match in the stack. A
+    small LLM can extract structured entities (dates,
+    durations, quantities) from free-text capture values and
+    inject the typed forms into `Match.captures` — once,
+    centrally — so every skill receives the same typed payload
+    regardless of which engine matched.
+  - **Dialog §3.5:** the most prominent LLM application —
+    response rewriting under a persona prompt. A `tone` or
+    `persona` directive on a dialog transformer routes the
+    skill's plain response through an LLM with a system
+    prompt, yielding the user-facing voice the assistant wants
+    to present. Translation models also live here for runtime
+    localization of skill-rendered text.
+  - **TTS §3.6:** not applicable in any practical sense; this
+    stage operates on audio bytes only.
+
+- **Cross-cutting concerns are the architectural value.**
+  Transformer chains are how a voice OS layers cross-cutting
+  concerns — translation, normalization, entity tagging,
+  persona rewriting, audio filtering — onto the lifecycle
+  without each skill or pipeline plugin having to reinvent
+  them. The architectural value is *uniformity*: a
+  cross-cutting concern applied via a transformer chain
+  affects every utterance / response / artifact that flows
+  through that injection point, with no skill-side opt-in or
+  coordination required.
+
+- **Cancellation in-spec use cases.** An utterance transformer
+  (§3.2) recognises a stop / cancel / never-mind cue in the
+  user's speech and wants the lifecycle to terminate without
+  reaching intent matching. A metadata or intent transformer
+  detects a condition under which the utterance should not be
+  acted on (a profanity filter rejecting unsafe input, a
+  sensitive-context guard halting in a parental-control mode,
+  a transcription-validator dropping garbage transcriptions).
+  A dialog or TTS transformer determines the response itself
+  should not be spoken (policy block, late content filter).
+
+- **Introspection surface: no aggregate query.** There is
+  deliberately no "give me everything" query; that would
+  imply a single responder with a global view, which this
+  specification does not assume exists. A consumer that wants
+  all six types issues six queries.
+
+- **Typical introspection consumers.** Developer tooling
+  surfacing the loaded set; monitoring services tracking chain
+  composition; integration tests asserting on chain order
+  under specific session policies.
 
 ### 4.9 Bus bridge (BRIDGE-1)
 
