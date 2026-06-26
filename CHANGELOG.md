@@ -7,6 +7,47 @@ status quo, `2` once it is not backwards compatible. Entries are grouped under
 the spec's current class. Every pull request that alters normative content adds
 an entry here.
 
+## OVOS-CONTEXT-1 — Intent Context
+
+### 2
+
+- Initial draft. Defines `session.intent_context` as a flat map of
+  key → entry carried inside the SESSION-1 session carrier. Covers
+  context entries (key, value, TTL, owner `skill_id`), private vs.
+  shared scopes (`:` discriminator in the key), decay (TTL counts down
+  per utterance; entries without TTL are session-persistent), three
+  mutation pathways (skill bus events; engine auto-population on match;
+  orchestrator sweep on session close), the `requires_context` and
+  `excludes_context` intent declaration fields, interaction with the
+  match result (context values MAY be injected into `Match.slots`),
+  and conformance roles (Orchestrator, Pipeline Plugin, Skill).
+  Non-goals: trust enforcement and replay prevention are explicitly
+  out of scope.
+## OVOS-TRANSFORM-1 — Transformer Plugins
+
+### 1
+
+- Initial draft. Defines six transformer chains at six injection
+  points in the OVOS-PIPELINE-1 §6 utterance lifecycle, in lifecycle
+  order: audio (raw audio before STT, §3.1), utterance (post-STT text
+  normalization before intent matching, §3.2), metadata (session
+  enrichment after the utterance text, before the match round, §3.3),
+  intent (match-result adjustment after the match round, before
+  dispatch, §3.4), dialog (response-text transformation after a skill
+  emits `speak()`, before TTS, §3.5), and tts (synthesized-audio
+  transformation after TTS, before playback, §3.6). An orchestrator
+  MAY implement any subset of the six points; an unimplemented chain
+  is a no-op. Chains are ordered; the output of one transformer is the
+  input to the next. Per-session ordering and denylists via the
+  `<type>_transformers` / `blacklisted_<type>_transformers` session
+  fields (§5). Defines session mutation discipline: transformers MAY
+  mutate session fields they own (SESSION-1 §2.1) but MUST NOT mutate
+  fields owned by other specs; and utterance cancellation (§8) as the
+  only sanctioned early short-circuit of the lifecycle, preserving the
+  `ovos.utterance.handled` invariant. Conformance roles: Audio,
+  Utterance, Metadata, Intent, Dialog, and TTS Transformer, plus
+  Orchestrator.
+
 ## OVOS-INTENT-1 — Sentence Template Grammar
 
 ### 2
@@ -26,6 +67,11 @@ tool does not recognize the token and cannot expand the template.
 - §3.6 — new malformed forms: a reference to an undefined vocabulary, and a
   cyclic reference chain; `<` and `>` join the unbalanced-metacharacter rule.
 - §7 — the Expander conformance role MUST resolve inline vocabulary references.
+- §3.4, §3 — a named slot MAY be written either `{name}` or `{{name}}`; the two
+  forms are exactly equivalent, with a conformant tool folding `{{name}}` to
+  `{name}`. The slot-name charset and whitespace rules apply to both. The
+  double-brace spelling is a slot, not a brace-escaping form; the grammar still
+  provides no escape.
 
 ### 1
 
@@ -83,6 +129,36 @@ tool does not recognize the token and cannot expand the template.
   authentication, authorization, retry, delivery and ordering
   guarantees, session lifecycle, and the internal shape of `session`
   beyond `session_id` and `lang` are explicitly out of scope.
+
+## OVOS-SESSION-2 — Session Lifecycle and State Ownership
+
+### 1
+
+- The state-ownership model (stateless bus, stateless orchestrator for
+  named sessions, orchestrator-owned default session), the mutation
+  boundaries, `ovos.session.sync` (§2.7), client-side merge rules,
+  resumption semantics, and conformance.
+- §2.4 — a handler that emits no Message cannot propagate in-place
+  session mutations: the orchestrator-emitted handler-lifecycle trio
+  does not reflect handler-side changes, so a handler whose mutations
+  must appear in terminal events emits at least one Message
+  (`ovos.utterance.speak` or `ovos.session.sync`).
+## OVOS-SESSION-1 — Session Carrier Wire Shape
+
+### 1
+
+- The `context.session` carrier wire shape: the `session_id` and `lang`
+  core fields, the language field family (§3.2), the §2.1 field-registry
+  mechanism by which other specifications claim OPTIONAL session fields,
+  and the propagation and wire-weight rules.
+- §2.1 — registered fields and their owning specifications:
+  `converse_handlers` (OVOS-CONVERSE-1 §2.1), `fallback_handlers`
+  (OVOS-FALLBACK-1 §4), and `persona_id` (OVOS-PERSONA-1 §3).
+- §3.3 — `site_id` is defined by OVOS-BRIDGE-1 §3.3; this section states
+  the consumer constraints that apply within the orchestrator pipeline.
+- See also — each field's owning specification, including
+  `session.active_handlers` (OVOS-PIPELINE-1 §7.1) and
+  `session.converse_handlers` (OVOS-CONVERSE-1 §2.1).
 
 ## OVOS-INTENT-4 — Intent and Entity Registration Bus Contract
 
@@ -142,3 +218,18 @@ tool does not recognize the token and cannot expand the template.
   handler-lifecycle trio (§8), and the utterance-layer topics — the
   entry point `ovos.utterance.handle` (§9.1) and the response exit point
   `ovos.utterance.speak` (§9.6).
+## OVOS-BRIDGE-1 — Bus Bridge and Opaque Relay
+
+### 2
+
+- The bus bridge: a participant that terminates an external channel and
+  relays Messages between the internal bus and remote participants. §3 —
+  the normative core: inbound identity stamping (`source`), outbound
+  routing by `destination` / `session_id` / `site_id`, `site_id`
+  assignment, and the relaying vs managing session-preservation modes.
+  §4 — emergent patterns over MSG-1 + SESSION-1/2 + PIPELINE-1 +
+  TRANSFORM-1 + CONTEXT-1 + INTENT-4 at a bus boundary: policy injection,
+  multi-deployment topologies, out-of-utterance `ovos.session.sync`, and
+  satellite skill registration. §5 ordering guidance; §6 conformance.
+- §3.3 — `site_id` assignment is owned here; OVOS-SESSION-1 §3.3 carries
+  the registry pointer and the orchestrator-pipeline consumer constraints.
