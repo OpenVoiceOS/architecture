@@ -42,3 +42,6 @@ open a PR adding it.
 | **GUI service** | The state-and-dispatch hub between applications and adapters: holds per-session display state, fans template events out to every adapter, runs the namespace lifecycle, and renders nothing itself ([GUI-1 §2.1](gui-1.md)). |
 | **GUI namespace** | The opaque string (by convention the producing `skill_id`) that scopes a stack of display state within a session ([GUI-1 §2.2](gui-1.md)). |
 | **Session data** | The flat key-value map describing a GUI template's content, accumulated per namespace and synced via `gui.value.set` ([GUI-1 §3.3](gui-1.md)). |
+| **Common query** | A pipeline plugin that answers factual questions by holding a timed contest among skills — broadcast, collect competing answers, rank, speak the best ([COMMON-QUERY-1 §2](common-query.md)). |
+| **Scatter-gather** | The contest pattern: one broadcast fans out to many skills (scatter), their answers are collected and ranked (gather) ([COMMON-QUERY-1 §2](common-query.md)). |
+| **Wants-to-answer poll** | Common query's fast ping/pong phase — a cheap local filter where skills self-nominate before the expensive full-answer phase ([COMMON-QUERY-1 §6](common-query.md)). |
