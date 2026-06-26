@@ -55,3 +55,58 @@
   format, and `ovos-localize` (§1.4) provides the
   operations layer; what remains is the *scale* of the
   translated corpus.
+
+### Bridge-specific gaps (OVOS-BRIDGE-1)
+
+- **Multi-hop bridge cascading.** BRIDGE-1 §4.2 describes
+  peer-to-peer topology between two deployments, but does not
+  address cascaded bridges (deployment A ↔ bridge ↔ deployment B
+  ↔ bridge ↔ deployment C). Each bridge stamps source
+  independently; outer-deployment participant identity is lost
+  at each inner boundary unless propagated as opaque metadata.
+- **Bridge-to-bridge wire format.** The spec does not prescribe
+  whether messages between peer bridges remain in MSG-1 envelope
+  form or may use a different serialization. The intent is that
+  they stay in MSG-1 form (per §4.2 "relays native bus messages"),
+  but the transport encoding is left as a deployment concern.
+- **Bridge health / heartbeat.** No `ovos.bridge.ping` /
+  `ovos.bridge.pong` surface is defined. The orchestrator has no
+  spec-level way to know whether a remote participant is
+  reachable. Deferred to a future observability specification if
+  needed.
+- **Audio transmission over the bus.** BRIDGE-1 §4.2.1 describes
+  two audio-stack placements — local (satellite runs STT and its
+  own audio-output layer) and hub-side (hub runs the full audio
+  stack, satellite transmits raw audio inbound and receives final
+  audio outbound). STT placement and audio-output placement are
+  symmetric and independent: each can live on the satellite or the
+  hub, giving four possible combinations. The hub-side model
+  requires transmitting audio as bus Message payloads (e.g.
+  base64-encoded PCM or compressed frames). The bus surface for
+  any audio transmission — topic names, payload shape, session
+  fields for codec and audio preferences — is not defined by any
+  current specification. Deferred to OVOS-AUDIO-1.
+- **Session-scoped pipeline plugin registration.** BRIDGE-1 §4.4
+  and INTENT-4 §11 cover session-scoped intent registration for
+  satellite-side skills. A satellite that implements a pipeline
+  plugin (not an intent-based skill) cannot register that plugin
+  on the hub; no bus surface exists for session-scoped plugin
+  loading. If needed, this requires a new specification or an
+  extension to OVOS-PIPELINE-1.
+- **Managing mode concurrent utterance race.** BRIDGE-1 §3.4.2
+  says the bridge SHOULD apply `ovos.utterance.handled` session
+  updates before injecting the next utterance, but makes no
+  guarantee when both arrive simultaneously. The handling of
+  overlapping utterance rounds in managing mode — whether to
+  queue, drop, or process with a stale session — is left as a
+  deployment concern. A future revision may define a normative
+  queuing policy.
+- **NAT bijection and hub-side session cleanup.** When a bridge
+  using `session_id` NAT (§3.2) disconnects a participant, the
+  hub-side `session_id` may remain in the orchestrator's
+  default-session store (SESSION-2 §5). BRIDGE-1 §3.2 says the
+  bridge SHOULD emit cleanup events using the hub-side `session_id`
+  before dropping the bijection, but does not define a complete
+  cleanup protocol for hub-side state created during the session's
+  lifetime (e.g. cross-utterance context, active handlers).
+  Deferred to a future session-lifecycle specification.

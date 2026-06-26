@@ -381,7 +381,70 @@ the normative sections.
   signals; consolidation is the consumer's decision per
   SESSION-1 §3.2.7.
 
-### 4.8 Stop pipeline plugin (STOP-1)
+### 4.9 Bus bridge (BRIDGE-1)
+
+- **Normative minimalism is design intent.** The bridge could have
+  been an auth spec, a topology spec, a wire-protocol spec. By
+  limiting normative weight to source stamping, session preservation,
+  and destination-based relay (3 MUSTs in §6), the spec correctly
+  identifies that session fields do the heavy lifting — the bridge
+  just carries them. Everything else (policy injection, topology
+  patterns) emerges from composing existing lifecycle,
+  state-ownership, and session-field specifications at the bus
+  boundary.
+- **Destination-based routing provides client isolation.**
+  Session-id-only routing lets one participant claim another's
+  `session_id` and receive messages intended for the other (§3.2).
+  Destination-based routing fixes this because the orchestrator uses
+  `.reply()` to set `destination` to the original `source`. Two
+  participants sharing the same `session_id` (especially
+  `"default"`) cannot impersonate each other — their `source` values
+  differ, and each receives only messages whose `destination`
+  matches its own identifier. The OVOS-MSG-1 §5 derivation chain
+  preserves routing metadata through every emission, so the bridge
+  never sees a message without sufficient routing information.
+- **Session_id matching is a MAY convenience.** The OVOS-MSG-1 §5
+  derivation chain preserves `destination` across every `forward` /
+  `reply` / `response` hop, so all bus messages that carry
+  conversation progress carry a `destination` the bridge can route
+  on. `session_id` matching exists for the narrow case of topic-level
+  subscriptions a bridge explicitly opts into, not for correctness.
+- **Layer-2 systems inject policy via session fields, not bridge
+  protocol.** A layer-2 system (MSG-1 §3.4) mutates the session at
+  the bridge boundary before the message enters the bus. No
+  bridge-specific protocol is needed — the session fields do the
+  work. This is the same pattern as SESSION-2 §2.4's
+  SHOULD-project pathway, but with the bridge as the enforcement
+  point rather than the component itself.
+- **The hardened minimum topic set is a deployer choice.** A bridge
+  MAY subscribe to everything (default, simpler, compatible with
+  future lifecycle additions) or restrict to the utterance-lifecycle
+  topic set (hardened, reduced attack surface). The trade-off is by
+  design, not prescribed.
+- **`site_id` enables bridge-side physical grouping without
+  requiring skills to understand topology.** The bridge is the
+  natural point to assign `site_id` because it is the only
+  component that has visibility into both the physical deployment
+  and the internal bus. A concrete example: a bridge that receives
+  Wi-Fi or Bluetooth scan data from participants can resolve that
+  signal to a physical location and stamp the appropriate `site_id`
+  before injecting the message; a bridge that integrates with a
+  home-automation system can use the canonical area name from that
+  system (e.g. `"living_room"`, `"kitchen"`) directly as the
+  `site_id`, giving skills a stable identifier that is already
+  meaningful in the user's home model. In either case, participants
+  need not know their own location, and skills need not understand
+  network topology.
+  The `site_id` then travels with the session, giving any downstream
+  pipeline plugin or skill a stable, location-derived grouping key
+  for context (e.g. applying room-specific TTS voices, routing
+  media to the nearest speaker, or gating location-aware intents).
+  This is why the spec mandates `site_id` for group routing rather
+  than enumerating participants: the bridge encapsulates the mapping
+  from physical signal to logical group, and everything downstream
+  consumes an opaque string.
+
+### 4.10 Stop pipeline plugin (STOP-1)
 
 The most common reader question on first encountering STOP-1 is
 *why a pipeline plugin and not a skill*. Stop sounds like an

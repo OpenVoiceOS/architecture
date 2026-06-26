@@ -156,3 +156,19 @@ tool does not recognize the token and cannot expand the template.
   consumer-side `ovos.mic.listen` row (defined in OVOS-AUDIO-1 §4.4).
 - See-also — cross-references OVOS-AUDIO-1 §4.4 as the defining spec
   for `ovos.mic.listen`.
+
+## OVOS-BRIDGE-1 — Bus Bridge and Opaque Relay
+
+### 2
+
+- The bus bridge: a participant that terminates an external channel and
+  relays Messages between the internal bus and remote participants. §3 —
+  the normative core: inbound identity stamping (`source`), outbound
+  routing by `destination` / `session_id` / `site_id`, `site_id`
+  assignment, and the relaying vs managing session-preservation modes.
+  §4 — emergent patterns over MSG-1 + SESSION-1/2 + PIPELINE-1 +
+  TRANSFORM-1 + CONTEXT-1 + INTENT-4 at a bus boundary: policy injection,
+  multi-deployment topologies, out-of-utterance `ovos.session.sync`, and
+  satellite skill registration. §5 ordering guidance; §6 conformance.
+- §3.3 — `site_id` assignment is owned here; OVOS-SESSION-1 §3.3 carries
+  the registry pointer and the orchestrator-pipeline consumer constraints.
