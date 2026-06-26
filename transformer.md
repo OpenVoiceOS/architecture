@@ -894,7 +894,7 @@ top-level keys in `Message.context`. To avoid collisions between
 unrelated plugins, transformers **SHOULD** namespace their
 ad-hoc coordination keys with their `transformer_id` (or a
 related stable identifier) as a prefix —
-e.g. `ovos-utterance-translation-plugin.output_lang` rather than
+e.g. `<transformer_id>.output_lang` rather than
 bare `output_lang`. The spec defines no central registry for
 context-key names; namespacing is the discipline that makes the
 absence of a registry safe.
