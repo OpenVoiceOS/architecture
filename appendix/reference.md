@@ -116,7 +116,7 @@ them.
 
 ### 6.4 Introspection patterns
 
-Four specs in this set define pull-query / scatter-response
+Several specs in this set define pull-query / scatter-response
 introspection surfaces. The shapes are intentionally similar
 but serve different scopes:
 
@@ -124,10 +124,9 @@ but serve different scopes:
 |------|-------|-------|-------------------------|
 | INTENT-4 §10 | `ovos.intent.list` / `.describe` | Declared intents observed on the bus | Orchestrator (the manifest) |
 | PIPELINE-1 §10 | `ovos.pipeline.<pipeline_id>.intents.list` | Intents currently compiled inside a specific plugin's matcher | The pipeline plugin |
-| CONTEXT-1 §5.4 | `ovos.context.list` | Post-decay session-context snapshot | The orchestrator process owning the match round |
 | TRANSFORM-1 §6 | `ovos.transformer.<type>.list` | Loaded transformers per injection point | The orchestrator process implementing that chain |
 
-Three properties hold across all four:
+Three properties hold across these surfaces:
 
 1. **Pull-query is the source of truth.** Producers MAY
    broadcast load-time announcements; consumers MUST NOT
