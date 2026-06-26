@@ -276,6 +276,33 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 - See-also — cross-references OVOS-AUDIO-1 §4.4 as the defining spec
   for `ovos.mic.listen`.
 
+## OVOS-GUI-1 — GUI Display Subsystem
+
+### 1
+
+- Initial draft. Formalizes the GUI display subsystem that decouples
+  voice applications from rendering technology: applications declare
+  *what* to display by naming a template from a closed, curated
+  vocabulary of `SYSTEM_*` templates and supplying that template's
+  session data; interchangeable render backends (adapters) decide
+  *how*. Defines the closed template vocabulary (§3) — state/feedback,
+  content primitives, media, domain cards, and interactive companions
+  — each with its normative session-data keys; the wire protocol (§4)
+  — `gui.value.set` / `gui.page.show`, the reserved `__from` / `__idle`
+  data keys, and the per-session namespace lifecycle; addressing (§5)
+  — routing by `session_id` alone, with shared/multi-room screens
+  expressed by clients sharing a `session_id` and no separate
+  site/location dimension; the adapter contract (§6) — entry-point
+  discovery, unconditional multi-modal fan-out to every installed
+  adapter, exception-safe non-blocking handlers/hooks keyed by
+  `session_id`, and capability-degradation guidance; the
+  interaction path (§7) for media transport and `confirm` / `select`
+  responses carrying the originating `session_id`; and conformance
+  (§8) for producers, the GUI service, and adapters. Raw-passthrough
+  templates (`SYSTEM_html` / `SYSTEM_url`) are documented as
+  discouraged escape hatches. Builds on OVOS-MSG-1 (envelope),
+  OVOS-SESSION-1 (the `session_id` routing key and reserved
+  `"default"`), and OVOS-SESSION-2 (lifecycle / client authority).
 ## OVOS-COMMON-QUERY-1 — Common Query Pipeline Plugin
 
 ### 2

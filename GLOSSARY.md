@@ -37,6 +37,11 @@ open a PR adding it.
 | **Context** | The assistant-metadata object on a Message; an extensible JSON object whose keys are defined by companion specs ([MSG-1 §2.3](msg-1.md)). |
 | **Session** | The per-conversation carrier in `context.session`; carries `session_id` (with `"default"` reserved for "originates from the device itself") and `lang` (the user's preferred language, distinct from any `data.lang` describing the payload's own language) ([MSG-1 §4](msg-1.md)). |
 | **Listening lifecycle signal** | A payload-free bus signal the audio input service emits or consumes around voice-command capture and sleep mode — `ovos.listener.record.started` / `.record.ended`, `ovos.listener.sleep`, `ovos.listener.awoken` ([AUDIO-IN-1 §6](audio-in.md)). |
+| **GUI template** | A member of the closed, curated `SYSTEM_*` vocabulary an application names to declare *what* to display; distinct from an INTENT-1 sentence template ([GUI-1 §3](gui-1.md)). |
+| **Render backend / Adapter** | An additive plugin that turns GUI template intents into a concrete presentation (screen, browser, terminal, face); every installed adapter receives every event ([GUI-1 §6](gui-1.md)). |
+| **GUI service** | The state-and-dispatch hub between applications and adapters: holds per-session display state, fans template events out to every adapter, runs the namespace lifecycle, and renders nothing itself ([GUI-1 §2.1](gui-1.md)). |
+| **GUI namespace** | The opaque string (by convention the producing `skill_id`) that scopes a stack of display state within a session ([GUI-1 §2.2](gui-1.md)). |
+| **Session data** | The flat key-value map describing a GUI template's content, accumulated per namespace and synced via `gui.value.set` ([GUI-1 §3.3](gui-1.md)). |
 | **Common query** | A pipeline plugin that answers factual questions by holding a timed contest among skills — broadcast, collect competing answers, rank, speak the best ([COMMON-QUERY-1 §2](common-query.md)). |
 | **Scatter-gather** | The contest pattern: one broadcast fans out to many skills (scatter), their answers are collected and ranked (gather) ([COMMON-QUERY-1 §2](common-query.md)). |
 | **Wants-to-answer poll** | Common query's fast ping/pong phase — a cheap local filter where skills self-nominate before the expensive full-answer phase ([COMMON-QUERY-1 §6](common-query.md)). |
