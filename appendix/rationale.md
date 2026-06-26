@@ -679,3 +679,67 @@ subscribed to `<own_skill_id>:stop`. The pipeline plugin matches
 and selects; the skill stops. Stop is one of the few cases in
 the spec set where the pipeline / skill split is not
 substitutable.
+
+### 4.10 Common query pipeline plugin (COMMON-QUERY-1)
+
+Common query answers factual questions by holding a timed contest
+among skills — broadcast the question, collect competing answers,
+rank them, speak the best. Four of its design choices are
+unusual enough to be worth recording, because each one trades
+against an instinct a reader brings to the spec.
+
+**`match` blocks, and that is deliberate.** PIPELINE-1 §4.4 tells
+plugins to return from `match` quickly and defer expensive work to
+the handler, because match-phase latency is response latency. Common
+query openly violates that discipline, and it has to: the answer
+*is* the claim decision. The plugin cannot return a `Match` and
+collect afterwards, because whether it claims at all depends on
+whether any skill produced an answer above threshold. Routing and
+processing are the same act here, so both happen in `match`. This is
+the one place the spec set says "yes, this matcher blocks for
+seconds" — and it pays for that admission with the early-start
+optimisation and explicit pipeline positioning, rather than
+pretending the cost away.
+
+**Returning `None` on no-answer is what keeps fallback alive.** The
+earlier, discarded design had the plugin claim the utterance, then
+discover during the handler that no skill could answer, and speak a
+dead-end "I don't know." That permanently starves fallback: once a
+plugin claims, first-match-wins means no later stage runs. Moving the
+whole contest into `match` lets the plugin make an honest claim — it
+returns a `Match` only when it actually has an answer, and `None`
+otherwise — so a failed contest flows naturally to fallback. The
+correctness of the whole pipeline tail depends on the contest
+finishing before the claim is made.
+
+**Ping/pong is a cheap filter gating an expensive operation, not
+ceremony.** It would be simpler to broadcast the question once and
+let skills answer directly. The two-phase poll earns its place
+because the full-answer request invites real I/O — a knowledge skill
+will hit Wikipedia, Wolfram, or a database. Without the cheap local
+pong filter, every such skill performs that I/O for every question
+that passes the gate, including ones far outside its domain. The
+~500ms poll window buys the right to *not* hammer every backend on
+every utterance. (Mycroft's original CommonQuerySkill was also
+two-phase, but for a different reason — message-bus timeout
+management; see comparisons §2.6.)
+
+**Early start hides latency without shrinking the contest.** Because
+`match` blocks, the plugin MAY begin the contest the instant the
+utterance arrives (`ovos.utterance.handle`), running it in parallel
+with the upstream stop/converse/intent stages that get first refusal
+anyway. The subtle requirement is that the early-start cache holds
+only *raw* responses — never a selected answer — and all filtering
+and selection run at `match` time against the *live* session. That
+keeps the optimisation transparent: an upstream stage that
+blacklists a skill or changes session state still takes full effect,
+because the denylist and confidence filters never saw the stale
+snapshot.
+
+The question gate (COMMON-QUERY-1 §4) is the other half of the
+latency story: a cheap up-front classifier that rejects weather
+requests, music commands, timers, and plain statements before any
+broadcast. It is a SHOULD, not a MUST — the confidence filter
+guarantees correctness without it — but on mixed traffic it is the
+single largest latency win available, since it skips the entire
+contest for utterances no knowledge skill would answer anyway.
