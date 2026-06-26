@@ -507,7 +507,7 @@ from within its dispatched handler. The mutation sets:
 
 ```json
 {
-  "skill_id": "<self.skill_id>",
+  "skill_id": "<skill_id>",
   "expires_at": <now + timeout_seconds>
 }
 ```
