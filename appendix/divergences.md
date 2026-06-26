@@ -178,7 +178,7 @@ defined by any spec** and should be removed or replaced:
   interception covers off-dispatch emissions.
 - **Entry-point topic renamed `ovos.utterance.handle`**
   (PIPELINE-1 §9.1). `recognizer_loop:utterance` fails
-  MSG-1 §2.1.2 naming conventions: `:` as a segment
+  MSG-1 §2.1.1 naming conventions: `:` as a segment
   separator, an implementation-role prefix, and no pairing
   with the terminal `ovos.utterance.handled`. Migration cost
   is real — every audio-input service and intent-service
@@ -220,7 +220,7 @@ defined by any spec** and should be removed or replaced:
 - **`ovos.transformer.{type}.list`** (TRANSFORM-1 §6).
   Per-type introspection of loaded transformers.
 - **Materialize-default-session rule** on `forward` /
-  `reply` / `response` (MSG-1 §4.3). Formalizes a "MAY"
+  `reply` / `response` (MSG-1 §5). Formalizes a "MAY"
   convenience for in-process subsystems; not currently
   implemented but compatible with current behaviour.
 - **`ovos.session.sync`** (SESSION-2 §2.7). Explicit
