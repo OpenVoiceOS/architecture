@@ -331,7 +331,7 @@ stage rejected.
 
 #### 4.1.3 Context pre-population
 
-`session.intent_context` (**OVOS-CONTEXT-1**) MAY be seeded at the
+`session.intent_context` (**OVOS-CONTEXT-1 §2**) MAY be seeded at the
 bridge boundary so that a remote participant's first utterance
 benefits from declarative gating or slot values. For example, a
 layer-2 system that knows the participant's locale can pre-populate
@@ -404,7 +404,7 @@ the cascading deployment actively participates in the utterance
 lifecycle before deciding to escalate.
 
 The local deployment MAY communicate what it has already attempted
-by seeding `session.intent_context` (**OVOS-CONTEXT-1**) or
+by seeding `session.intent_context` (**OVOS-CONTEXT-1 §2**) or
 adjusting `session.active_handlers` (**OVOS-PIPELINE-1 §7.1**)
 before forwarding the utterance. The bridge relays the message
 unchanged; the remote deployment's pipeline receives the session as
