@@ -1,13 +1,6 @@
 ---
 [← APPENDIX.md](../APPENDIX.md) · Non-normative
 
-> **⚠️ AI-generated draft — not yet fully reviewed.** This content
-> was produced by a large language model (Claude Code) and
-> has not yet been fully reviewed for accuracy, completeness, or
-> consistency with the specifications. The normative specifications
-> themselves are human-reviewed; this appendix is supplementary
-> context. Readers should verify claims before relying on them.
-
 ## 1. About the OVOS specifications
 
 ### 1.0 The voice operating system concept
@@ -71,15 +64,15 @@ implemented by new engines, new hosts, and adopted by other
 assistants.
 
 This matters for how to read them. They are **prescriptive** —
-each spec states a clean target, and where it diverges from
-current OVOS behaviour the divergence is a deliberate cleanup
+each spec states a clean target, and where it diverges from the
+reference implementation the divergence is a deliberate cleanup
 (catalogued in §5) — but they are not speculative. The target is
 a lightly-cleaned version of a working system, not a greenfield
 design. `padacioso`, `ovos-workshop`, and `ovos-bus-client` are
-the closest existing implementations; none yet fully conforms,
-and bringing them into conformance is planned work. OVOS-MSG-1
-is the closest to current code of all the specs — it is largely
-a verbatim formalization of what `ovos-bus-client` already does.
+the closest existing implementations; each predates the
+specifications and none implements them in full. OVOS-MSG-1 sits
+closest to the reference implementation of all the specs — it is
+largely a verbatim formalization of what `ovos-bus-client` does.
 
 ### 1.2 The spec set, in three stacks
 
@@ -146,11 +139,10 @@ dependency-light Python package. New tools that consume locale
 folders or expand templates should depend on it rather than
 reimplementing.
 
-The bus and orchestrator stacks do not yet have a comparable
-ground-up reference implementation; `ovos-bus-client` is the
-closest match for OVOS-MSG-1 and `ovos-core` is the closest
-match for OVOS-PIPELINE-1 + OVOS-INTENT-4, but both predate the
-specs.
+The bus and orchestrator stacks have no comparable ground-up
+reference implementation; `ovos-bus-client` is the closest match
+for OVOS-MSG-1 and `ovos-core` is the closest match for
+OVOS-PIPELINE-1 + OVOS-INTENT-4, but both predate the specs.
 
 **`ovos-localize`** is the i18n-operation layer atop the intent
 stack: a GitHub-native localization platform for OVOS skills,
