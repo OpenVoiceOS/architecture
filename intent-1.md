@@ -410,9 +410,9 @@ and a slot referencing an undefined value set is **not** an error.
 
 ### 5.5 Slot consistency across a definition
 
-A `.intent` or `.dialog` file — and equivalently any set of inline samples
-registered together (§6.1) — defines **one** intent or **one** dialog. Every
-template in that definition MUST declare the **identical set of slot names**. A
+A `.dialog` file — and equivalently any set of inline caller-supplied-fill
+phrases registered together (§6.1) — defines **one** dialog. Every template in
+that definition MUST declare the **identical set of slot names**. A `.dialog`
 definition MUST NOT mix templates that declare different slots, and MUST NOT mix
 slot-bearing templates with slot-free ones.
 
@@ -421,13 +421,21 @@ template. Optionality does not change this: a slot inside an optional group
 (`[{x}]`, §5.1) is still declared, so a template `say [{x}]` and a template
 `say {x}` declare the **same** slot set and may coexist in one definition.
 
-This guarantees that an intent's captured slots, or a dialog's required fill
-values, are the same regardless of which template matched or was chosen. If two
-phrasings genuinely need different slots, they are two different intents (or
-dialogs): place them in **separate files** and handle them individually.
+This guarantees that a dialog's required fill values are the same regardless
+of which phrase is chosen. If two phrasings genuinely need different slots,
+they are two different dialogs: place them in **separate files** and render
+them individually.
 
-A tool MUST reject a definition whose templates do not all declare the same
-slot set.
+A `.intent` file does **not** impose this constraint. A template intent (§6.1)
+is a collection of training samples; the engine matches against individual
+templates and extracts only the slots declared by the template that best
+matches. Templates in one `.intent` file MAY declare **different slot sets**;
+the union of all declared slot names is the intent's available slot set. A
+tool MUST NOT reject a `.intent` definition because its templates declare
+different slots.
+
+A tool MUST reject a `.dialog` definition whose templates do not all declare
+the same slot set.
 
 ---
 
@@ -454,7 +462,9 @@ On receiving training data a conformant engine **MUST**:
 
 1. Read the file or take the inline samples.
 2. Verify the templates conform to §2–§3 (normalized form, valid tokens).
-3. Verify the templates declare a consistent slot set per §5.5.
+3. For `.dialog` training data, verify the templates declare a consistent
+   slot set per §5.5; for `.intent` training data, accept templates with
+   differing slot sets.
 4. Expand each template to its sample set per §4.
 5. Use the resulting samples as training data, treating `{...}` slots as
    match-time-filled slots. How the engine learns from and generalizes beyond

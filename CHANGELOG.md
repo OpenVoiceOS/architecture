@@ -72,6 +72,11 @@ tool does not recognize the token and cannot expand the template.
   `{name}`. The slot-name charset and whitespace rules apply to both. The
   double-brace spelling is a slot, not a brace-escaping form; the grammar still
   provides no escape.
+- §5.5 — slot consistency applies to `.dialog` only; a `.intent` file MAY
+  declare different slot sets across its templates, and the engine extracts
+  the slots of the best-matching template. §6.2 — the engine verifies a
+  consistent slot set for `.dialog` and accepts differing slot sets for
+  `.intent`.
 
 ### 1
 
