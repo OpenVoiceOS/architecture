@@ -79,6 +79,30 @@ tool does not recognize the token and cannot expand the template.
 
 ## OVOS-INTENT-2 — Locale Resource Formats
 
+### 2
+
+**Breaking change.** Version 2 reinterprets brace handling in `.prompt` and
+`.dialog` files. A `.prompt` authored against version 1 changes meaning under
+version 2: its `{{ … }}` sequences become substitution points, and its
+`<!-- … -->` sequences are no longer stripped.
+
+- §4.4 (`.prompt`) — the substitution variable is now the **double-brace**
+  `{{name}}` form **only**. A single `{name}`, a lone `{` or `}`, and literal
+  JSON/markup pass through unchanged, which is why prompts (full of literal
+  single braces) require double braces. The previous author-comment exception
+  is **removed**: a `.prompt` has no comment handling and `<!-- … -->` is
+  literal text. `{{name}}` substitution is now the *only* special handling a
+  `.prompt` receives, dropping the prior fenced-code-block rule (a single-brace
+  `{name}` is already literal everywhere).
+- §4.2 (`.dialog`) — now recognizes **both** named-slot forms, `{name}` and the
+  equivalent `{{name}}`, per OVOS-INTENT-1 §3.4, treating them identically. The
+  prior "single-brace only; no `{{ }}` form" restriction is dropped.
+- §4.1 (`.intent`) — clarified to match OVOS-INTENT-1 §5.5: lines MAY declare
+  different sets of named slots, the intent's slot set is their union, and the
+  engine extracts only the slots of the matched template. The prior "every line
+  MUST declare the same set of slots; use a separate file" rule is dropped for
+  `.intent` (it still holds for `.dialog`, §4.2).
+
 ### 1
 
 - The locale folder layout and the plain-text resource file formats
