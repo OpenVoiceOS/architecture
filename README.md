@@ -38,12 +38,11 @@ keeps working. A skill written against the intent stack runs on any
 conformant orchestrator, under any pipeline configuration, in any
 language OVOS supports.
 
-> ⚠️ **Draft.** Specs in this repository are at **Draft** status.
-> Implementations are being brought into conformance progressively;
-> current OVOS behaviour may not yet match these documents. Where
-> it diverges, that is a known implementation bug — not a defect in
-> the specification (see *Authority* below). The notice will be
-> removed when a spec reaches a stable status.
+> **Draft status.** Every spec in this repository is at **Draft**
+> status (the Status column below). A Draft spec is prescriptive:
+> where an implementation diverges from it, the divergence is an
+> implementation bug, not a defect in the specification (see
+> *Authority* below).
 
 ---
 
@@ -162,11 +161,11 @@ providing the sentence-template expander, the locale resource
 loader, the dialog renderer, language matching, and the
 `ovos-spec-lint` linter. Components that don't want to reimplement
 the spec machinery themselves can depend on it. It is also the
-intended home of the planned conformance corpus.
+intended home of the conformance corpus.
 
-The bus stack (OVOS-MSG-1) does not yet have a comparable
-ground-up reference implementation; `ovos-bus-client` is the
-closest existing match but predates the spec.
+The bus stack (OVOS-MSG-1) has no comparable ground-up reference
+implementation; `ovos-bus-client` is the closest existing match
+but predates the spec.
 
 ---
 
