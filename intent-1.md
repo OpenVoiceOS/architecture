@@ -2,7 +2,7 @@
 
 **Spec ID:** OVOS-INTENT-1 · **Version:** 2 · **Status:** Draft
 
-This document defines the *sentence template* grammar used by padatious-like
+This document defines the *sentence template* grammar used by example-based
 intent engines and by the localized resource files of a skill. A sentence
 template is a compact string that describes a set of sentences. The grammar is
 implementation-agnostic: any tool, in any programming language, can claim
