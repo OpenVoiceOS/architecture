@@ -380,7 +380,7 @@ Typical handler-side mutations:
 ### 8.3 Long-running handlers
 
 A persona handler **MAY** block for an unbounded duration
-(PIPELINE-1 §6.5). When emitting a get_response-style prompt, the
+(PIPELINE-1 §6.5). When emitting a prompt that awaits a reply, the
 `ovos.utterance.speak` Message **MUST** carry `listen: true` so that
 the audio output service reopens the microphone after speech.
 
@@ -688,7 +688,7 @@ listing the intent names it dispatches on.
 - subscribe to `<own_pipeline_id>:converse` to support multi-turn
   interactions (§8.3);
 - carry `listen: true` on `ovos.utterance.speak` when used as a
-  get_response prompt (§8.3);
+  prompt that awaits a reply (§8.3);
 - respond to `ovos.pipeline.<own_pipeline_id>.intents.list` per
   PIPELINE-1 §10;
 - respond to `ovos.persona.list` with its supported `persona_id`
