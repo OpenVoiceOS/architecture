@@ -1,13 +1,6 @@
 ---
 [← APPENDIX.md](../APPENDIX.md) · Non-normative
 
-> **⚠️ AI-generated draft — not yet fully reviewed.** This content
-> was produced by a large language model (Claude Code) and
-> has not yet been fully reviewed for accuracy, completeness, or
-> consistency with the specifications. The normative specifications
-> themselves are human-reviewed; this appendix is supplementary
-> context. Readers should verify claims before relying on them.
-
 ## 4. Design rationale, per specification
 
 Short notes on *why* the specifications make the choices they
@@ -37,9 +30,9 @@ the normative sections.
   know which engines an installation runs.
 - **Slot typing is deferred** (INTENT-1 §5.3). Interpreting
   a slot value as a number or date is inseparable from how
-  ASR output is normalized — and normalization is not yet
-  specified. Specifying typing first would be incoherent, so
-  a value is, for now, an opaque sequence of words.
+  ASR output is normalized — and normalization is specified
+  separately. Specifying typing first would be incoherent, so
+  a slot value is an opaque sequence of words.
 - **`.blacklist` vs `excluded`** (INTENT-3 §4.2, §5.4). The
   template grammar is purely generative — it cannot express
   "not this". Template intents therefore need a separate
@@ -93,8 +86,8 @@ the normative sections.
   context, cross-skill state, and similar concerns are
   deferred to other specifications.
 - **Topic naming conventions** (MSG-1 v2 §2.1.2). The
-  conventions other specs in the family already follow are
-  now codified as SHOULD-rules: dot-separated hierarchy
+  conventions other specs in the family follow are
+  codified as SHOULD-rules: dot-separated hierarchy
   with `:` reserved for component-pair shapes; stable
   ecosystem-identifying root; verb-tense pattern for the
   trailing segment; request/terminal pairs sharing a root
@@ -114,11 +107,11 @@ the normative sections.
 - **Prescriptive, not descriptive.** Only the fields
   normatively claimed by other specs are recognized.
   Implementations carrying extra per-session state
-  (current OVOS Session has `persona_id`, `system_unit`,
-  `time_format`, `date_format`, `location`, `is_speaking`,
-  `is_recording`, …) are non-normative under v1 — they
-  ride through as opaque pass-through and can be claimed
-  by future per-domain specs.
+  (the OVOS Session, for example, has `persona_id`,
+  `system_unit`, `time_format`, `date_format`, `location`,
+  `is_speaking`, `is_recording`, …) are non-normative under
+  v1 — they ride through as opaque pass-through and remain
+  available for per-domain specs to claim.
 - **Omission means "let the orchestrator decide".** Single
   deferral mechanism: omitted single field, empty
   `session: {}`, absent `session`, explicit
@@ -140,16 +133,13 @@ the normative sections.
 
 ### 4.4 Intent registration broadcast (INTENT-4)
 
-- **Registrations are broadcast — already how OVOS works.**
-  Skills emit registration messages on the bus; plugins
-  that care about a particular registration kind subscribe
-  to the corresponding topic. There has never been a
-  central routing party in OVOS; INTENT-4 just gives this
-  existing model normative topic names. The legacy bus
-  topics (`padatious:register_intent`, `register_vocab`,
-  etc.) are renamed into the `ovos.intent.*` namespace —
-  see §5.7 for the mapping. Migration is mostly a string
-  replacement.
+- **Registrations are broadcast.** Skills emit registration
+  messages on the bus; plugins that care about a particular
+  registration kind subscribe to the corresponding topic.
+  There is no central routing party; INTENT-4 gives this
+  model normative topic names in the `ovos.intent.*`
+  namespace — see §5.7 for the mapping from the bus topics
+  other engines use.
 - **No "no plugin claimed" error.** Following from the
   broadcast model: a registration that no plugin consumes
   is silently dropped. The producer gets no signal — the
@@ -158,10 +148,10 @@ the normative sections.
   what the orchestrator's passive index recorded.
 - **The orchestrator passively indexes; it does not
   gate.** The introspection topics serve from a passive
-  registration index built by listening to broadcasts
-  (this *is* new — current OVOS has no central index). The
-  index reflects what skills *declared*, not what plugins
-  actually match against — observability-only.
+  registration index the orchestrator builds purely by
+  listening to broadcasts; it is not a routing authority.
+  The index reflects what skills *declared*, not what
+  plugins actually match against — observability-only.
 - **Skill self-identification on every emission**
   (INTENT-4 §3.1). Every Message a skill emits or
   modifies in place carries `Message.context["skill_id"]`.
@@ -173,11 +163,11 @@ the normative sections.
 
 ### 4.5 Pipeline and lifecycle (PIPELINE-1)
 
-- **The plugin model is already in place; PIPELINE-1
-  refines it** (§3.2). The current orchestrator already
-  loads plugins by id through `OVOSPipelineFactory` and
-  iterates `Session.pipeline`. PIPELINE-1 tightens the
-  contract rather than introducing the abstraction.
+- **PIPELINE-1 formalizes an existing plugin model**
+  (§3.2). The orchestrator loads plugins by id through
+  `OVOSPipelineFactory` and iterates `Session.pipeline`;
+  PIPELINE-1 tightens the contract rather than introducing
+  the abstraction.
 - **Orchestrator and plugin contracts live in one spec**,
   since the orchestrator's job *is* iterating plugins and
   translating their matches into bus events. Splitting
@@ -207,11 +197,11 @@ the normative sections.
   ranking is both unworkable and would defeat interception;
   selective plugins are expected to be conservative and trust
   their position.
-- **Tier conventions are out of scope.** The current
+- **Tier conventions are out of scope.** The
   high / medium / low suffix is implementation strategy:
-  from the bus, each tier is already a distinct
-  `pipeline_id` in `Session.pipeline`. The current
-  convention is compatible with PIPELINE-1 unchanged.
+  from the bus, each tier is a distinct `pipeline_id` in
+  `Session.pipeline`. The convention is compatible with
+  PIPELINE-1.
 - **Skills and plugins are equivalent handler owners.**
   The dispatch topic `<skill_id>:<intent_name>` is uniform:
   for a pure-matcher plugin the `skill_id` is the matched
@@ -233,7 +223,7 @@ the normative sections.
 
 - **Lifts intent context out of Adapt.** The Adapt-specific
   `add_context` / `remove_context` mechanism, and the
-  legacy `mycroft.skill.set_cross_context` /
+  `mycroft.skill.set_cross_context` /
   `remove_cross_context` fan-out for cross-skill use, are
   Adapt-only at the matcher level — Padatious and other
   engines ignore them. CONTEXT-1 generalizes the mechanism
@@ -242,8 +232,8 @@ the normative sections.
   `requires_context` and `excludes_context` declarations.
 - **Two explicit scopes encoded in the key shape.**
   `private` (orchestrator auto-prefixes with
-  `<skill_id>:`) and `shared` (flat, cross-skill). The
-  current OVOS code models the same distinction informally
+  `<skill_id>:`) and `shared` (flat, cross-skill). OVOS
+  models the same distinction informally
   (`MycroftSkill.set_context` auto-prefixes with
   `alphanumeric_skill_id`; `set_cross_skill_context` fans
   out via a bus event); CONTEXT-1 names the scopes
@@ -253,11 +243,10 @@ the normative sections.
   private entry. This optimises for the safer case: a
   cross-skill leak from an accidentally-shared entry is
   harder to debug than a cross-skill miss from an
-  accidentally-private entry. The current Adapt
-  `set_context` pattern is effectively skill-private; the
-  default preserves migration fidelity. Cross-skill
-  coordination is a conscious decision that deserves an
-  explicit `scope: "shared"`.
+  accidentally-private entry. The Adapt `set_context`
+  pattern is effectively skill-private, which the private
+  default matches. Cross-skill coordination is a conscious
+  decision that deserves an explicit `scope: "shared"`.
 - **Prior art for the negative gate.** Three in-tree
   intent engines under `/plugins-pipeline/` —
   [jurebes](https://github.com/OpenJarbas/jurebes),
@@ -307,7 +296,7 @@ the normative sections.
   an injected enrichment rather than a built-in engine
   feature.
 - **Concrete in-tree plugins as prior art.** Nine plugins
-  live under `/plugins-transformer/` today, covering five
+  live under `/plugins-transformer/`, covering five
   of the six injection points: utterance transformers
   (`ovos-utterance-normalizer`,
   `ovos-utterance-corrections-plugin`,
@@ -327,24 +316,21 @@ the normative sections.
   cross-chain coordination via `Message.context` that
   TRANSFORM-1 §7 formalizes.
 - **Ascending priority.** TRANSFORM-1 §4 specifies
-  ascending priority (lower = earlier, default 50).
-  Current OVOS sorts transformer chains **descending**
-  (`ovos_core/transformers.py:53,117,205`, `reverse=True`);
-  the spec aligns with the **ascending** convention
-  already used by fallback skills (`fallback_service.py:49`,
-  default 101 = run last) and the natural "stages count
-  up" reading. Bringing current plugins into conformance
-  only requires flipping relative priorities, not
-  rewriting.
+  ascending priority (lower = earlier, default 50). Where
+  prior plugins sort transformer chains **descending**
+  (`ovos_core/transformers.py:53,117,205`, `reverse=True`),
+  the spec adopts the **ascending** convention used by
+  fallback skills (`fallback_service.py:49`, default 101 =
+  run last) and the natural "stages count up" reading.
 - **Cancellation aligned with prior plugin convention.**
-  Two existing utterance transformers
+  Two utterance transformers
   (`ovos-utterance-plugin-cancel`,
-  `ovos-transcription-validator-plugin`) already signal
-  the lifecycle should abort by returning empty utterance
+  `ovos-transcription-validator-plugin`) signal the
+  lifecycle should abort by returning empty utterance
   lists with `{canceled: true, cancel_word: <reason>}`
-  context keys. TRANSFORM-1 §8 keeps the convention,
-  renaming `cancel_word` to `cancel_reason` (the structured
-  concept the field encodes) and adding orchestrator-stamped
+  context keys. TRANSFORM-1 §8 adopts this convention,
+  naming the field `cancel_reason` for the structured
+  concept it encodes and adding orchestrator-stamped
   `cancel_by: <transformer_id>`. The spec's
   `ovos.utterance.cancelled` terminal event sits alongside
   `ovos.intent.unmatched`, keeping cancellation and
@@ -560,7 +546,7 @@ the normative sections.
   composition; integration tests asserting on chain order
   under specific session policies.
 
-### 4.9 Bus bridge (BRIDGE-1)
+### 4.8 Bus bridge (BRIDGE-1)
 
 - **Normative minimalism is design intent.** The bridge could have
   been an auth spec, a topology spec, a wire-protocol spec. By
@@ -622,6 +608,25 @@ the normative sections.
   than enumerating participants: the bridge encapsulates the mapping
   from physical signal to logical group, and everything downstream
   consumes an opaque string.
+
+### 4.9 Audio output service (AUDIO-1)
+
+**Sentence segmentation as a latency-reduction technique (AUDIO-1 §3.2).**
+When a TTS engine synthesises a long utterance as a single unit, the
+user must wait for the entire synthesis to complete before hearing
+anything. An implementation can reduce perceived latency by splitting
+the utterance at sentence boundaries, synthesising each sentence
+independently, and enqueuing each segment as soon as it is ready —
+so the first sentence begins playing while later sentences are still
+being synthesised.
+
+This is an internal implementation strategy: no other bus participant
+observes whether the TTS engine segments or not. The visible contract
+is unchanged — `ovos.audio.output.started` fires when the first
+audio begins, `ovos.audio.output.ended` fires when the last audio
+completes. The `listen` flag is honoured after all audio for the
+originating utterance has played, regardless of how many internal
+segments were used.
 
 ### 4.10 Stop pipeline plugin (STOP-1)
 
@@ -692,26 +697,7 @@ and selects; the skill stops. Stop is one of the few cases in
 the spec set where the pipeline / skill split is not
 substitutable.
 
-
-### 4.9 Audio output service (AUDIO-1)
-
-**Sentence segmentation as a latency-reduction technique (AUDIO-1 §3.2).**
-When a TTS engine synthesises a long utterance as a single unit, the
-user must wait for the entire synthesis to complete before hearing
-anything. An implementation can reduce perceived latency by splitting
-the utterance at sentence boundaries, synthesising each sentence
-independently, and enqueuing each segment as soon as it is ready —
-so the first sentence begins playing while later sentences are still
-being synthesised.
-
-This is an internal implementation strategy: no other bus participant
-observes whether the TTS engine segments or not. The visible contract
-is unchanged — `ovos.audio.output.started` fires when the first
-audio begins, `ovos.audio.output.ended` fires when the last audio
-completes. The `listen` flag is honoured after all audio for the
-originating utterance has played, regardless of how many internal
-segments were used.
-### 4.10 Common query pipeline plugin (COMMON-QUERY-1)
+### 4.11 Common query pipeline plugin (COMMON-QUERY-1)
 
 Common query answers factual questions by holding a timed contest
 among skills — broadcast the question, collect competing answers,
