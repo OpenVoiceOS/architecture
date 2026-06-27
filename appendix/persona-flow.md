@@ -1,13 +1,6 @@
 ---
 [← APPENDIX.md](../APPENDIX.md) · Non-normative
 
-> **⚠️ AI-generated draft — not yet fully reviewed.** This content
-> was produced by a large language model (Claude Code) and
-> has not yet been fully reviewed for accuracy, completeness, or
-> consistency with the specifications. The normative specifications
-> themselves are human-reviewed; this appendix is supplementary
-> context. Readers should verify claims before relying on them.
-
 # Persona lifecycle — annotated bus sequences
 
 This section shows the full observable bus sequence for the three
