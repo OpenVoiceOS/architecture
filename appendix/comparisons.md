@@ -1,13 +1,6 @@
 ---
 [← APPENDIX.md](../APPENDIX.md) · Non-normative
 
-> **⚠️ AI-generated draft — not yet fully reviewed.** This content
-> was produced by a large language model (Claude Code) and
-> has not yet been fully reviewed for accuracy, completeness, or
-> consistency with the specifications. The normative specifications
-> themselves are human-reviewed; this appendix is supplementary
-> context. Readers should verify claims before relying on them.
-
 ## 2. Comparison with other voice-assistant systems
 
 The OVOS specifications occupy territory adjacent to several
@@ -30,7 +23,7 @@ grammar.
 
 - **An implementation-agnostic spec at all.** HA and Rhasspy
   have no format-level specification independent of their
-  implementation — the code is the contract. OVOS now has one,
+  implementation — the code is the contract. OVOS has one,
   which is what lets multiple engines (and other assistants)
   implement the same contract.
 - **Engine-agnostic matching.** OVOS-INTENT-1 §4 treats
@@ -114,7 +107,7 @@ gate uniformly without buying into a particular dialog policy.
 
 Rasa wins on conversation-level evaluation infrastructure —
 story-based testing, end-to-end success metrics — for which
-the OVOS specs have no analogue yet (§7 catalogues this as a
+the OVOS specs have no analogue (§7 catalogues this as a
 known gap).
 
 Rasa's NLU pipeline is also the closest analogue to
@@ -204,10 +197,10 @@ utterance. The window is incidental; the filtering is the point.
 handler — common query was itself a skill. COMMON-QUERY-1 lifts it
 into a pipeline plugin and runs the entire contest in `match`, so
 the no-answer case returns `None` and the pipeline reaches fallback
-(rationale §4.9). A skill-layer implementation cannot do this: by
+(rationale §4.11). A skill-layer implementation cannot do this: by
 the time a skill handler runs, the claim is already made and
 fallback is foreclosed — the same layering argument that puts STOP-1
-in the pipeline (rationale §4.8).
+in the pipeline (rationale §4.10).
 
 **Single speaker.** In COMMON-QUERY-1 the plugin is the only voice:
 skills return answer *strings* and the plugin speaks the winner
