@@ -1,26 +1,18 @@
 ---
 [← APPENDIX.md](../APPENDIX.md) · Non-normative
 
-> **⚠️ AI-generated draft — not yet fully reviewed.** This content
-> was produced by a large language model (Claude Code) and
-> has not yet been fully reviewed for accuracy, completeness, or
-> consistency with the specifications. The normative specifications
-> themselves are human-reviewed; this appendix is supplementary
-> context. Readers should verify claims before relying on them.
-
-## 5. Where the specs differ from current OVOS code
+## 5. Where the specs differ from the reference implementation
 
 These specifications are *prescriptive*. Some of what they
-prescribe matches what runs in OVOS today verbatim; some is a
-deliberate cleanup the implementations are expected to grow
-into. This section catalogues every known divergence so
-implementers know what to migrate and reviewers know what to
-expect.
+prescribe matches the reference implementation verbatim; some
+is a deliberate cleanup from which the implementation diverges.
+This section catalogues the known divergences between the
+specifications and the reference implementation.
 
 ### 5.1 Already aligned
 
-Formalizations of behaviour that exists in current OVOS code
-and needs no implementation change:
+Formalizations of behaviour in the reference implementation
+that need no change:
 
 - The Message envelope (`type` / `data` / `context`) — matches
   `ovos-bus-client.Message`.
@@ -37,7 +29,7 @@ and needs no implementation change:
 - `forward` / `reply` / `response` derivation semantics —
   matches `ovos-bus-client.Message.{forward,reply,response}`.
 - The `.response` suffix convention — pervasive across OVOS
-  topics today.
+  topics.
 - `ovos.utterance.cancelled` and `ovos.utterance.handled`
   (PIPELINE-1) — match current topic names verbatim.
 - Per-utterance first-match-wins iteration (PIPELINE-1) —
@@ -46,8 +38,8 @@ and needs no implementation change:
 - Per-session pipeline configuration (PIPELINE-1) — matches
   `Session.pipeline`.
 - The `<skill_id>:<intent_name>` dispatch topic shape
-  (PIPELINE-1) — matches current OVOS practice; skills
-  already subscribe to these topics.
+  (PIPELINE-1) — matches OVOS practice; skills subscribe to
+  these topics.
 
 ### 5.2 Prescriptive renames
 
@@ -64,8 +56,8 @@ The following topics exist in current ovos-core but are **not
 defined by any spec** and should be removed or replaced:
 
 - **`ovos.session.update_default`** —
-  emitted by `SessionManager` in legacy code to broadcast the
-  current default session. SESSION-2 §5.4 acknowledges that an
+  emitted by `SessionManager` to broadcast the default
+  session. SESSION-2 §5.4 acknowledges that an
   orchestrator MAY emit default-session state on a deployer-defined
   topic but assigns no normative name. This ad-hoc topic should be
   retired: any component that needs the default-session state can
@@ -73,8 +65,9 @@ defined by any spec** and should be removed or replaced:
   the session it carries, or listen to any other assistant-emitted
   Message on the default session. See §5.7 for the migration mapping.
   Note: `ovos.session.sync` serves a distinct purpose — explicit
-  out-of-utterance state sync — and is now formalized by
-  SESSION-2 §2.7; see §5.5 for its entry as a new topic.
+  out-of-utterance state sync — and is formalized by
+  SESSION-2 §2.7; see §5.5 for its entry as a topic without
+  direct precedent.
 
 ### 5.3 Prescriptive shape changes
 
@@ -221,13 +214,13 @@ defined by any spec** and should be removed or replaced:
   Per-type introspection of loaded transformers.
 - **Materialize-default-session rule** on `forward` /
   `reply` / `response` (MSG-1 §5). Formalizes a "MAY"
-  convenience for in-process subsystems; not currently
-  implemented but compatible with current behaviour.
+  convenience for in-process subsystems; compatible with
+  existing behaviour.
 - **`ovos.session.sync`** (SESSION-2 §2.7). Explicit
   out-of-utterance session-state sync emitted by a component that
   has mutated session state outside the normal utterance lifecycle
-  and needs the change propagated. No current spec-conformant
-  equivalent — `ovos.session.update_default` (now retired, see
+  and needs the change propagated. No spec-conformant
+  predecessor — `ovos.session.update_default` (retired, see
   §5.2.1) served an overlapping purpose for the default session
   only. `ovos.session.sync` is generalised to any session.
 
@@ -260,11 +253,11 @@ defined by any spec** and should be removed or replaced:
 ### 5.7 Predecessor-topic mapping
 
 The bus topics formalized by INTENT-4 and PIPELINE-1 replace
-a number of legacy names. Implementer migration aid:
+a number of predecessor names. The mapping:
 
 #### Registration topics (INTENT-4)
 
-| Legacy topic | v1 replacement | Notes |
+| Predecessor topic | v1 replacement | Notes |
 |--------------|---------------|-------|
 | `register_vocab` | folded into `ovos.intent.register.keyword` | Vocabularies in v1 are inline `samples` or `file`-by-path inside the registration. |
 | `register_intent` (Adapt parser) | `ovos.intent.register.keyword` | Adapt's `IntentBuilder.__dict__` payload replaced by the structured shape. |
@@ -276,7 +269,7 @@ a number of legacy names. Implementer migration aid:
 
 #### Utterance-lifecycle topics (PIPELINE-1)
 
-| Legacy topic | Status |
+| Predecessor topic | Status |
 |--------------|--------|
 | `recognizer_loop:utterance` | renamed to `ovos.utterance.handle` (see §5.4) |
 | `complete_intent_failure` | renamed to `ovos.intent.unmatched` — follows `ovos.intent.*` namespace. |
@@ -288,7 +281,7 @@ a number of legacy names. Implementer migration aid:
 
 #### Out of scope
 
-| Legacy topic | Status |
+| Predecessor topic | Status |
 |--------------|--------|
 | `add_context` / `remove_context` | Replaced by `ovos.context.set` / `.unset` under CONTEXT-1. |
 | `mycroft.skill.set_cross_context` / `remove_cross_context` | Replaced by `ovos.context.set` / `.unset` with `scope: "shared"` under CONTEXT-1. |
@@ -296,7 +289,7 @@ a number of legacy names. Implementer migration aid:
 
 #### Listening-lifecycle topics (AUDIO-IN-1)
 
-| Legacy topic | v2 replacement | Notes |
+| Predecessor topic | v2 replacement | Notes |
 |--------------|---------------|-------|
 | `recognizer_loop:record_begin` | `ovos.listener.record.started` | Capture start. `:` segment separator and implementation-role prefix dropped; no payload. |
 | `recognizer_loop:record_end` | `ovos.listener.record.ended` | Capture end; pairs with the start signal. |
@@ -315,9 +308,9 @@ a number of legacy names. Implementer migration aid:
   conformant with either model; deployments that share the
   `"default"` session across multiple peers must migrate to
   destination-based routing for client isolation.
-- **OVOS-BRIDGE-1 is new — no existing implementation fully
-  conforms.** The bridge spec formalizes a role that exists today
+- **No existing implementation fully conforms to OVOS-BRIDGE-1.**
+  The bridge spec formalizes a role that exists in deployments
   (the HiveMind gateway, the bus client, any inbound message
-  fan-in) but with a tighter normative core. Current
-  implementations are expected to adopt the source-stamping and
-  session-preservation requirements incrementally.
+  fan-in) with a tighter normative core — source-stamping and
+  session-preservation requirements — than current implementations
+  provide.
