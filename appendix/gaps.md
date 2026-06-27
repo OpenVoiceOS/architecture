@@ -1,14 +1,7 @@
 ---
 [← APPENDIX.md](../APPENDIX.md) · Non-normative
 
-> **⚠️ AI-generated draft — not yet fully reviewed.** This content
-> was produced by a large language model (Claude Code) and
-> has not yet been fully reviewed for accuracy, completeness, or
-> consistency with the specifications. The normative specifications
-> themselves are human-reviewed; this appendix is supplementary
-> context. Readers should verify claims before relying on them.
-
-## 7. Known gaps and planned work
+## 7. Known gaps
 
 - **Per-plugin behavioural specs.** OVOS-PIPELINE-1 defines
   the plugin contract (the `match` shape, the orchestrator's
@@ -19,15 +12,14 @@
   `persona`. Each defines its own internal behaviour and its
   own bus emissions beyond the universal lifecycle PIPELINE-1
   prescribes.
-- **Session preference fields not yet claimed.** SESSION-1
-  defines the wire shape and OVOS-SESSION-2 (in flight at
-  PR #27) defines the lifecycle and state-ownership model;
-  what remains deferred is the full set of session
-  preferences current OVOS already carries (`persona_id`,
-  `time_format`, `date_format`, `system_unit`,
-  `tts_preferences`, `location`, …) — these need to be
-  claimed under SESSION-1 §2.1's field registry by their
-  respective owning specs (a future preferences spec,
+- **Session preference fields not claimed by a spec.**
+  SESSION-1 defines the wire shape and OVOS-SESSION-2 defines
+  the lifecycle and state-ownership model; what remains
+  deferred is the full set of session preferences OVOS
+  carries (`persona_id`, `time_format`, `date_format`,
+  `system_unit`, `tts_preferences`, `location`, …) — these
+  need to be claimed under SESSION-1 §2.1's field registry by
+  their respective owning specs (a preferences spec,
   OCP / persona / locale specs as appropriate).
 - **Text normalization of ASR output.** The basis for slot
   value typing (INTENT-1 §5.3). Deferred to its own
@@ -43,7 +35,7 @@
   files, registration, match, handler.
 - **Conversation-level evaluation infrastructure.** Rasa
   has story-based testing and end-to-end success metrics;
-  the OVOS specs do not currently have a counterpart.
+  the OVOS specs have no counterpart.
 - **OVOS-INTENT-2 ↔ hassil `intents` translation tool.**
   The grammar lineage (§2.1) makes a mechanical translator
   between OVOS-INTENT-2 locale resources and HA's `intents`
@@ -72,8 +64,8 @@
 - **Bridge health / heartbeat.** No `ovos.bridge.ping` /
   `ovos.bridge.pong` surface is defined. The orchestrator has no
   spec-level way to know whether a remote participant is
-  reachable. Deferred to a future observability specification if
-  needed.
+  reachable. Deferred to a separate observability specification
+  if needed.
 - **Audio transmission over the bus.** BRIDGE-1 §4.2.1 describes
   two audio-stack placements — local (satellite runs STT and its
   own audio-output layer) and hub-side (hub runs the full audio
@@ -99,7 +91,7 @@
   guarantee when both arrive simultaneously. The handling of
   overlapping utterance rounds in managing mode — whether to
   queue, drop, or process with a stale session — is left as a
-  deployment concern. A future revision may define a normative
+  deployment concern. A revision may define a normative
   queuing policy.
 - **NAT bijection and hub-side session cleanup.** When a bridge
   using `session_id` NAT (§3.2) disconnects a participant, the
@@ -109,4 +101,4 @@
   before dropping the bijection, but does not define a complete
   cleanup protocol for hub-side state created during the session's
   lifetime (e.g. cross-utterance context, active handlers).
-  Deferred to a future session-lifecycle specification.
+  Deferred to a separate session-lifecycle specification.
