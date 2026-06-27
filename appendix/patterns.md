@@ -1,13 +1,6 @@
 ---
 [← APPENDIX.md](../APPENDIX.md) · Non-normative
 
-> **⚠️ AI-generated draft — not yet fully reviewed.** This content
-> was produced by a large language model (Claude Code) and
-> has not yet been fully reviewed for accuracy, completeness, or
-> consistency with the specifications. The normative specifications
-> themselves are human-reviewed; this appendix is supplementary
-> context. Readers should verify claims before relying on them.
-
 ## 3. Architectural patterns
 
 Two patterns recur across the spec family and are worth a
@@ -154,11 +147,11 @@ compose without contention.
 
 Several real concerns are deferred by this stance and are
 listed under §7 (Known gaps): multi-turn conversation, the
-other session knobs current OVOS carries beyond `session_id`
+other session knobs OVOS carries beyond `session_id`
 and `lang` (`persona_id`, `time_format`, `date_format`,
-`system_unit`, `tts_preferences`, …), and the eventual shape
+`system_unit`, `tts_preferences`, …), and the shape
 of conversational state. The async-by-default model means
-those future specs only need to define *what* the state is,
+those specs only need to define *what* the state is,
 not *how* it travels.
 
 #### 3.1.4 Layer-2 substrates
@@ -194,22 +187,23 @@ a turn, runs `converse` / `fallback` / `common_query` / `ocp` /
 structurally distinctive (HA and Rhasspy have no equivalent
 layer).
 
-The plugin abstraction is **already in current code**:
-`OVOSPipelineFactory` loads pipeline plugins by id at startup,
-the orchestrator holds them in a `pipeline_plugins` dict
-keyed on `pipeline_id`, and the default `Session.pipeline` is
-an ordered list of plugin identifiers (with a migration map
-translating legacy `padatious_high`-style names into modern
-`ovos-padatious-pipeline-plugin-high`-style ones). The
+The plugin abstraction is **realized in the reference
+implementation**: `OVOSPipelineFactory` loads pipeline plugins
+by id at startup, the orchestrator holds them in a
+`pipeline_plugins` dict keyed on `pipeline_id`, and the default
+`Session.pipeline` is an ordered list of plugin identifiers
+(with a name-mapping that accepts both the short
+`padatious_high`-style ids and their fully-qualified
+`ovos-padatious-pipeline-plugin-high`-style forms). The
 official `ovos-padatious-pipeline-plugin`,
 `ovos-adapt-pipeline-plugin`, `ovos-converse-pipeline-plugin`,
 `ovos-fallback-pipeline-plugin`,
 `ovos-common-query-pipeline-plugin`,
 `ovos-ocp-pipeline-plugin`, and the persona plugins all
-already conform to this model.
+conform to this model.
 
-OVOS-PIPELINE-1's contribution is therefore a **prescriptive
-refinement**, not a wholesale new abstraction. It:
+OVOS-PIPELINE-1 **formalizes** this model rather than
+introducing a new abstraction. It:
 
 - formalizes the plugin contract (the `match` shape, the
   `Match` result, the side-effect-free discipline);
@@ -219,12 +213,12 @@ refinement**, not a wholesale new abstraction. It:
   participant alongside skill-owned handlers;
 - prescribes the **universal `ovos.utterance.handled`
   end-marker** on every terminal path;
-- renames the `mycroft.skill.handler.*` trio →
+- names the handler-lifecycle trio
   `ovos.intent.handler.*`.
 
-The current high/medium/low confidence-tier convention is
+The high/medium/low confidence-tier convention is
 **compatible** with PIPELINE-1 and out of scope for the spec.
-From the bus's perspective each tier is already a distinct
+From the bus's perspective each tier is a distinct
 `pipeline_id` in the session's pipeline list (e.g.
 `padatious_high`, `padatious_medium`, `padatious_low`), which
 is exactly what the spec prescribes. How a Python plugin
@@ -246,7 +240,7 @@ expressive:
   responded — the user does not know or care whether a skill
   matched against a registered intent or a language-model
   plugin generated the response on the fly.
-- **The engine-agnostic intent contract is already
+- **The engine-agnostic intent contract is
   realized**, not hypothetical. OVOS persona plugins
   (`ovos-persona`, `ovos-persona-server`,
   `ovos-claude-plugin`, `ovos-openai-plugin`, etc.) plug into
@@ -337,8 +331,9 @@ assistant core.
   YAML at the same level of abstraction. Such a tool would
   let the HA `intents` corpus and the OVOS locale corpus
   cross-pollinate without either project changing its
-  format. This is concrete planned tooling, not just an
-  architectural possibility (§7).
+  format. This is a concrete tooling opportunity the shared
+  grammar lineage invites, not just an architectural
+  abstraction (§7).
 - **MQTT-based stacks** (Rhasspy 2.x, miscellaneous IoT
   voice systems). Bridge at the bus boundary (injection
   point 3), same shape as Wyoming.
