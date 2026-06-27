@@ -1,13 +1,6 @@
 ---
 [← APPENDIX.md](../APPENDIX.md) · Non-normative
 
-> **⚠️ AI-generated draft — not yet fully reviewed.** This content
-> was produced by a large language model (Claude Code) and
-> has not yet been fully reviewed for accuracy, completeness, or
-> consistency with the specifications. The normative specifications
-> themselves are human-reviewed; this appendix is supplementary
-> context. Readers should verify claims before relying on them.
-
 ## 6. Implementer reference
 
 Material an implementer reaches for repeatedly: cross-spec
@@ -140,7 +133,7 @@ Three properties hold across these surfaces:
    the orchestrator is split (PIPELINE-1 §2), each process
    responds from its own slice; consumers aggregate.
 
-All four surfaces share the `ovos.<domain>.` prefix; verb
+All of these surfaces share the `ovos.<domain>.` prefix; verb
 segments vary by domain (some nest, some don't). The
 uniformity is in the namespace, not in a fixed depth.
 
