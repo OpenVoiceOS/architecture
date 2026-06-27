@@ -110,8 +110,9 @@ Intent context is one of several mechanisms an assistant may use to
 sustain continuous dialog, and the **only one this spec defines**.
 Imperative response-collection and recency-based routing are defined
 by the companion *Active Handlers and Interactive Response
-Specification* (OVOS-CONVERSE-1) — `session.response_mode` (§2.2) for the
-imperative response window, and `session.converse_handlers` (§2.1) for the
+Specification* (OVOS-CONVERSE-1) — `session.response_mode`
+(OVOS-CONVERSE-1 §2.2) for the imperative response window, and
+`session.converse_handlers` (OVOS-CONVERSE-1 §2.1) for the
 eligibility list the converse plugin role iterates. The evaluation
 order follows from PIPELINE-1's first-match-wins iteration and
 pipeline positioning: response-mode pre-empts; converse poll runs
