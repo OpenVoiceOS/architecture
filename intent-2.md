@@ -38,7 +38,7 @@ loader how to parse it.
 | Dialog | `.dialog` | slot-bearing | Phrases the assistant speaks in response |
 | Entity | `.entity` | slot-free | Example values that can fill a named slot |
 | Vocabulary | `.voc` | slot-free | A named set of localized phrasings |
-| Blacklist | `.blacklist` | slot-free | Words that suppress an intent |
+| Blacklist | `.blacklist` | slot-free | Words that suppress an intent or must not fill a slot |
 | Prompt | `.prompt` | whole-file verbatim | A localized language-model prompt (§4.4) |
 
 The slot-bearing roles map onto the data path of a voice interaction:
@@ -242,7 +242,7 @@ with the expanded phrase set:
 |-----------|------|-------------|---------|
 | `.entity` | Example values that can fill a `{slot}` | Intent engine, as a slot value set (OVOS-INTENT-1 §5.4) | Base name = the `{slot}` name it supplies |
 | `.voc` | A named set of localized phrasings | Keyword intent engines; skill runtime helpers; inline `<name>` references in templates (OVOS-INTENT-1 §3.7) | Base name = the vocabulary name |
-| `.blacklist` | Words whose presence suppresses an intent | Intent engine, as match suppression | Base name = the `.intent` it suppresses |
+| `.blacklist` | Words that either suppress an intent or must not fill a slot | Intent engine, as match suppression or slot-value exclusion | Base name = the `.intent` it suppresses, **or** the `.entity` / `{slot}` whose values it excludes |
 
 How an `.entity` or `.voc` phrase set is *used* — slot constraint, keyword
 test — is engine or skill policy, consistent with matching behaviour being out
@@ -261,6 +261,19 @@ the word `start`). If any phrase from the set occurs in the user's utterance,
 that intent is suppressed — a **hard, score-independent rejection**, not a
 confidence penalty. A `.blacklist` does not affect any other intent.
 
+A `.blacklist` paired by base name with an `.entity` (or with a `{slot}` /
+vocabulary of that name) instead defines a **slot-value exclusion**: its phrase
+set lists values that **MUST NOT** fill that slot. When a candidate value the
+utterance would bind to the slot occurs (same whole-word-sequence rule) in the
+exclusion set, the engine **MUST NOT** bind it — the slot is left unresolved, as
+though the utterance had not supplied it. The canonical use is preventing
+anaphoric pronouns from filling a referential slot: a `person.blacklist` of
+`he`, `she`, `they` leaves `{person}` unresolved for *"how tall is he"* so a
+later stage — OVOS-CONTEXT-1 §7 context fill, or a re-prompt — supplies the
+value. Pronoun sets are language-specific, so this keeps them in per-language
+`locale/<lang>/` resources rather than engine code; a `.blacklist` MAY reference
+a shared `.voc` inline via the `<name>` token (§4.3).
+
 ```
 # weekday.entity        — values for the {weekday} slot
 monday
@@ -276,6 +289,11 @@ yeah
 # play_music.blacklist  — suppresses play_music.intent
 (music|movie) (trailer|video)
 trailer
+```
+```
+# person.blacklist       — values that must not fill the {person} slot
+(he|she|they|him|her|them)
+it
 ```
 
 ### 4.4 `.prompt` — language-model prompt
