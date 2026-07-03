@@ -654,15 +654,23 @@ normative requirement on that map — the *context-supplied slot*
 rule below. All other surfacing of context entries is engine-
 specific.
 
-**Context-supplied slots (normative).** When an intent's
-`requires_context` list contains a key `k` that **also names a
-slot of the intent's definition** (a template slot per
-OVOS-INTENT-3 §5, or a vocabulary name per OVOS-INTENT-3 §4), and
-the §3.1-selected entry for `k` has a non-null `value`, the engine
+**Context-supplied slots (normative).** When a **slot of the
+intent's definition** has the name `k` (a template slot per
+OVOS-INTENT-3 §5, or a vocabulary name per OVOS-INTENT-3 §4), and a
+context entry for `k` has a live non-null `value`, the engine
 **MUST** offer that value to its matcher as a **candidate** for
 slot `k` **before** matching, and report the resolved value in
-`Match.slots[k]` (keyed by `k`, unprefixed, regardless of whether
-§3.1 selected a private or shared entry).
+`Match.slots[k]` (keyed by `k`, unprefixed). The entry for `k` is
+selected by the intent's owner: a private entry `<skill_id>:k`
+takes precedence over a shared entry `k`, mirroring §3.1.
+
+This rule is **independent of `requires_context`.** A string-valued
+context entry is ambient conversational data: any declared slot or
+vocabulary whose name matches a live entry is a candidate for it,
+whether or not the intent declares `requires_context`. `requires_context`
+and `excludes_context` (§6) are the **flag-gating** declarations —
+they decide whether an intent may match; they do not drive slot
+fill. A `null`-valued entry (a flag) is never a slot candidate.
 
 The candidate is offered before the match, not applied after it,
 because the two engine families both need it there:
@@ -684,11 +692,9 @@ context fills only what the utterance leaves unresolved.
 This is the portable, engine-agnostic mechanism by which a fact
 recorded by an earlier turn (`person: "Bob"`) reaches a later turn's
 handler as a slot value without the later utterance having to
-repeat it. An intent that wants this behaviour declares the key in
-`requires_context` **and** names a slot or vocabulary with the same
-name in its definition. A `requires_context` key whose §3.1-selected
-entry has a `null` value (a flag), or with no matching slot or
-vocabulary name, is **gated only** (§6) — no candidate is injected.
+repeat it. The later intent needs only to name a `{person}` slot;
+the live `person` entry fills it when the utterance leaves it
+unresolved, and an utterance-produced `person` overrides it.
 
 ---
 
@@ -723,11 +729,12 @@ vocabulary name, is **gated only** (§6) — no candidate is injected.
 - honour the negative gating contract of §6.1 — never report a
   match whose intent declares an `excludes_context` key that is
   live in the session, resolved per §3.1;
-- apply the §7 context-supplied slot rule when a
-  `requires_context` key also names a slot or vocabulary of the
-  intent's definition — offering the non-null entry value to the
-  matcher as a candidate for that slot **before** matching, and
-  letting an utterance-produced value for the same slot replace it;
+- apply the §7 context-supplied slot rule for every slot or
+  vocabulary of the intent's definition whose name has a live
+  non-null context entry — offering that value to the matcher as a
+  candidate for the slot **before** matching (independent of any
+  `requires_context` declaration), and letting an utterance-produced
+  value for the same slot replace it;
 - read context from the post-decay snapshot the orchestrator
   presents on each `match` call (OVOS-PIPELINE-1 §4).
 
