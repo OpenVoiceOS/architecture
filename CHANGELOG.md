@@ -362,6 +362,22 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   the `utterance` as correlation key and derive via MSG-1 `reply`,
   with the session in `context.session`. Tunable defaults and
   confidence-range guidance are collected in appendices.
+- Consistency audit: the full-answer request renamed
+  `<skill_id>:common_query` → `<skill_id>.common_query.request` — it is
+  a plugin-emitted request, not an orchestrator dispatch, and the colon
+  form is reserved for the PIPELINE-1 §7 dispatch shape (OVOS-MSG-1
+  §2.1.1); the message family is now uniformly dotted
+  (`ovos.common_query.ping`/`.pong`,
+  `<skill_id>.common_query.request`/`.response`) with the single
+  remaining colon topic the genuine dispatch `<pipeline_id>:common_query`;
+  §8 fast-win demoted to a deployment-opt-in rule, off by default —
+  self-reported `conf` shares no calibrated scale across skills, so
+  first-past-threshold selection is a nondeterministic latency race;
+  confidence thresholds, window sizes, and `latency_ms` interpretation
+  remain RECOMMENDED tunables (Appendix A); §5 early-start phrased
+  normatively (responses MAY already be collected); cross-spec note that
+  the poll boolean's field name (`can_answer`) is protocol-local;
+  OVOS-SESSION-1 cited by its canonical title.
 ## OVOS-FALLBACK-1 — Fallback Pipeline Plugin
 
 ### 2
