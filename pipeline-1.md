@@ -177,22 +177,21 @@ Inputs:
   language. A plugin is free to consider all candidates, only the
   first, or any subset; the orchestrator does not prescribe how
   candidates are weighted.
-- `lang` — the **optional** BCP-47 content-language tag. When the
-  entry-topic (§9.1) carried an authoritative `Message.data.lang`,
-  the orchestrator passes it through. When it did not, the
-  orchestrator MAY — and is **RECOMMENDED** to — resolve the
-  utterance language **once**, from the per-utterance evidence
-  fields of OVOS-SESSION-1 §3.2 (user preference, lang-detect
-  signals), and pass the resolved tag to **every** plugin's
-  `match` call for this utterance. Resolving once at the
-  orchestrator keeps the match round coherent: if each plugin
-  re-derives language independently, the same utterance can be
-  matched in different languages at different pipeline stages,
-  and which language "wins" becomes an accident of ordering. A
-  plugin **MAY** refine the received tag (e.g. a multilingual
-  matcher that detects a different content language) but
-  **SHOULD NOT** re-derive it independently from session
-  evidence, and **MUST** declare the language it actually
+- `lang` — the BCP-47 content-language tag. When the entry-topic
+  (§9.1) carried an authoritative `Message.data.lang`, the
+  orchestrator passes it through. When it did not, the
+  orchestrator **MUST** resolve the utterance language **once**
+  per utterance, from the per-utterance evidence fields of
+  OVOS-SESSION-1 §3.2 (user preference, lang-detect signals), and
+  pass the resolved tag to **every** plugin's `match` call for
+  that utterance. A single resolution point keeps the match round
+  coherent: if each plugin re-derived language independently, the
+  same utterance could be matched in different languages at
+  different pipeline stages, and which language "wins" would be an
+  accident of ordering. A plugin **MAY** refine the received tag
+  (e.g. a multilingual matcher that detects a different content
+  language) but **MUST NOT** re-derive it independently from
+  session evidence, and **MUST** declare the language it actually
   matched in via `Match.lang`.
 - `session` — the session carrier from `context.session` of the
   utterance Message (OVOS-MSG-1 §4, OVOS-SESSION-1).
@@ -303,13 +302,13 @@ value. Because §4.2 permits a plugin to communicate over the bus during
 etc.), the call can block for an unbounded time.
 
 The orchestrator **SHOULD** bound each `match` invocation by a
-deployment-defined time. The **RECOMMENDED** default is **10 s**. The
-bound **MUST** be at least as large as any collection ceiling a stage
-runs internally (e.g. OVOS-COMMON-QUERY-1 §2.1's requirement to sit
-at or above its 5 s default collection-window ceiling) — a
-match-phase timeout shorter than a stage's own internal
-wait guarantees that stage is killed mid-collection on every
-utterance it handles. If a plugin has not returned within the bound,
+deployment-defined time. The **RECOMMENDED** default is **10 s**.
+When a bound is applied, it **MUST** be at least as large as any
+collection ceiling a stage runs internally (e.g. the
+OVOS-COMMON-QUERY-1 §2.1 collection window) — a match-phase timeout
+shorter than a stage's own internal wait guarantees that stage is
+killed mid-collection on every utterance it handles. If a plugin
+has not returned within the bound,
 the orchestrator **MUST** treat the call as if the plugin had raised an
 exception — log the timeout, skip to the next plugin per §6.2, and
 continue normally. Any partial mutation performed by the plugin during the
@@ -895,11 +894,10 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
   continuation of an already-active skill's participation or its
   termination, not a fresh activation. The orchestrator applies
   the polymorphism rule (§7.0) uniformly and does not otherwise
-  distinguish skill from pipeline-plugin dispatches; suppression
-  is keyed strictly off the reserved-name registry. Suppression is
-  keyed on the Match's `intent_name` appearing in the §7.3
-  reserved-name registry — never on the producing `pipeline_id`.
-  The push is
+  distinguish skill from pipeline-plugin dispatches: suppression
+  **MUST** be keyed on the Match's `intent_name` appearing in the
+  §7.3 reserved-name registry — never on the producing
+  `pipeline_id`. The push is
   applied after `Match.updated_session` is committed: a plugin
   that mutates `active_handlers` via `updated_session` (e.g.,
   STOP-1's global stop wiping the list) sees the stamp applied
@@ -1099,7 +1097,7 @@ Payload shape:
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `utterances` | array of strings | yes | One or more candidate utterance strings. |
-| `lang` | string | no | BCP-47 language tag of the utterance. **Present only when the producer authoritatively knows the content language** (e.g. a chat client emitting text it locally typed in `de-DE`, or an audio service emitting text from an STT decoder run in `en-US`). When absent, the content language is **not authoritatively known**; producers **MUST NOT** synthesize a value on the wire. On receipt, the orchestrator SHOULD resolve the language once from OVOS-SESSION-1 §3.2 evidence fields and pass the resolved tag to every plugin's `match` call (§4) — a single resolution point keeps all stages matching in the same language; plugins MAY refine but SHOULD NOT re-derive independently. |
+| `lang` | string | no | BCP-47 language tag of the utterance. **Present only when the producer authoritatively knows the content language** (e.g. a chat client emitting text it locally typed in `de-DE`, or an audio service emitting text from an STT decoder run in `en-US`). When absent, the content language is **not authoritatively known**; producers **MUST NOT** synthesize a value on the wire. On receipt, the orchestrator **MUST** resolve the language once from OVOS-SESSION-1 §3.2 evidence fields and pass the resolved tag to every plugin's `match` call (§4) — a single resolution point keeps all stages matching in the same language; plugins MAY refine but MUST NOT re-derive independently. |
 
 `ovos.utterance.handle` is the only entry topic name this
 specification recognizes. A conformant orchestrator subscribes to
