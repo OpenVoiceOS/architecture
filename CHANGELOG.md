@@ -278,6 +278,25 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ## OVOS-OCP-1 — OVOS Common Playback: the Virtual Media Player
 
+### 2
+
+- §3.1 — numeric codes for the `PlayerState` axis; the code, not the
+  symbolic name, travels on the wire in state reports.
+- §4.2.1 (new) — the `ovos.common_play.play` payload: `media` (media
+  entry), `playlist`, `disambiguation`, `repeat`.
+- §4.2.2 (new) — seek is absolute: `position` in milliseconds within
+  now-playing; relative skips are resolved by the requester from the
+  state reports, so concurrent seekers cannot compound offsets.
+- §4.2 — `ovos.common_play.search.start` / `.end` bracket the
+  discovery step as first-class Messages.
+- §4.4 — the shared state-report payload (`state`: numeric axis code)
+  and the track-state axis (disambiguation / queued / playing,
+  qualified by backend kind).
+- §4.5 (new) — the media entry object exchanged by playback requests
+  and state consumers; unknown fields are ignored by consumers.
+  `length` counts in milliseconds with `-1` = unknown/live — one time
+  convention across the media surface (OVOS-GUI-1 §3.4).
+
 ### 1
 
 - Initial draft. Formalizes the Virtual Media Player: one logical,
