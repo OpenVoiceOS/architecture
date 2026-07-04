@@ -79,8 +79,8 @@ by the time it reaches the engine, be **normalized** to:
 
 Normalization (lowercasing, punctuation and apostrophe stripping, whitespace
 collapsing, locale-specific transliteration) is performed **upstream** of the
-intent engine and is **out of scope** for this grammar. A future specification
-will define text normalization in detail. An engine MAY assume its input
+intent engine and is **out of scope** for this grammar; it belongs to a
+separate text-normalization specification. An engine MAY assume its input
 already satisfies the contract.
 
 Two consequences follow:
@@ -323,7 +323,7 @@ an engine cannot train on an empty sample.
 
 After replacing `[the]` with `(the|)`, three groups of 2 branches each give
 `2 × 2 × 2 = 8` combinations. When the empty `the` branch is taken, whitespace
-normalization (step 3) collapses the resulting double space. The sample set is:
+normalization (step 4) collapses the resulting double space. The sample set is:
 
 ```
 switch fan          turn fan
@@ -395,9 +395,10 @@ should become the integer `42` depends entirely on how numerals are normalized
 upstream, which this draft does not prescribe (§2). Specifying typing without
 first specifying normalization would be incoherent.
 
-Slot value types and the normalization they depend on are therefore deferred to
-a **future, separate specification**. Until then there is exactly one slot form,
-`{name}`, with no `{name:type}` variant.
+Slot value types and the normalization they depend on are therefore **out of
+scope** for this specification and belong to a separate text-normalization
+specification. There is exactly one slot form, `{name}`, with no `{name:type}`
+variant.
 
 ### 5.4 Value sets
 
@@ -498,15 +499,13 @@ expanded, and filled* — never how an engine *matches*.
   the same slot set (§5.5), fill `{name}` slots by caller-supplied values before
   rendering, and MUST NOT emit a phrase containing an unfilled slot (§5.1).
 
-No tool may change the meaning of the tokens defined here. A machine-checkable
-conformance corpus of `template → sample set` pairs is planned for a future
-revision of this specification.
+No tool may change the meaning of the tokens defined here.
 
 ---
 
 ## See also
 
 - *Locale Resource Formats Specification* (OVOS-INTENT-2) — the locale folder
-  layout and the five resource roles. All of them — `.intent`, `.entity`,
+  layout and the six resource roles, five of which — `.intent`, `.entity`,
   `.voc`, `.dialog`, `.blacklist` — carry templates written in this grammar
   (§1.1).

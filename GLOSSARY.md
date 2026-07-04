@@ -20,7 +20,7 @@ open a PR adding it.
 | **Expansion** | Resolving `(a\|b)` / `[x]` into a finite set of concrete sentences ([INTENT-1 §4](intent-1.md)). |
 | **Sample / sample set** | A concrete sentence produced by expansion; the set of all of them for a template ([INTENT-1 §4](intent-1.md)). |
 | **Slot** | A named placeholder `{name}` filled with a value rather than written out ([INTENT-1 §3.4, §5](intent-1.md)). |
-| **Capture map** | The names→values mapping a match produces — slot names or vocabulary names as keys ([INTENT-3 §7](intent-3.md)). |
+| **Slot map** | The names→values mapping a match produces — slot names or vocabulary names as keys ([INTENT-3 §7](intent-3.md)). |
 | **Resource file / role** | A skill's plain-text files: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist` ([INTENT-2 §1](intent-2.md)). |
 | **Vocabulary** | A named slot-free phrase set; the unit a keyword intent constrains over ([INTENT-3 §4.1](intent-3.md)). |
 | **Occurrence** | A phrase appearing in an utterance as a contiguous whole-word subsequence ([INTENT-2 §4.3](intent-2.md), [INTENT-3 §4.1](intent-3.md)). |
@@ -35,7 +35,7 @@ open a PR adding it.
 | **Registration** | Submitting an intent's definition and handler together, as one unit ([INTENT-3 §6.1](intent-3.md)). |
 | **Message** | The unit of communication on the bus: a JSON object with `type`, `data`, `context` ([MSG-1 §2](msg-1.md)). |
 | **Context** | The assistant-metadata object on a Message; an extensible JSON object whose keys are defined by companion specs ([MSG-1 §2.3](msg-1.md)). |
-| **Session** | The per-conversation carrier in `context.session`; carries `session_id` (with `"default"` reserved for "originates from the device itself") and `lang` (the user's preferred language, distinct from any `data.lang` describing the payload's own language) ([MSG-1 §4](msg-1.md)). |
+| **Session** | The per-conversation carrier in `context.session`; carries `session_id` (with `"default"` reserved for "interact with the device-local session") and `lang` (the user's preferred language, distinct from any `data.lang` describing the payload's own language) ([SESSION-1 §3.1, §3.2](session-1.md)). |
 | **Listening lifecycle signal** | A payload-free bus signal the audio input service emits or consumes around voice-command capture and sleep mode — `ovos.listener.record.started` / `.record.ended`, `ovos.listener.sleep`, `ovos.listener.awoken` ([AUDIO-IN-1 §6](audio-in.md)). |
 | **GUI template** | A member of the closed, curated `SYSTEM_*` vocabulary an application names to declare *what* to display; distinct from an INTENT-1 sentence template ([GUI-1 §3](gui-1.md)). |
 | **Render backend / Adapter** | An additive plugin that turns GUI template intents into a concrete presentation (screen, browser, terminal, face); every installed adapter receives every event ([GUI-1 §6](gui-1.md)). |

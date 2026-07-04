@@ -116,7 +116,7 @@ provides content and dialog transformers that shape it.
 ## 3. The `persona_id` session field
 
 This specification claims one optional session field per the
-OVOS-SESSION-1 §2.1 registry mechanism.
+OVOS-SESSION-1 §2.2 registry mechanism.
 
 | Field | Wire type | Owner |
 |-------|-----------|-------|
@@ -124,9 +124,9 @@ OVOS-SESSION-1 §2.1 registry mechanism.
 
 `persona_id` is an opaque string identifying which persona identity
 is active for the current session. The value space is
-deployment-defined. This specification places no constraint on the
-string beyond the opaque-string rules of OVOS-SESSION-1 §2.2 (no `:`,
-no whitespace).
+deployment-defined. This specification places no hard constraint on
+the string; values composed of ASCII letters, digits, `_`, and `-`
+are **RECOMMENDED**.
 
 `persona_id` is a **single value** — exactly one persona identity may
 be active per session at a time. Composition of multiple personas
@@ -234,11 +234,17 @@ session by:
 - a **pipeline plugin** via handler-side session mutation;
 - a **session sync** (`ovos.session.sync`) from any component.
 
-Per OVOS-SESSION-1 §4, omitting `persona_id` from a message does
-not clear it — the field is carried forward unchanged. A client
-that wants to dismiss a persona must send an explicit clear (empty
-string or absent field with intent to remove) via session sync or
-a summoning plugin that handles the release intent.
+Omission does not dismiss, but the mechanics differ by session
+class. For the **default session**, the orchestrator's merge
+semantics (OVOS-SESSION-2 §5.1) preserve the stored value when an
+inbound Message omits `persona_id`; dismissal therefore requires an
+**explicit clear** — an empty-string `persona_id` (equivalent to
+absent, §3) sent via `ovos.session.sync`, a summoning plugin that
+handles the release intent, or a committed `Match.updated_session`
+snapshot without the field. For a **named session**, the client's
+copy is authoritative (OVOS-SESSION-2 §2.5): the client dismisses
+by removing `persona_id` from the session state it carries on
+subsequent Messages.
 
 When dismiss is detected, any in-progress generation for the session
 **SHOULD** cease. The persona's per-session state (conversation
@@ -340,7 +346,7 @@ A persona plugin **MAY** mutate session state via
 
 - set or clear `session.persona_id` as part of a summon or release
   match (§7.1 route 1);
-- modify any other session field it owns per the OVOS-SESSION-1 §2.1
+- modify any other session field it owns per the OVOS-SESSION-1 §2.2
   registry mechanism.
 
 One-off query matches (the `ask` command) do **not** mutate
@@ -401,7 +407,7 @@ OVOS-SESSION-2 §2.4. History too large to project into session-resident
 fields is held in plugin-internal storage with best-effort resumption.
 
 A persona plugin **SHOULD** project summary state into a
-session-resident field registered per OVOS-SESSION-1 §2.1 — so that
+session-resident field registered per OVOS-SESSION-1 §2.2 — so that
 resumption across orchestrator restarts or multi-orchestrator
 deployments retains basic continuity even when full history is held
 internally.
@@ -431,7 +437,9 @@ Session context for history continuity is read from
 The plugin generates a response for the specified `persona_id` using
 the `reply()` derivation (OVOS-MSG-1 §5) to route back to the caller.
 If `persona_id` is not supported by this plugin, the plugin **MUST**
-respond with `None` rather than silently drop the request.
+still reply on `ovos.persona.answer` — echoing `persona_id` and
+`utterance`, omitting `response`, and setting the `error` field —
+rather than silently drop the request.
 
 The response payload:
 
@@ -439,7 +447,8 @@ The response payload:
 |-------|------|----------|---------|
 | `persona_id` | string | yes | The persona that answered. |
 | `utterance` | string | yes | Echo of the query. |
-| `response` | string | yes | The generated response text. |
+| `response` | string | on success | The generated response text. Omitted when `error` is present. |
+| `error` | string | on failure | Short reason the query could not be answered (e.g. `"unsupported persona_id"`). Omitted on success. |
 
 This interface is **not** part of the utterance lifecycle — it
 bypasses the pipeline, the dispatch mechanism, and the
@@ -694,7 +703,7 @@ listing the intent names it dispatches on.
 - respond to `ovos.persona.list` with its supported `persona_id`
   values (§8.7);
 - project summary state into a session-resident field registered per
-  OVOS-SESSION-1 §2.1 for resumption safety (§8.4).
+  OVOS-SESSION-1 §2.2 for resumption safety (§8.4).
 
 ### A persona pipeline plugin **SHOULD**:
 
@@ -738,7 +747,7 @@ listing the intent names it dispatches on.
   derivations used for all bus communication.
 - *Session Carrier Wire Shape Specification* (OVOS-SESSION-1) — the
   session field registry and the omission rule; the persona spec
-  claims the `persona_id` field via §2.1.
+  claims the `persona_id` field via §2.2.
 - *Session Lifecycle and State Ownership Specification*
   (OVOS-SESSION-2) — the SHOULD-project / MAY-internal state
   pathways and the mutation boundaries.

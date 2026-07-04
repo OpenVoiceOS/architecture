@@ -19,7 +19,7 @@ It builds on three companion specifications:
 - the *Bus Message Specification* (OVOS-MSG-1) — the envelope,
   routing keys, session carrier, and derivations every Message
   defined here travels in;
-- the *Transformer Injection Point Specification*
+- the *Transformer Plugins Specification*
   (OVOS-TRANSFORM-1) — the dialog-transformer and TTS-transformer
   chains that run before and after TTS synthesis.
 
@@ -317,7 +317,8 @@ Message; the service answers for that session only. An absent or
 `"default"` `session_id` asks about the device-local default session
 (OVOS-SESSION-1 §3.1); it is not a wildcard over all sessions.
 
-The service replies with:
+The service **MUST** reply via the `response` derivation
+(OVOS-MSG-1 §5.3), i.e. on `ovos.audio.is_speaking.response`, with:
 
 ```json
 { "speaking": true }
@@ -411,7 +412,7 @@ The audio output service **MAY** scope its response to that session.
   — the pipeline iteration, `ovos.utterance.speak`, and `ovos.utterance.handled`.
 - *Bus Message Specification* (OVOS-MSG-1) — the envelope and
   derivations used for all bus communication.
-- *Transformer Injection Point Specification* (OVOS-TRANSFORM-1) —
+- *Transformer Plugins Specification* (OVOS-TRANSFORM-1) —
   the dialog-transformer and TTS-transformer chains that plug into
   the rendering pipeline.
 - *Stop Pipeline Plugin Specification* (OVOS-STOP-1) — the universal

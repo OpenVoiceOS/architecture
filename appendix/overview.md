@@ -128,7 +128,7 @@ grammar / resources / intent-definition snapshot checked by
 
 The bus and orchestrator stacks are versioned **individually**
 and not placed on a unified ladder — a tool targeting them cites
-per-spec versions ("MSG-1 v2, PIPELINE-1 v2").
+per-spec versions ("MSG-1 v1, PIPELINE-1 v2").
 
 ### 1.4 Reference implementations and ecosystem tooling
 

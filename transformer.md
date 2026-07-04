@@ -120,8 +120,8 @@ It does **not** define:
 - **Slot value typing schemas.** Intent transformers (§3.4) are
   the canonical home for system-type entity injection (dates,
   numbers, durations, etc.), but the *typed value formats*
-  themselves are deferred to a future text-normalization
-  specification (OVOS-INTENT-1 §5.3).
+  themselves are out of scope for this specification
+  (OVOS-INTENT-1 §5.3).
 - **Streaming / end-to-end pipeline shapes.** The §2 flow diagram
   describes the canonical staged flow most transformers depend on
   (mic → STT → text → intent → speak → TTS → playback);
@@ -184,9 +184,9 @@ each other and with the component-identity keys claimed by other
 specifications — `context["skill_id"]` (OVOS-INTENT-4 §3.1) and
 `context["pipeline_id"]` (OVOS-PIPELINE-1 §3.1), both **single
 strings**. Attribution consumers that need to pick a single
-emitter apply the precedence rule codified in OVOS-CONTEXT-1 §5.2
-(most-specific by lifecycle position, reading the last element of
-the list-valued keys).
+emitter **SHOULD** take the identity most specific by lifecycle
+position among the keys present, reading the last element of the
+list-valued keys.
 
 `<type>_transformer_ids` is the transformer chain's
 **self-attribution**. It is distinct from any
@@ -403,7 +403,7 @@ applies here equally.
 Two distinct outcomes share this shape: (1) **no plausible
 transcription** — empty list without the §8.1 cancellation signal;
 downstream stages treat it as silence and the lifecycle terminates
-with `complete_intent_failure` followed by `ovos.utterance.handled`
+with `ovos.intent.unmatched` followed by `ovos.utterance.handled`
 per OVOS-PIPELINE-1 §9; (2) **cancellation** — empty list returned
 together with `canceled: true` and `cancel_reason` per §8.1; the
 orchestrator terminates via the §8.2 path, emitting
@@ -478,9 +478,9 @@ the universe of candidates deterministically.
 > Mutating certain reserved keys has effects that spec readers
 > should be aware of even though they are not prohibited:
 >
-> - Mutating `session.intent_context` directly bypasses OVOS-CONTEXT-1 §5
->   bus-event stamping — no `origin` is stamped because the
->   mutation does not ride the §5 bus events.
+> - Mutating `session.intent_context` directly is the sanctioned
+>   transformer pathway of OVOS-CONTEXT-1 §5.2; the key-shape
+>   rules of OVOS-CONTEXT-1 §3 apply to every entry written.
 > - Mutating `session.pipeline` (OVOS-PIPELINE-1 §5) changes which
 >   pipeline plugins are consulted for this utterance — a powerful
 >   per-utterance routing primitive that is also easy to misuse.
@@ -496,27 +496,27 @@ the universe of candidates deterministically.
 the `Match` object that a pipeline plugin produced
 (OVOS-PIPELINE-1 §4.1) before the orchestrator emits the dispatch
 Message (OVOS-PIPELINE-1 §7). Two things happen in this window —
-**engine-side session mutation** per OVOS-CONTEXT-1 §5.3 and the
+**engine-side session mutation** per OVOS-CONTEXT-1 §5.1 and the
 intent-transformer chain of this section — and the **engine-side
 mutation MUST happen first**. The orchestrator accepts the match,
 allows the matching engine to write any context entries it intends
-to per CONTEXT-1 §5.3, and only then runs the intent-transformer
+to per CONTEXT-1 §5.1, and only then runs the intent-transformer
 chain over the resulting `Match`. This ordering lets an intent
 transformer read context the matching engine just wrote (for
-example, to enrich a capture based on a freshly-promoted entry).
+example, to enrich a slot based on a freshly-promoted entry).
 
 **Input.** The `Match` produced by the pipeline plugin that
-claimed the utterance — `skill_id`, `intent_name`, `captures`,
+claimed the utterance — `skill_id`, `intent_name`, `slots`,
 `utterance` (OVOS-PIPELINE-1 §4.1) — together with the post-engine-
 mutation `session.intent_context` snapshot.
 
 **Output.** A `Match` of the same shape, possibly with an enriched
-`captures` map.
+`slots` map.
 
 **Permitted mutations.** A transformer MAY add entries to
-`Match.captures` and MAY overwrite existing entries it itself
+`Match.slots` and MAY overwrite existing entries it itself
 produced earlier in the chain. It **SHOULD NOT** delete or
-overwrite capture entries produced by the matching engine or by an
+overwrite slot entries produced by the matching engine or by an
 earlier transformer in the chain, unless deletion is the
 transformer's deployer-configured purpose (PII redaction,
 content filtering, profanity censoring). It **MUST NOT** change
@@ -591,8 +591,7 @@ applied effects) for observability.
 A chain runs in **ascending priority order**: a transformer with
 `priority = 1` runs before one with `priority = 50` runs before one
 with `priority = 100`. Lower number = earlier in the chain. This
-matches the natural "stages count up" reading and the existing
-fallback-skill ordering convention elsewhere in OVOS.
+matches the natural "stages count up" reading.
 
 Each transformer plugin declares an integer `priority`. The
 default is `50` — the middle of the band — so plugins with no
@@ -620,7 +619,7 @@ apply explicit order when configured.
 ## 5. Per-session overrides
 
 This specification claims **twelve session fields** under
-OVOS-SESSION-1 §2.1: six **preference** fields naming a per-type
+OVOS-SESSION-1 §2.2: six **preference** fields naming a per-type
 chain ordering (§5.1) and six **policy** fields naming a per-type
 denylist (§5.2). The composition rule of §5.3 layers them.
 
@@ -1002,10 +1001,9 @@ observes a cancellation signal:
 
 Stamped from the transformer that produced the signal (the
 orchestrator knows which one), **not** from any value the
-transformer included in the payload. This parallels OVOS-CONTEXT-1
-§5.2's origin-stamping rule and serves the same purpose: a
-transformer cannot impersonate another transformer's
-cancellation.
+transformer included in the payload. The orchestrator-side stamp
+guarantees that a transformer cannot impersonate another
+transformer's cancellation.
 
 When `canceled: true` is observed alongside an empty utterance
 list (§3.2) or any other artifact, the cancellation flag is the
@@ -1041,7 +1039,7 @@ signal that triggered the cancellation. `ovos.utterance.handled`
 preserves the universal end-marker invariant of OVOS-PIPELINE-1
 §9.5.
 
-The orchestrator **MUST NOT** emit `complete_intent_failure`
+The orchestrator **MUST NOT** emit `ovos.intent.unmatched`
 (OVOS-PIPELINE-1 §9.3) on the cancellation path — failure and
 cancellation are distinct outcomes; an observer that wants to
 count "user gave up" or "policy blocked it" separately from
@@ -1090,7 +1088,7 @@ the orchestrator does not implement, no obligations arise.
 - on any cancellation, emit `ovos.utterance.cancelled` followed
   by `ovos.utterance.handled` (§8.2), carrying `cancel_reason` and
   the stamped `cancel_by`, and **MUST NOT** emit
-  `complete_intent_failure` on the cancellation path; **MUST NOT**
+  `ovos.intent.unmatched` on the cancellation path; **MUST NOT**
   strip the `canceled` / `cancel_reason` / `cancel_by` keys from
   `Message.context` on the terminal events or downstream
   derivations; **MUST NOT** dispatch a Match that was reached
@@ -1162,16 +1160,15 @@ covers.
 - read and mutate `session.intent_context` (OVOS-CONTEXT-1 §2)
   directly on the session object it holds in hand. The direct-
   mutation pathway is normatively permitted for any transformer
-  type by OVOS-CONTEXT-1 §5.3 — the orchestrator is the carrier
+  type by OVOS-CONTEXT-1 §5.2 — the orchestrator is the carrier
   of writes, not the bus. When mutating, the transformer **MUST**
-  use the key-shape rules of OVOS-CONTEXT-1 §3 and §5.3 (private
+  use the key-shape rules of OVOS-CONTEXT-1 §3 and §5.2 (private
   entries prefixed `<skill_id>:`, where `<skill_id>` for a
   transformer is its own `transformer_id` or, when the transformer
   is writing on behalf of a specific skill, that skill's
-  `skill_id`). Mutations made via the bus (`ovos.context.set` /
-  `.unset` / `.clear`, OVOS-CONTEXT-1 §5) are also permitted; the
-  choice between direct and bus is the transformer's, with the
-  trade-offs catalogued in OVOS-CONTEXT-1 §5.3;
+  `skill_id`). Mutations made via the `ovos.session.sync` pathway
+  (OVOS-CONTEXT-1 §5.3) are also permitted; the choice between
+  the in-place pathway and the sync pathway is the transformer's;
 - access the bus for side-effects unrelated to the transformer's
   IO (logging, telemetry, cross-session signals) — but **SHOULD
   NOT** make the transformer's output depend on bus responses
@@ -1197,10 +1194,9 @@ true` or `cancel_reason`:
 - **Slot value typing schemas.** Intent transformers (§3.4) are
   where typed system entities are injected, but the typed value
   formats themselves (date encoding, number representation,
-  duration units) are deferred to a future text-normalization
-  specification (OVOS-INTENT-1 §5.3). This spec defines the
-  injection pathway; the future spec will define what gets
-  injected.
+  duration units) are out of scope for this specification
+  (OVOS-INTENT-1 §5.3). This spec defines the injection pathway
+  only, not what gets injected.
 - **Behavioural contracts for any specific transformer type beyond
   the IO shape and the canonical use-case list.** Whether an
   utterance transformer normalizes contractions, translates,
@@ -1262,12 +1258,12 @@ true` or `cancel_reason`:
   claims the six per-session transformer-override fields (§5), and
   the deployment-default fallback rule for omitted fields.
 - *Intent Context Specification* (OVOS-CONTEXT-1) — the
-  context-mutation pathways transformers may use. Both the bus
-  events (§5) and the direct-session-mutation pathway (§5.3) are
-  available; the choice is the transformer's per the conformance
-  rules of §9 of this spec.
+  context-mutation pathways transformers may use. Both the
+  `ovos.session.sync` pathway (§5.3) and the in-place
+  transformer pathway (§5.2) are available; the choice is the
+  transformer's per the conformance rules of §9 of this spec.
 - *Intent Definition Specification* (OVOS-INTENT-3) — the intent
-  and `Match` model that §3.4 operates on; §7 capture-map shape.
+  and `Match` model that §3.4 operates on; §7 slot map.
 - *Sentence Template Grammar Specification* (OVOS-INTENT-1) — §5.3
   deferred slot value typing, for which §3.4 of this spec is the
   agreed injection home.

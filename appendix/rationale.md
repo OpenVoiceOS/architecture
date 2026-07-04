@@ -238,15 +238,17 @@ the normative sections.
   `alphanumeric_skill_id`; `set_cross_skill_context` fans
   out via a bus event); CONTEXT-1 names the scopes
   explicitly and routes both through one bus surface.
-- **Why private is the default.** A skill that calls
-  `ovos.context.set` without specifying `scope` gets a
-  private entry. This optimises for the safer case: a
-  cross-skill leak from an accidentally-shared entry is
-  harder to debug than a cross-skill miss from an
-  accidentally-private entry. The Adapt `set_context`
-  pattern is effectively skill-private, which the private
-  default matches. Cross-skill coordination is a conscious
-  decision that deserves an explicit `scope: "shared"`.
+- **Why private is the default.** A skill that writes an
+  entry via the `ovos.session.sync` pathway (CONTEXT-1 §5.3)
+  using its own-prefixed key gets a private entry, and
+  bare-string gate declarations default to the private
+  lookup. This optimises for the safer case: a cross-skill
+  leak from an accidentally-shared entry is harder to debug
+  than a cross-skill miss from an accidentally-private
+  entry. The Adapt `set_context` pattern is effectively
+  skill-private, which the private default matches.
+  Cross-skill coordination is a conscious decision that
+  deserves an explicitly bare (shared) key.
 - **Prior art for the negative gate.** Three in-tree
   intent engines under `/plugins-pipeline/` —
   [jurebes](https://github.com/OpenJarbas/jurebes),
@@ -260,19 +262,20 @@ the normative sections.
 - **Engine-side mutation as a sanctioned non-bus
   pathway.** The Adapt pipeline plugin auto-injects matched
   entities into context *inside* `match()`, which conflicts
-  with PIPELINE-1 §4.2's side-effect-free `match` rule.
-  CONTEXT-1 §5.3 carves an explicit window between
+  with PIPELINE-1 §4.2's rule that match-phase session
+  mutations are visible only via `Match.updated_session`.
+  CONTEXT-1 §5.1 carves an explicit window between
   match-accept and dispatch-emit for engine-side session
   mutation, with the orchestrator (not the bus) carrying
   the write. This both legitimizes the established
   practice and resolves the PIPELINE-1 contradiction.
-- **Eight-level lifecycle-position owner precedence**
-  (CONTEXT-1 §5.2). When a Message carries multiple
-  component-identity keys (skill_id, pipeline_id, the six
-  `<type>_transformer_ids`) from a derivation chain that
-  crossed component boundaries, the orchestrator picks the
-  owner by lifecycle position: the latest stage to run is
-  the most specific.
+- **Lifecycle-position owner precedence.** When a Message
+  carries multiple component-identity keys (skill_id,
+  pipeline_id, the six `<type>_transformer_ids`) from a
+  derivation chain that crossed component boundaries, a
+  consumer that needs a single owner picks it by lifecycle
+  position: the latest stage to run is the most specific
+  (TRANSFORM-1 §1.3).
 
 ### 4.7 Transformer plugins (TRANSFORM-1)
 
@@ -456,8 +459,9 @@ the normative sections.
     sensitive-query signal and swapping `session.pipeline`);
     system context injection (writing entries to
     `session.intent_context` for downstream pipeline plugins
-    and skills to read as gates, without round-tripping
-    through CONTEXT-1 §5 bus events).
+    and skills to read as gates, via the in-place transformer
+    pathway (CONTEXT-1 §5.2) without an `ovos.session.sync`
+    round-trip).
   - **Intent §3.4:** system entity injection — the canonical
     use. Parse free-text capture values into typed system
     entities (dates, numbers, durations, named locations,
@@ -500,7 +504,7 @@ the normative sections.
   - **Intent §3.4:** the strongest match in the stack. A
     small LLM can extract structured entities (dates,
     durations, quantities) from free-text capture values and
-    inject the typed forms into `Match.captures` — once,
+    inject the typed forms into `Match.slots` — once,
     centrally — so every skill receives the same typed payload
     regardless of which engine matched.
   - **Dialog §3.5:** the most prominent LLM application —

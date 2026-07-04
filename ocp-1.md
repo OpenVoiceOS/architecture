@@ -128,7 +128,9 @@ emit playback-mutating messages under this prefix; they observe state
 | Message | Meaning |
 |---|---|
 | `ovos.common_play.play` | Begin playback of a resolved result / queue. |
-| `ovos.common_play.search` | Acquire candidate media for a phrase (the pipeline's discovery step); `…search.start` / `…search.end` bracket it. |
+| `ovos.common_play.search` | Acquire candidate media for a phrase (the pipeline's discovery step). Bracketed by the two Messages below. |
+| `ovos.common_play.search.start` | The component orchestrating the search **MUST** emit this before querying providers. |
+| `ovos.common_play.search.end` | The component orchestrating the search **MUST** emit this after result aggregation completes. |
 
 A playback request **MAY** name a preferred output (a backend alias) in the
 utterance; absent that, the player selects an output by its configured

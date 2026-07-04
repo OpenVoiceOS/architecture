@@ -82,8 +82,12 @@ registration method).
 
 The **orchestrator** (OVOS-INTENT-3 §6.1) maintains the manifest
 (§10): a passive index built from observed registrations,
-observability-only. It does not gate matching, influence
-consumption, or block re-registration. Plugins are observably
+observability-only. In processing registrations it does not gate
+matching, influence consumption, or block re-registration. Other
+specifications **MAY** consult the manifest read-only during the
+utterance lifecycle (for example, OVOS-PIPELINE-1 §6.2's
+`required_slots` backstop); such consultation does not make the
+manifest a gate on registration processing. Plugins are observably
 pluggable — adding or removing one is a deployment concern; bus
 traffic and the manifest are unaffected.
 
@@ -144,7 +148,7 @@ For an **intent**:
 | `lang` | string | yes | BCP-47 (INTENT-2 §2), case-insensitive (SESSION-1 §3.2). The language of the resource being registered — distinct from `session.lang`. |
 
 The triple `(skill_id, intent_name, lang)` identifies an **intent**
-(INTENT-3 §6.1). For manifest indexing and replacement (§8.1), the
+(INTENT-3 §3). For manifest indexing and replacement (§8.1), the
 **registration key** is the quadruple
 `(skill_id, intent_name, lang, method)` — `method` being `keyword`
 (§5) or `template` (§6). Registering a quadruple that matches an
@@ -291,6 +295,13 @@ A producer **MUST** include all four top-level keys (`required`,
 `optional`, `one_of`, `excluded`); a payload missing any of them is
 malformed.
 
+**Unknown payload fields** are not malformed: a consumer **MUST**
+ignore fields it does not recognise and **MUST NOT** reject a
+registration because of them. This is what lets companion
+specifications (e.g. OVOS-CONTEXT-1's `requires_context` /
+`excludes_context`) ride on the registration payload as additional
+fields; the orchestrator's manifest preserves them (§10.2).
+
 A consuming plugin **MUST NOT** index a registration that violates
 these rules. The rejecting plugin **MUST** log the rejection at
 WARN, including `skill_id`, `intent_name`, `lang`, the rejecting
@@ -360,7 +371,8 @@ A consuming plugin **MUST NOT** index a template registration in which:
 
 The §5.3 WARN-log rule applies: the rejecting plugin **MUST** log
 the rejection with `skill_id`, `intent_name`, `lang`, and a
-one-line reason.
+one-line reason. The §5.3 unknown-field rule also applies: unknown
+payload fields **MUST** be ignored, not treated as malformed.
 
 ---
 
@@ -449,18 +461,17 @@ registered under that `skill_id`. Payload:
 { "skill_id": "music.skill" }
 ```
 
-An optional `session_id` field narrows the removal to registrations
-scoped to that session (§11):
-
-```json
-{ "skill_id": "music.skill", "session_id": "satellite-abc" }
-```
+The removal is scoped to the `session_id` read from
+`context.session.session_id` of the Message (§11.1) — never from
+`Message.data`. A deregistration arriving under the default session
+removes the `"default"`-scoped registrations; one arriving under a
+satellite's session removes only that session's registrations (§11.3).
 
 This is the message an orchestrator emits, or that a skill sends to
 the orchestrator, when a skill is unloaded (INTENT-3 §6.1). A bridge
-SHOULD emit `ovos.skill.deregister` with the satellite's `session_id`
-for every skill the satellite registered when the satellite
-disconnects (OVOS-BRIDGE-1 §3).
+SHOULD emit `ovos.skill.deregister` carrying the satellite's session
+in `context` for every skill the satellite registered when the
+satellite disconnects (OVOS-BRIDGE-1 §3).
 
 Deregistering an intent, entity, or skill that is not currently
 registered is a **no-op**: registrations are fire-and-forget, every
@@ -497,8 +508,16 @@ deregisters the triple (§8.2, removes both methods) and re-registers
 just the desired one.
 
 Enabling an already-enabled intent, or disabling an already-disabled
-intent, is a no-op. Re-registration (§8.1) preserves enabled/disabled
-state unless the producer deregisters first.
+intent, is a no-op. Enabling or disabling an intent that is not
+currently registered is likewise a no-op — like deregistration
+(§8.4), each consumer processes the message independently and one
+without a matching record has nothing to change. Re-registration
+(§8.1) preserves enabled/disabled state unless the producer
+deregisters first. Whether a consuming plugin's disabled-state
+record survives a plugin reload is **out of scope**: a reloaded
+plugin that needs the current enabled/disabled state recovers it by
+querying the manifest (§10.1), whose `enabled` field reflects the
+latest state.
 
 ---
 
@@ -657,17 +676,19 @@ default intent.
 ### 11.3 Deregistration and session teardown
 
 `ovos.intent.deregister` and `ovos.entity.deregister` remove the
-entry whose full key matches, including `session_id`. An omitted
-`session_id` in the deregistration payload removes the entry from
-`"default"` only — it does not remove session-scoped registrations
-with the same `(skill_id, intent_name, lang)`.
+entry whose full key matches, including `session_id`. As for every
+message in this specification, the `session_id` is read from
+`context.session.session_id` (§11.1) — never from `Message.data`. A
+deregistration arriving under the default session removes the
+`"default"`-scoped entry only — it does not remove session-scoped
+registrations with the same `(skill_id, intent_name, lang)`.
 
-`ovos.skill.deregister` with an optional `session_id` field (§8.4)
-removes all registrations for that skill scoped to that session. A
-bridge SHOULD emit `ovos.skill.deregister` with the satellite's
-`session_id` for each satellite skill when the satellite disconnects,
-to clean up the satellite's session-scoped registrations from the
-orchestrator's index.
+`ovos.skill.deregister` (§8.4) removes all registrations for that
+skill scoped to the session read from `context.session.session_id`.
+A bridge SHOULD emit `ovos.skill.deregister` carrying the
+satellite's session in `context` for each satellite skill when the
+satellite disconnects, to clean up the satellite's session-scoped
+registrations from the orchestrator's index.
 
 ### 11.4 Pipeline plugin visibility
 
@@ -751,11 +772,12 @@ OVOS-PIPELINE-1's concern.
 - honour `ovos.intent.enable` / `ovos.intent.disable` in the
   manifest (§8.5) — the `enabled` field of §10.1 reflects the
   latest state;
-- on receiving `ovos.skill.deregister` with a `session_id` field,
-  remove all manifest entries for that `(session_id, skill_id)` pair
-  (§8.4, §11.3);
-- **NOT** validate, reject, route, or gate any registration message.
-  The orchestrator is a passive listener for the manifest, not a
+- on receiving `ovos.skill.deregister`, remove all manifest entries
+  for the `(session_id, skill_id)` pair, with `session_id` read from
+  `context.session.session_id` (§8.4, §11.1, §11.3);
+- **NOT** validate, reject, route, or gate any registration message
+  beyond the reserved-`intent_name` exclusion of §3.2. The
+  orchestrator is a passive listener for the manifest, not a
   routing party.
 
 The orchestrator's other responsibilities — matching, dispatch,

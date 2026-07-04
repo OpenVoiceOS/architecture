@@ -8,12 +8,13 @@ tables that don't fit cleanly in any single normative spec.
 
 ### 6.1 Topic-name conventions across the family
 
-The naming conventions of OVOS-MSG-1 v2 §2.1.2 — dot-separated
-hierarchy, stable root, verb-tense pattern for the trailing
-segment, request/terminal pairs sharing a root verb,
-`.response` suffix, per-instance
-`<root>.<domain>.<id>.<verb>` form — apply across the family.
-The four-way collision of the word "intent" in introspection
+The following naming conventions hold across the family as
+appendix-level guidance (each spec is authoritative for its own
+topics): dot-separated hierarchy, stable root, verb-tense
+pattern for the trailing segment, request/terminal pairs
+sharing a root verb, the `.response` suffix (OVOS-MSG-1 §5.3),
+and the per-instance `<root>.<domain>.<id>.<verb>` form.
+The three-way collision of the word "intent" in introspection
 topics deserves an explicit callout:
 
 - `ovos.intent.list` (INTENT-4 §10) — list of registered
@@ -38,8 +39,8 @@ accidentally parse responses from another.
 ### 6.2 Session-field cheat-sheet
 
 Every spec in the family that claims a `session` field does
-so via the OVOS-SESSION-1 §2.1 registry mechanism. The full
-set spans four specs; this table consolidates them. All
+so via the OVOS-SESSION-1 §2.2 registry mechanism. The full
+set spans seven specs; this table consolidates them. All
 fields follow the canonical SHOULD-omit /
 `[]`-equivalent-to-omission wire-weight rule of
 OVOS-SESSION-1 §3.4.
@@ -71,6 +72,11 @@ OVOS-SESSION-1 §3.4.
 | `blacklisted_dialog_transformers` | TRANSFORM-1 §5.2 | policy (denylist) | ≡ absent |
 | `blacklisted_tts_transformers` | TRANSFORM-1 §5.2 | policy (denylist) | ≡ absent |
 | `intent_context` | CONTEXT-1 §2 | per-session state | object; absent ≡ empty |
+| `active_handlers` | PIPELINE-1 §7.1 | per-session state | ≡ absent |
+| `converse_handlers` | CONVERSE-1 §2.1 | per-session state | ≡ absent |
+| `response_mode` | CONVERSE-1 §2.2 | per-session state | n/a (object) |
+| `fallback_handlers` | FALLBACK-1 §4 | preference (ordering) | ≡ absent |
+| `persona_id` | PERSONA-1 §3 | per-session state | n/a (string; empty ≡ absent) |
 
 **Role glossary:**
 
@@ -90,9 +96,10 @@ OVOS-SESSION-1 §3.4.
 
 Each component type self-identifies via a reserved context
 key. The keys coexist freely on a single Message when the
-derivation chain crosses component boundaries; attribution
-consumers apply the eight-level lifecycle-position precedence
-of CONTEXT-1 §5.2 to pick a single owner when needed.
+derivation chain crosses component boundaries; an attribution
+consumer that needs a single owner picks the identity most
+specific by lifecycle position, reading the last element of
+list-valued keys (TRANSFORM-1 §1.3).
 
 | Context key | Owner | Stamps on (origination + modify-in-place) | `.reply` / `.response` | `.forward` |
 |-------------|-------|------|----------|--------|
@@ -152,5 +159,5 @@ layer-2 transports (see appendix/patterns.md §3.1.2).
 | Handler-lifecycle trio `.start` / `.complete` / `.error` (PIPELINE-1 §8) | `forward` | Same direction as the inbound dispatch |
 | `ovos.session.sync` emitted inside a handler (SESSION-2 §2.7) | `forward` | Session update travels toward the originating client |
 | `ovos.stop.pong` (STOP-1 §4.2) | `reply` | Skill answers back to the stop plugin that sent the ping |
-| `<owner_id>.converse.response` (CONVERSE-1 §4.2) | `reply` | Owner answers back to the converse plugin that polled |
+| `<skill_id>.converse.pong` (CONVERSE-1 §4.2) | `reply` | Owner answers back to the converse plugin that polled |
 | Pipeline introspection response (PIPELINE-1 §10.2) | `reply` | Plugin answers back to the observer that requested |

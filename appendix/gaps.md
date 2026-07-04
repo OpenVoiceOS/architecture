@@ -7,20 +7,21 @@
   the plugin contract (the `match` shape, the orchestrator's
   iteration semantics) but explicitly defers what each
   non-trivial plugin type actually *does*. `converse` (OVOS-CONVERSE-1),
-  `stop` (OVOS-STOP-1), and `common_query` (OVOS-COMMON-QUERY-1)
-  have their own specs. Remaining candidates: `fallback`, `ocp`,
-  `persona`. Each defines its own internal behaviour and its
-  own bus emissions beyond the universal lifecycle PIPELINE-1
-  prescribes.
+  `stop` (OVOS-STOP-1), `common_query` (OVOS-COMMON-QUERY-1),
+  `fallback` (OVOS-FALLBACK-1), `persona` (OVOS-PERSONA-1), and
+  the media player (OVOS-OCP-1) have their own specs. Each
+  defines its own internal behaviour and its own bus emissions
+  beyond the universal lifecycle PIPELINE-1 prescribes.
 - **Session preference fields not claimed by a spec.**
   SESSION-1 defines the wire shape and OVOS-SESSION-2 defines
   the lifecycle and state-ownership model; what remains
   deferred is the full set of session preferences OVOS
-  carries (`persona_id`, `time_format`, `date_format`,
-  `system_unit`, `tts_preferences`, `location`, …) — these
-  need to be claimed under SESSION-1 §2.1's field registry by
-  their respective owning specs (a preferences spec,
-  OCP / persona / locale specs as appropriate).
+  carries (`time_format`, `date_format`, `system_unit`,
+  `tts_preferences`, `location`, …) — these need to be
+  claimed under SESSION-1 §2.2's field registry by their
+  respective owning specs (a preferences spec, OCP / locale
+  specs as appropriate). `persona_id` is already claimed by
+  OVOS-PERSONA-1 §3.
 - **Text normalization of ASR output.** The basis for slot
   value typing (INTENT-1 §5.3). Deferred to its own
   specification.
@@ -74,10 +75,13 @@
   symmetric and independent: each can live on the satellite or the
   hub, giving four possible combinations. The hub-side model
   requires transmitting audio as bus Message payloads (e.g.
-  base64-encoded PCM or compressed frames). The bus surface for
-  any audio transmission — topic names, payload shape, session
-  fields for codec and audio preferences — is not defined by any
-  current specification. Deferred to OVOS-AUDIO-1.
+  base64-encoded PCM or compressed frames). The **outbound**
+  half is covered: OVOS-AUDIO-1 §3.4 (`ovos.utterance.speak.b64`)
+  and §4.3 (`ovos.audio.speech`) define base64 delivery of
+  synthesised audio to remote clients. The **inbound** half —
+  transmitting captured microphone audio from a satellite to a
+  hub-side STT, with session fields for codec and audio
+  preferences — remains undefined.
 - **Session-scoped pipeline plugin registration.** BRIDGE-1 §4.4
   and INTENT-4 §11 cover session-scoped intent registration for
   satellite-side skills. A satellite that implements a pipeline

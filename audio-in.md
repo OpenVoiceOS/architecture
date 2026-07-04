@@ -67,7 +67,8 @@ Canonical use cases:
 - **Denoising and normalisation** — noise reduction, gain
   normalisation, format conversion.
 - **Voice-print recognition** — writes an intermediate result to
-  `Message.context` (e.g. `context.voice_match`) for downstream
+  `Message.context` (e.g. `context.voice_match` — an illustrative
+  key name, not claimed by this specification) for downstream
   consolidation by a metadata transformer.
 
 ---
@@ -87,7 +88,7 @@ per **OVOS-PIPELINE-1 §9.1**.
 
 ### 5.1 Language resolution
 
-Select the STT input language in this order:
+The service **SHOULD** select the STT input language in this order:
 
 1. `session.detected_lang` (**OVOS-SESSION-1 §3.2.6**) — audio
    transformer's language classification.
@@ -161,7 +162,10 @@ No payload. The session is identified by `context.session.session_id`
 of this Message.
 
 On receipt the audio input service enters sleep mode and suspends
-capture until it is awoken (§6.4).
+capture until it is awoken (§6.4). Sleep entry is **unacknowledged
+by design**: no confirmation Message is emitted on entering sleep.
+The only sleep-related emission is `ovos.listener.awoken` on the
+sleep→awake transition (§6.4).
 
 ### 6.4 Awoken
 

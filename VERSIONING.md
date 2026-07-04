@@ -9,7 +9,7 @@ the pre-specification behavior of the OVOS stack:
 | **V1** | A formalization of behavior that is **compatible with V0**. A V0 component keeps working against a V1 implementation, even if degraded (missing optional fields, reduced guarantees, legacy namespaces honored). |
 | **V2** | Behavior that is **not backwards compatible** with V0. Adopting it requires coordinated migration (e.g. the `legacy_namespace` configuration gate). |
 
-Until launch day, every spec in this repository MUST be classified as V1 or
+Every spec in this repository MUST be classified as V1 or
 V2. The classification is part of the spec header. Rules of thumb:
 
 - A spec that documents existing message flows, adds optional fields, or
@@ -23,11 +23,9 @@ Within a class, editorial revisions bump the spec's own revision number in
 its header; compatibility class changes (V1 → V2) are a new spec version, not
 a revision.
 
-## The 1.0 definition
+## Full spec compliance
 
-The compatibility classes define the project roadmap. The stack starts at V0
-(the undocumented status quo — beta). Each subsystem is formalized as V1, then
-migrated to V2 where the spec demands incompatible change. **OVOS is fully
-spec compliant when every subsystem operates on V2 — that state is the
-"breakthrough" in "from beta to breakthrough", and it is the 1.0 release
-criterion.**
+The compatibility classes define a progression. A subsystem starts at V0
+(the undocumented status quo), is formalized as V1, then migrated to V2
+where the spec demands incompatible change. **A deployment is fully spec
+compliant when every subsystem operates on V2.**

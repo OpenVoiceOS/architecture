@@ -271,8 +271,8 @@ other (§3), distinguished only by its identifier.
 ### 3.2 Language signals
 
 A session carries up to six BCP-47 language-tag fields, each
-naming a different *kind* of language signal. All four are
-session-scoped, all four are omissible per §2, and all four are
+naming a different *kind* of language signal. All six are
+session-scoped, all six are omissible per §2, and all six are
 populated independently (typically by different stages of the
 pipeline, by different components, or by an out-of-band caller).
 
@@ -546,11 +546,10 @@ For the avoidance of doubt:
 
 ### 4.1 Default materialization
 
-OVOS-MSG-1 §4.1 permits an implementation to **materialize** a
-default session on a derived Message when the source Message had no
-`session`. That section permits "any device-local fields the
-implementation chooses"; this specification narrows that permission
-for the field set §3 claims. A materialized default **MUST** set `session_id: "default"`. A
+The derivations of OVOS-MSG-1 §5.1–§5.2 permit an implementation
+to **materialize** a default session on a derived Message when the
+source Message had no `session`; this specification narrows that
+permission for the field set §3 claims. A materialized default **MUST** set `session_id: "default"`. A
 materialized default **MUST NOT** populate any field whose
 deployment default is a deployment-configured or "no behaviour"
 value — those fields carry meaning only when explicitly set by the

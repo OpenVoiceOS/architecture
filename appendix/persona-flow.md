@@ -124,12 +124,12 @@ event; the session field change is the signal.
 ## Out-of-band query (skill asks persona directly)
 
 ```
-ovos.persona.ask                 [persona_id="alice", utterance="summarise X", source=<skill>]
+ovos.persona.query               [persona_id="alice", utterance="summarise X", source=<skill>]
   │
   ├─ persona plugin (supports "alice") receives it
   │    generates reply internally
   │
-  ovos.persona.ask.response      [persona_id="alice", utterance="summarise X", response="..."]
+  ovos.persona.answer            [persona_id="alice", utterance="summarise X", response="..."]
                                   routed via reply() back to <skill>
 ```
 

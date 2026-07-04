@@ -40,7 +40,7 @@ It builds on six companion specifications:
   `Message.context`, the `session` carrier, and the
   `forward` / `reply` / `response` derivations every Message
   defined here travels in;
-- the *Session Carrier Wire Shape Specification* (OVOS-SESSION-1) —
+- the *Session Specification* (OVOS-SESSION-1) —
   the field-registry mechanism under which this spec claims its
   session fields (§2), and the omission-not-`null` rule;
 - the *Session Lifecycle and State Ownership Specification*
@@ -299,10 +299,12 @@ PIPELINE-1 §4.2 mechanism), and its returned `Match` dispatches
 per PIPELINE-1 §7 normally. There is no dispatch suppression and
 no out-of-band signalling between the plugin and the orchestrator.
 
-The plugin is a **pure matcher** in OVOS-PIPELINE-1 §7.0 terms —
-its `match` produces a `Match` whose `skill_id` is some *other*
-component's identity (the claiming handler, or the
-response-mode holder), never its own `pipeline_id`. The reserved
+The plugin is a **pure matcher** — a matcher whose only output is
+its return value: its `match` produces a `Match` whose `skill_id`
+is some *other* component's identity (the claiming handler, or the
+response-mode holder), never its own `pipeline_id`
+(OVOS-PIPELINE-1 §7.0), and the plugin bundles no handler of its
+own. The reserved
 intent_names are dispatched to those handler-owners, which
 subscribe to `<own_skill_id>:converse` / `<own_skill_id>:response`.
 The plugin **SHOULD** publish the intent_names it produces matches
@@ -330,7 +332,13 @@ When invoked, a converse plugin MUST proceed in this order:
 
 1. **Response-mode pre-emption.** If `session.response_mode` is
    present and its `expires_at` is in the future, the plugin
-   MUST return a `Match` per §5.2 for the holder, on
+   MUST first verify the §2.2 identity invariant: after the §3.2
+   TTL prune (when configured), the holder's `skill_id` MUST
+   appear in `session.converse_handlers` — a pruned or
+   unrecognised holder MUST NOT receive delivery; the plugin
+   discards the entry via `Match.updated_session` (log and
+   discard) and proceeds to step 2. For a valid holder, the
+   plugin MUST return a `Match` per §5.2 for the holder, on
    `intent_name == "response"`, and SKIP the converse-handler poll.
    The orchestrator dispatches per PIPELINE-1 §7; the holder's
    response handler runs.
@@ -394,6 +402,11 @@ not affect the topic name. The response carries `data`:
 | `result` | boolean | yes | `true` ⇒ the owner claims the utterance; `false` ⇒ the owner declines. |
 | `error_code` | string | no | Optional structured reason (see §4.4) when `result` is `false`. |
 
+The boolean's field name is protocol-specific: this spec's poll
+uses `result`, while the analogous polls of OVOS-FALLBACK-1 /
+OVOS-STOP-1 use `can_handle` and OVOS-COMMON-QUERY-1 uses
+`can_answer`. Each name is normative only within its own protocol.
+
 Both topics use the **dotted addressed** form (`<skill_id>.<verb>`).
 The poll is **not** a PIPELINE-1 §7 dispatch, so it avoids the `:`
 separator that OVOS-MSG-1 §2.1.1 reserves for the dispatch shape
@@ -436,7 +449,7 @@ returns a `Match` (PIPELINE-1 §4.1) shaped as follows:
 - `intent_name` = the reserved value `converse`;
 - `lang` = the active language;
 - `utterance` = the chosen candidate;
-- `captures` = `{}` (a converse claim is not a slot-bearing
+- `slots` = `{}` (a converse claim is not a slot-bearing
   match);
 - `updated_session` = OPTIONAL. The converse plugin MAY use
   this PIPELINE-1 §4.2 channel to pre-promote the claimer to
@@ -478,12 +491,14 @@ the declining owner from `session.converse_handlers`:
   iteration): remove the `"done"` owner via `Match.updated_session`
   (the PIPELINE-1 §4.2 channel).
 - **When returning `null`** (no owner claimed): there is no Match
-  to carry `updated_session`. The plugin MUST mutate the inbound
-  session object in-place, removing the `"done"` owner from
-  `converse_handlers`. This in-place mutation on a null-return is
-  the sole permitted exception to PIPELINE-1 §4.2's non-mutation
-  rule; it is scoped strictly to `"done"` removal and has no effect
-  on the current utterance's dispatch path.
+  to carry `updated_session`, and in-place mutation of the inbound
+  session object is not visible past the plugin boundary
+  (PIPELINE-1 §4.2). The plugin MUST instead emit
+  `ovos.session.sync` (OVOS-SESSION-2 §2.7), derived from the
+  inbound utterance Message, carrying the session with the `"done"`
+  owner removed from `converse_handlers`. The removal takes effect
+  for subsequent utterances and has no effect on the current
+  utterance's dispatch path.
 
 Removal is the only effect of `"done"` — it does not affect any
 other iteration step.
@@ -560,7 +575,7 @@ converse plugin's `match`, the plugin consults
    - `intent_name` = the reserved value `response`;
    - `lang` = the active language;
    - `utterance` = the first candidate;
-   - `captures` = `{}`;
+   - `slots` = `{}`;
    - `updated_session` = the inbound session with
      `session.response_mode` removed (single-shot delivery).
 
@@ -576,16 +591,17 @@ converse plugin's `match`, the plugin consults
    any other intent dispatch, with the full handler-trio and
    §3.1 activation.
 
-   The dispatch `data`:
+   The dispatch `data` is the standard PIPELINE-1 §7.1 payload:
 
    | Key | Type | Required | Meaning |
    |-----|------|----------|---------|
-   | `skill_id` | string | yes | The holder; equals the topic prefix. |
-   | `intent_name` | string | yes | The reserved value `response`. |
    | `lang` | string | yes | The active language. |
    | `utterance` | string | yes | The first candidate. |
-   | `utterances` | array of strings | yes | The candidate list per PIPELINE-1 §4.1, post utterance-transformer chain. |
-   | `captures` | object | yes | `{}` — response-mode delivery is not slot-bearing. |
+   | `slots` | object | yes | `{}` — response-mode delivery is not slot-bearing. |
+
+   `skill_id` and `intent_name` are not repeated in the payload —
+   they are the topic's `<skill_id>:<intent_name>` prefix and
+   suffix (PIPELINE-1 §7.1).
 
 4. **Handler.** The handler subscribed to `<skill_id>:response`
    runs and processes the awaited utterance. When it returns,
@@ -644,8 +660,11 @@ OVOS-STOP-1 distinguishes two stop paths with different effects on
   in `session.converse_handlers` and may still claim converse turns.
 - A **global stop** (`intent_name: "global_stop"`, STOP-1 §5) empties
   both `session.active_handlers` and `session.converse_handlers` via
-  `Match.updated_session`. The converse plugin will see an empty list on
-  the next utterance and produce no converse Match.
+  `Match.updated_session`. The subsequent `global_stop` dispatch then
+  stamps the stop plugin itself back onto the lists (§3.1 here is
+  uniform, and `global_stop` is not a reserved intent_name), so the
+  converse plugin sees at most the stop plugin on the next
+  utterance's poll.
 
 When a stop signal arrives in a deployment, the converse plugin SHOULD
 remove `session.response_mode` for affected sessions on its next match
@@ -782,10 +801,14 @@ A **converse plugin** that claims the role defined in §4 MUST:
   `skill_id` is another component's identity; the plugin bundles
   no handler of its own;
 - follow the §4.1 iteration order in `match`:
-  - check `session.response_mode` first; if present and
-    non-expired, return a `Match` on `intent_name == "response"`
-    clearing the field via `Match.updated_session` (§5.2); if
-    expired, clear via `Match.updated_session` and continue;
+  - check `session.response_mode` first; verify the §2.2 identity
+    invariant against the post-prune `session.converse_handlers`
+    (a pruned or unrecognised holder MUST NOT receive delivery —
+    discard the entry via `Match.updated_session` and continue);
+    if present, non-expired, and held by a listed owner, return a
+    `Match` on `intent_name == "response"` clearing the field via
+    `Match.updated_session` (§5.2); if expired, clear via
+    `Match.updated_session` and continue;
   - conduct the §4.2 poll on the eligible set (MAY run in
     parallel; MUST select the claimer with the highest
     `activated_at`; SHOULD skip `blacklisted_skills`); return a

@@ -26,7 +26,7 @@ time, lets an orchestrator restart without losing client-side
 continuity, and lets multiple orchestrators in a deployment serve
 the same session without coordination.
 
-It builds on five companion specifications:
+It builds on six companion specifications:
 
 - the *Bus Message Specification* (OVOS-MSG-1) — the envelope,
   routing keys, `forward` / `reply` / `response` derivations,
@@ -48,8 +48,9 @@ It builds on five companion specifications:
   *Active Handlers and Interactive Response Specification*
   (OVOS-CONVERSE-1) — both elect the §2.4 SHOULD-project
   pathway for their cross-utterance state (intent-context
-  entries, active-handler list, response-mode wait window
-  respectively), making it resumption-safe by construction.
+  entries for CONTEXT-1; the converse-handler list and
+  response-mode wait window for CONVERSE-1), making it
+  resumption-safe by construction.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 **MAY**, and **RECOMMENDED** are used as in RFC 2119.
@@ -168,7 +169,7 @@ Behaviour rules for the default-session store are in §5.
 A component (a pipeline plugin, a transformer, any other
 participant) that holds `session_id`-keyed state **across**
 utterances **SHOULD** project that state into a session-resident
-field it owns (claimed under SESSION-1 §2.1) when projection is
+field it owns (claimed under SESSION-1 §2.2) when projection is
 practical. Projection flows through the pipeline plugin's
 `Match.updated_session` channel (PIPELINE-1 §4.2) or through
 in-place mutation at transformer / handler boundaries (§2.6).
@@ -496,6 +497,15 @@ field. This is the natural complement to the stateless-named-
 session rule: the default-session store fills the role the
 client plays for named sessions.
 
+The field-by-field merge rule above applies to **inbound client
+Messages** only. A committed `Match.updated_session`
+(PIPELINE-1 §4.2) is a complete snapshot: the orchestrator
+**MUST** replace the working session snapshot with it
+wholesale — a field absent from `Match.updated_session` is
+deleted, not preserved. Deletion by omission is available only
+on this pathway; inbound client Messages cannot delete a stored
+field by omitting it.
+
 ### 5.2 Restart semantics
 
 The default-session store is **process-local**. An orchestrator
@@ -581,7 +591,7 @@ A component that holds `session_id`-keyed state across
 utterances **SHOULD**:
 
 - project that state into a session-resident field it claims
-  under SESSION-1 §2.1 (per §2.4), via the appropriate
+  under SESSION-1 §2.2 (per §2.4), via the appropriate
   in-utterance pathway — `Match.updated_session` for pipeline
   plugins per PIPELINE-1 §4.2, direct mutation for
   transformers and handlers per §2.6;
@@ -654,6 +664,6 @@ The per-utterance session propagation (§2.6) and end-marker
 
 See §1 for the full list of non-goals. This section adds one
 clarification: **default-session persistence across orchestrator
-restart** is not defined here. §5.3 makes restart-loss
+restart** is not defined here. §5.2 makes restart-loss
 explicit and intentional; persistence is deployer policy if
 desired.

@@ -17,10 +17,11 @@ It builds on five companion specifications:
   `session` carrier in which context lives (§4), and the
   `forward` derivation used by the `ovos.session.sync` mutation
   pathway (§5.3);
-- the *Session Carrier Wire Shape Specification* (OVOS-SESSION-1) —
+- the *Session Specification* (OVOS-SESSION-1) —
   the field-registry mechanism under which this spec claims
   `session.intent_context` (§2);
-- the *Session Lifecycle Specification* (OVOS-SESSION-2) — the
+- the *Session Lifecycle and State Ownership Specification*
+  (OVOS-SESSION-2) — the
   `ovos.session.sync` topic and its merge semantics (§5.3);
 - the *Intent Definition Specification* (OVOS-INTENT-3) — the intent
   definition this spec extends with a `requires_context` declaration;
@@ -598,8 +599,8 @@ The `requires_context` and `excludes_context` (§6.1) fields travel
 with the rest of the intent definition. In-process engines read
 them from the registration record they receive locally. They are
 **optional** declarations of the OVOS-INTENT-3 intent definition,
-not enumerated by the OVOS-INTENT-4 registration payload (§6.1 of
-that spec): a skill that uses them attaches them to the
+not enumerated by the OVOS-INTENT-4 registration payloads (§5.2 /
+§6.1 of that spec): a skill that uses them attaches them to the
 `ovos.intent.register.template` / `.keyword` payload as additional
 fields, which OVOS-INTENT-4 §6.3 / §5.3 carry without rejecting
 (unknown fields are tolerated, not malformed). An engine that does
@@ -815,6 +816,7 @@ a **classification primitive**, not an authorization primitive.
 - *Session Specification* (OVOS-SESSION-1) — the wire shape of
   `session`, the registry mechanism under which this specification
   claims the `intent_context` field, and propagation semantics.
-- *Session Lifecycle Specification* (OVOS-SESSION-2) — session
+- *Session Lifecycle and State Ownership Specification*
+  (OVOS-SESSION-2) — session
   lifecycle responsibilities; cited by §4.2 for client-side
   session management.

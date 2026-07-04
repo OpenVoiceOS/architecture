@@ -130,6 +130,11 @@ topic name.
 | `skill_id` | string | yes | The `skill_id` of the responding handler. |
 | `can_handle` | boolean | yes | Whether the handler has stoppable activity for the inbound `session_id`. |
 
+The boolean's field name is protocol-specific: this spec and
+OVOS-FALLBACK-1 use `can_handle`, OVOS-CONVERSE-1's poll uses
+`result`, and OVOS-COMMON-QUERY-1 uses `can_answer`. Each name is
+normative only within its own protocol.
+
 `can_handle: true` asserts that the handler has user-visible or
 session-affecting activity in progress for the inbound `session_id`
 **and** is prepared to cease it on receipt of `<skill_id>:stop`.
@@ -197,6 +202,12 @@ Match(
 All three fields are cleared atomically at match time via
 `Match.updated_session` (PIPELINE-1 §4.2), before dispatch.
 
+`<shared_pipeline_id>` is the `pipeline_id` of the stop plugin
+instance whose `match` produced this Match. When multiple stop
+instances are deployed (§3.1), they MUST deduplicate so that
+exactly one `ovos.stop` broadcast is emitted per global stop event
+per session.
+
 PIPELINE-1 §7.1 stamps `<shared_pipeline_id>` onto `active_handlers`
 at dispatch time (the name `global_stop` is not reserved, so stamping
 suppression does not apply). This is intentional: the stop plugin MAY
@@ -252,8 +263,9 @@ A stop plugin MUST honour `session.blacklisted_skills` and
 - `blacklisted_skills`: a handler whose `skill_id` appears in this list
   MUST NOT be selected as a stop target;
 - `blacklisted_intents`: applies to the dispatched intent_name (`"stop"`
-  or `"global_stop"`). A stop plugin MUST not resolve a intent_name 
-  that appears in `blacklisted_intents`. A `stop` utterance that
+  or `"global_stop"`). A stop plugin MUST NOT return a `Match` whose
+  `<Match.skill_id>:<Match.intent_name>` appears in
+  `blacklisted_intents`. A `stop` utterance that
   would resolve to `global_stop` (§4.1 steps 1 or 5) is subject to the
   `global_stop` entry, not the `stop` entry. This list does not affect
   the ping broadcast.

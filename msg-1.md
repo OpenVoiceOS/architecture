@@ -179,7 +179,7 @@ any other external participant on the bus). Together they tell every
 observer which direction a Message is travelling across that boundary
 at any given moment.
 
-### 3.1 The boundary, illustrated
+### 3.1 The boundary, illustrated (informative)
 
 A typical end-to-end flow, showing how the routing pair flips as the
 Message crosses the boundary:

@@ -16,7 +16,7 @@ It builds on the two companion specifications:
 
 The specifications are numbered in dependency order: read OVOS-INTENT-1 first,
 then OVOS-INTENT-2, then this document. Each builds on the ones before it, and
-this one — the last — assumes both.
+this one assumes both.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are used as in
 RFC 2119.
@@ -62,7 +62,7 @@ implementation concern (§6).
 
 ## 2. The two definition methods
 
-An intent is defined by exactly **one** of two methods:
+An intent is defined by one or both of two methods:
 
 - a **keyword intent** — defined by keyword constraints over vocabularies (§4);
 - a **template intent** — defined by sentence templates (§5).
@@ -81,8 +81,10 @@ The two methods are **complementary**. They describe a command in fundamentally
 different shapes — a keyword intent by *which words must be present*, a template
 intent by *what whole sentences sound like* — and each suits triggers the other
 does not. A skill **MAY** define some of its intents as keyword intents and
-others as template intents. Each **individual** intent, however, uses exactly
-one method; the two definition shapes are never mixed within one intent.
+others as template intents. Each **individual** registration uses exactly one
+method; the two definition shapes are never mixed within one registration. An
+intent **MAY** carry one registration per method — two training-data
+representations of the same handler (OVOS-INTENT-4 §3.2).
 
 A developer chooses the method **per intent**, by what best describes that
 command, and by which engines the target assistant runs (§6).
@@ -278,8 +280,10 @@ always a refinement, never a requirement.
 
 A template intent MAY declare **required slots**: a list of slot names that the
 engine **MUST** extract for a match to be valid. If any required slot is
-absent from the match result, the engine treats the match as if it had not
-occurred — the intent does not fire.
+absent from the match result, the engine **MUST** treat the intent as
+unmatched for that utterance — the intent does not fire. The engine **MAY**
+internally consider other templates of the same intent before concluding
+that the intent is unmatched.
 
 Required slots are an **optional** opt-in guarantee for the handler. When
 present, the handler MAY rely on those slots being populated; when absent,
@@ -350,9 +354,12 @@ retained by the **orchestrator** — the intent system that owns the engines —
 invoked with the match result (§7) when the engine reports a match. An engine
 never invokes a handler directly; it reports matches, and the orchestrator routes.
 
-Registering an intent whose `(skill id, intent name, language)` triple (§3)
-matches an existing registration **replaces** it: the previous definition and
-handler binding are discarded and wholly superseded by the new one.
+Registering an intent whose `(skill id, intent name, language, method)`
+quadruple (§2, §3) matches an existing registration **replaces** it: the
+previous definition and handler binding for that method are discarded and
+wholly superseded by the new one. A registration under the other method for
+the same `(skill id, intent name, language)` triple is untouched
+(OVOS-INTENT-4 §3.2).
 
 **Deregistration** ("detach") removes an intent: its definition is withdrawn
 from the engine and its handler reference is released by the orchestrator. Definition
@@ -416,9 +423,9 @@ Whichever method defined an intent, a successful match yields one uniform
 
 - the **qualified intent name** `skill_id:intent_name` (§3) — identifying which
   intent, and therefore which skill and which handler;
-- a **slots map** — a mapping of names to extracted text values. For a keyword
+- a **slot map** — a mapping of names to extracted text values. For a keyword
   intent the keys are vocabulary names (§4.3); for a template intent the keys
-  are slot names (§5.2). A slots map **MAY** be empty.
+  are slot names (§5.2). A slot map **MAY** be empty.
 
 Slot values are **opaque sequences of words**, returned as text. This
 specification defines **no** value typing or coercion — consistent with
@@ -429,7 +436,7 @@ In classifier terms the qualified intent name is the **label** and the slots
 map is the **payload**: the label selects which handler runs, the payload is
 the data that handler is given. The orchestrator routes the result to the **one handler** bound to
 that intent at registration, and to nothing else. The handler always receives
-the slots map — a set of key-value pairs, possibly empty — and that is the
+the slot map — a set of key-value pairs, possibly empty — and that is the
 only data it receives from the intent layer. Running that handler is the whole
 purpose of the intent: it is the point at which a recognized natural-language
 command becomes the execution of the developer's code.
@@ -454,7 +461,7 @@ responsibility. A handler **SHOULD** prompt the user for data it needs but did
 not receive, and **MAY** decline — treating the call as a misclassification —
 when the slot values do not make sense for it. This recovery behaviour is
 skill logic and is out of scope for this specification; what the specification
-requires is only that a handler not assume a complete slots map.
+requires is only that a handler not assume a complete slot map.
 
 ---
 
@@ -462,13 +469,14 @@ requires is only that a handler not assume a complete slots map.
 
 **A skill** that defines intents **MUST**, for each intent:
 
-- define it by exactly one method — keyword (§4) or template (§5), never both;
+- define each of its registrations by exactly one method — keyword (§4) or
+  template (§5) — with at most one registration per method per intent (§2);
 - give it an intent name unique within the skill — the skill itself having an
   assistant-unique skill id (§3) — a language, and a handler;
 - ensure the definition conforms to §4 or §5 and to OVOS-INTENT-1 and
   OVOS-INTENT-2;
 - register the definition and the handler together as one unit (§6.1);
-- write the handler so it copes with a missing or partial slots map (§7.1).
+- write the handler so it copes with a missing or partial slot map (§7.1).
 
 **An intent engine** **MUST**:
 

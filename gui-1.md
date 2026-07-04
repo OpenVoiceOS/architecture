@@ -207,6 +207,13 @@ template to render meaningfully, all others are optional.
 | `SYSTEM_video_player` | `uri` (string, *req*), `title` (string), `playing` (boolean) | A video surface; the render backend renders the stream. |
 | `SYSTEM_media_player` | `media_title`, `media_artist`, `media_album`, `media_image`, `media_uri`, `media_position` (number, ms), `media_duration` (number, ms; `-1` = live), `media_playback_state` (string: `playing` \| `paused` \| `stopped` \| `loading` \| `error`), `media_playlist` (array of `{title, artist, image, uri, duration}`), `media_search_results` (array of `{title, artist, image, uri, skill_id, match_confidence}`), `media_playlist_position` (number) | The unified media-player UI (now-playing, queue, search results). Driven by the media subsystem, not by an ordinary application (§7.1). |
 
+The position/duration conventions are **template-specific and
+deliberate**: `SYSTEM_audio_player` counts in seconds with `0`
+meaning unknown/streaming; `SYSTEM_media_player` counts in
+milliseconds with `-1` meaning live. A producer **MUST** use the
+convention of the template it targets; neither convention carries
+over to the other row.
+
 #### Domain cards
 
 These templates are first-class **because they are reimplemented
@@ -251,8 +258,8 @@ regardless of where it runs.
 
 `SYSTEM_html` and `SYSTEM_url` are **escape hatches** that hand a
 render backend opaque content (raw markup, or an arbitrary web page)
-instead of a semantic intent. They are retained for migration and
-edge cases but are **discouraged**: they defeat the consistency the
+instead of a semantic intent. They exist for edge cases where no
+semantic template fits but are **discouraged**: they defeat the consistency the
 closed vocabulary exists to provide (§3.1), they cannot be styled or
 degraded uniformly, and a render backend that is not a full web
 engine cannot honour them. A producer **SHOULD** prefer a semantic
@@ -363,6 +370,7 @@ active namespaces.
   | `__idle` | Behaviour |
   |----------|-----------|
   | `true` | Persistent — stays until cleared. |
+  | `false` | Not persistent — the render backend **MUST NOT** treat the namespace as idle-persistent; removal follows the same deployment default as an omitted `__idle`. |
   | a number *N* | Visible for *N* seconds, then auto-removed. |
   | omitted / absent | A deployment default applies. |
 

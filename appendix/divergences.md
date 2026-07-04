@@ -182,7 +182,7 @@ defined by any spec** and should be removed or replaced:
 
 - **`ovos.intent.matched`** (PIPELINE-1 §9.2). The
   positive-match broadcast notification. No current equivalent.
-- **`ovos.intent.unmatched`** (PIPELINE-1 §9.4). Renamed from
+- **`ovos.intent.unmatched`** (PIPELINE-1 §9.3). Renamed from
   `complete_intent_failure`; follows the `ovos.intent.*`
   namespace for symmetry with `ovos.intent.matched`.
 - **`ovos.utterance.speak`** (PIPELINE-1 §9.6). The NL output
@@ -206,8 +206,9 @@ defined by any spec** and should be removed or replaced:
 - **`ovos.intent.list` / `ovos.intent.describe`** (INTENT-4
   §10). Introspection topics served from the orchestrator's
   passive registration index.
-- **`ovos.context.set` / `.unset` / `.clear` / `.list`**
-  (CONTEXT-1 §5). Skill-facing API replacing Adapt-specific
+- **The `ovos.session.sync` context pathway** (CONTEXT-1 §5.3).
+  Skill-facing intent-context mutation via the session snapshot
+  carried on `ovos.session.sync`, replacing Adapt-specific
   `add_context` / `remove_context` plus
   `mycroft.skill.set_cross_context`.
 - **`ovos.transformer.{type}.list`** (TRANSFORM-1 §6).
@@ -228,11 +229,12 @@ defined by any spec** and should be removed or replaced:
 
 - The session object's internal shape is owned by
   OVOS-SESSION-1; the field set is the closed set defined
-  there plus whatever future specs claim via SESSION-1 §2.1.
-  The "extra" fields current OVOS Session carries
-  (`persona_id`, `system_unit`, `time_format`, `date_format`,
-  …) ride through as non-normative pass-through and may be
-  claimed by future per-domain specs.
+  there plus whatever other specs claim via SESSION-1 §2.2
+  (`persona_id`, for example, is claimed by PERSONA-1 §3).
+  The remaining "extra" fields current OVOS Session carries
+  (`system_unit`, `time_format`, `date_format`, …) ride
+  through as non-normative pass-through and may be claimed
+  by per-domain specs.
 - The `mycroft.*` topic prefix outside the intent layer (e.g.
   `mycroft.audio.*`) — these are not part of any spec here.
 - The `<skill_id>:<intent_name>` dispatch topic — kept
@@ -283,8 +285,8 @@ a number of predecessor names. The mapping:
 
 | Predecessor topic | Status |
 |--------------|--------|
-| `add_context` / `remove_context` | Replaced by `ovos.context.set` / `.unset` under CONTEXT-1. |
-| `mycroft.skill.set_cross_context` / `remove_cross_context` | Replaced by `ovos.context.set` / `.unset` with `scope: "shared"` under CONTEXT-1. |
+| `add_context` / `remove_context` | Replaced by the `ovos.session.sync` pathway (CONTEXT-1 §5.3) writing private (`<skill_id>:`-prefixed) keys. |
+| `mycroft.skill.set_cross_context` / `remove_cross_context` | Replaced by the `ovos.session.sync` pathway (CONTEXT-1 §5.3) writing bare (shared) keys per CONTEXT-1 §3. |
 | `<skill_id>.activate` | Activity-tracking emit currently in `ovos-core`; not part of any spec here. |
 
 #### Listening-lifecycle topics (AUDIO-IN-1)

@@ -76,7 +76,7 @@ It does **not** define:
 - **the `session` lifecycle** — `session` is carried opaquely per
   OVOS-MSG-1 §4. The session fields this spec owns are listed in §5;
   other internal fields are owned by other specifications via the
-  OVOS-SESSION-1 §2.1 registry mechanism.
+  OVOS-SESSION-1 §2.2 registry mechanism.
 - **per-plugin behavioural specs** — plugins have no behavioural
   contract beyond §4. A `converse` plugin, a `fallback` plugin, a
   persona plugin, a language-model plugin, a chatbot plugin: each
@@ -328,7 +328,7 @@ discipline.
 ## 5. Session fields owned by this specification
 
 This specification claims four session fields per OVOS-SESSION-1
-§2.1: one **positive** ordering field (§5.1 `pipeline`) and three
+§2.2: one **positive** ordering field (§5.1 `pipeline`) and three
 **negative** filtering fields (§5.2 `blacklisted_pipelines`, §5.3
 `blacklisted_skills`, §5.4 `blacklisted_intents`). All four are
 session-scoped, propagate with the session under OVOS-SESSION-1 §4,
@@ -599,11 +599,10 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     session = match.updated_session or session   # §4.1, §4.2
    │
    │     ┌── post-match-pre-dispatch window ──────────────┐
-   │     │ engine-side context promotion (CONTEXT-1 §5.3) │
+   │     │ engine-side context promotion (CONTEXT-1 §5.1) │
    │     │ intent-transformer chain runs (TRANSFORM-1     │
    │     │   §3.4) — may modify Match.slots, MUST NOT  │
    │     │   change skill_id / intent_name                 │
-   │     │ post-decay turns_remaining-- (CONTEXT-1 §4)    │
    │     └────────────────────────────────────────────────┘
    │
    │     ovos.intent.matched                  (§9.2)
@@ -616,9 +615,14 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     (dialog-transformer chain ← TRANSFORM-1 §3.5)
    │     (tts-transformer chain   ← TRANSFORM-1 §3.6)
    │
-   └─ if no plugin matched (or all matches filtered):
-         ovos.intent.unmatched                  (§9.3)
-         ovos.utterance.handled                   (§9.5)
+   ├─ if no plugin matched (or all matches filtered):
+   │     ovos.intent.unmatched                  (§9.3)
+   │     ovos.utterance.handled                   (§9.5)
+   │
+   └─ post-match decrement turns_remaining--   ← CONTEXT-1 §4
+      (runs after the match round whether or not any intent
+       matched; entries freshly written this round — CONTEXT-1
+       §4.1 — are exempt)
 ```
 
 The flow diagram shows where companion-spec chains plug into this
@@ -628,7 +632,7 @@ the entry topic is emitted and is therefore not visible here. The
 **utterance** and **metadata** transformer chains run after entry
 and before iteration, against the candidate utterance list. The
 **post-match-pre-dispatch window** is where
-CONTEXT-1 §5.3 sanctions engine-side `session.intent_context`
+CONTEXT-1 §5.1 sanctions engine-side `session.intent_context`
 mutation and where TRANSFORM-1 §3.4 inserts the intent-transformer
 chain over the chosen `Match`. **`ovos.utterance.handled` is emitted at handler completion** —
 immediately after `ovos.intent.handler.complete` (or `.error`).
@@ -937,7 +941,7 @@ skill's participation, not a fresh activation. The reserving
 specification gets exclusive use of the name across the
 deployment's skill set; it gets no other privilege.
 
-Reservations currently in force:
+Reserved intent_names:
 
 | Reserved intent_name | Reserving spec | Meaning of a Match bearing this name |
 |----------------------|----------------|--------------------------------------|
@@ -950,7 +954,7 @@ Reservations currently in force:
 This specification fixes only the registry mechanism (reservation
 listing); the per-name semantics are owned by the reserving
 specification. Other specifications MAY reserve further names by
-adding rows to this table in their own PR.
+adding rows to this table in a revision of this specification.
 
 A plain skill (§7.0) subscribes to a reserved-name dispatch topic
 via framework convention rather than OVOS-INTENT-4 registration —

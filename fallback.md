@@ -18,7 +18,7 @@ It builds on four companion specifications:
 - the *Bus Message Specification* (OVOS-MSG-1) — the envelope,
   routing keys, session carrier, and derivations every Message
   defined here travels in;
-- the *Session Carrier Wire Shape Specification* (OVOS-SESSION-1) —
+- the *Session Specification* (OVOS-SESSION-1) —
   the session field registry and the omission rule;
 - the *Intent and Entity Registration Bus Contract*
   (OVOS-INTENT-4) — the session-scoped registration model.
@@ -153,10 +153,10 @@ produce an answer rather than silent failure. Every deployment
 SHOULD include a catch-all fallback skill — registered at the
 highest priority number in the pool (e.g. `priority: 100`) — that
 unconditionally returns `can_handle: true` and responds with a
-graceful "I don't know how to answer that" message. This skill is
-the last entry in `session.fallback_handlers` if that field is
-set, and the last resort after all higher-confidence handlers have
-declined. Without it, an utterance that no skill can handle
+graceful "I don't know how to answer that" message. When
+`session.fallback_handlers` is set, this skill **SHOULD** be its
+last entry, so it remains the last resort after all
+higher-confidence handlers have declined. Without it, an utterance that no skill can handle
 produces `ovos.intent.unmatched` with no user-facing response.
 
 ### 3.4 Session-scoped registration
@@ -172,7 +172,7 @@ available to all sessions. Skills registered under a specific
 ## 4. Session fields
 
 This specification claims one optional session field per
-**OVOS-SESSION-1 §2.1**.
+**OVOS-SESSION-1 §2.2**.
 
 | Field | Wire type | Owner |
 |-------|-----------|-------|
@@ -189,7 +189,7 @@ available are appended after the listed skills, sorted by
 registered priority ascending.
 
 Per-skill access control uses the existing
-`session.blacklisted_skills` field (**OVOS-SESSION-1 §3**) — no
+`session.blacklisted_skills` field (**OVOS-PIPELINE-1 §5.3**) — no
 separate fallback-specific denylist is needed. To block all
 fallback handling for a session, add the fallback stage(s) to
 `session.blacklisted_pipelines`, or omit them from
@@ -214,7 +214,7 @@ pool**:
    the current `session_id` (including `"default"` registrations
    per §3.4).
 4. **Policy.** Remove any `skill_id` present in
-   `session.blacklisted_skills` (**OVOS-SESSION-1 §3**).
+   `session.blacklisted_skills` (**OVOS-PIPELINE-1 §5.3**).
 
 The result is the ordered effective pool. An empty pool causes the
 plugin to return `None` immediately. No later stage adds what an
@@ -257,6 +257,11 @@ The queried skill replies with:
 | `skill_id` | string | yes | The responding skill's identity. MUST equal the topic prefix. |
 | `can_handle` | bool | yes | Whether this skill is willing to handle the current utterance. |
 
+The boolean's field name is protocol-specific: this spec and
+OVOS-STOP-1 use `can_handle`, OVOS-CONVERSE-1's poll uses `result`,
+and OVOS-COMMON-QUERY-1 uses `can_answer`. Each name is normative
+only within its own protocol.
+
 The plugin waits for each skill's reply before advancing to the
 next. A skill that does not respond within a deployment-defined
 timeout is treated as `can_handle: false` and skipped.
@@ -274,7 +279,7 @@ per-skill converse poll.
 The plugin selects the first skill in pool order whose
 `can_handle` reply is `true`. If the pool is exhausted with no
 willing skill the plugin returns `None`, and the pipeline emits
-`ovos.intent.unmatched` (**PIPELINE-1 §9.4**).
+`ovos.intent.unmatched` (**PIPELINE-1 §9.3**).
 
 ### 6.3 Match shape
 
@@ -283,7 +288,7 @@ willing skill the plugin returns `None`, and the pipeline emits
 | `skill_id` | The selected skill's `skill_id`. |
 | `intent_name` | `"fallback"` — reserved per PIPELINE-1 §7.3. |
 | `lang` | The resolved BCP-47 language tag. |
-| `utterance` | The utterance string passed to `match`. |
+| `utterance` | The first element of the input candidate list (PIPELINE-1 §4.1 fallback rule). |
 | `slots` | Empty. |
 | `updated_session` | Present if the plugin mutates session state. |
 
@@ -419,8 +424,8 @@ identically regardless of how many stages are present.
 - **OVOS-PIPELINE-1** — pipeline-plugin contract, Match shape,
   dispatch, reserved intent-name registry (§7.3).
 - **OVOS-MSG-1** — envelope, derivations, and routing keys.
-- **OVOS-SESSION-1** — session field registry;
-  `session.blacklisted_skills`.
+- **OVOS-SESSION-1** — session field registry and the omission
+  rule.
 - **OVOS-INTENT-4** — session-scoped registration model (§11).
 - **OVOS-CONVERSE-1** — the dotted-addressed per-skill query
   pattern this specification follows.
