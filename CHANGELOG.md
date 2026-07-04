@@ -263,6 +263,18 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 2
 
+- §6.5 (new) — `ovos.listener.wakeword`: the wake-word detection
+  signal (`wake_word`, optional `lang`), preceding
+  `ovos.listener.record.started`; the observable event behind a
+  wake-word-derived `session.request_lang`. Push-to-talk /
+  `ovos.mic.listen` capture emits no wake-word signal.
+- §6.3 — sleep is device-scoped: a sleeping service captures nothing
+  for any session; sleep entry is unacknowledged by design, the only
+  sleep-related emission being `ovos.listener.awoken`.
+- §5.1 — language resolution is a MUST-precedence rule
+  (`detected_lang` → `request_lang` → `session.lang` → deployment
+  default), so every producer of a language hint can predict the
+  transcription language.
 - §6 (new) — listening lifecycle signals. The audio input service
   emits `ovos.listener.record.started` / `ovos.listener.record.ended` around
   voice-command capture, accepts `ovos.listener.sleep` to enter sleep mode

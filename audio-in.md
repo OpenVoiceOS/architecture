@@ -67,7 +67,8 @@ Canonical use cases:
 - **Denoising and normalisation** — noise reduction, gain
   normalisation, format conversion.
 - **Voice-print recognition** — writes an intermediate result to
-  `Message.context` (e.g. `context.voice_match`) for downstream
+  `Message.context` (e.g. `context.voice_match` — an illustrative
+  key name, not claimed by this specification) for downstream
   consolidation by a metadata transformer.
 
 ---
@@ -87,7 +88,9 @@ per **OVOS-PIPELINE-1 §9.1**.
 
 ### 5.1 Language resolution
 
-Select the STT input language in this order:
+The service **MUST** select the STT input language by this
+precedence — a deterministic order is what lets every producer of a
+language hint predict which language the transcription will assume:
 
 1. `session.detected_lang` (**OVOS-SESSION-1 §3.2.6**) — audio
    transformer's language classification.
@@ -161,7 +164,16 @@ No payload. The session is identified by `context.session.session_id`
 of this Message.
 
 On receipt the audio input service enters sleep mode and suspends
-capture until it is awoken (§6.4).
+capture until it is awoken (§6.4). Sleep entry is **unacknowledged
+by design**: no confirmation Message is emitted on entering sleep.
+The only sleep-related emission is `ovos.listener.awoken` on the
+sleep→awake transition (§6.4).
+
+**Sleep is device-scoped.** Although the `ovos.listener.sleep`
+request rides a session like every Message, sleep mode is a
+**physical device state**: a sleeping audio input service captures
+nothing for any session. Entering or leaving sleep affects the whole
+device, not only the session that carried the request.
 
 ### 6.4 Awoken
 
@@ -177,13 +189,37 @@ of this Message.
 This signal fires only on the sleep→awake transition; it is not
 emitted when the service is already awake.
 
-### 6.5 Bus surface
+### 6.5 Wake-word detection
+
+When a wake word triggers voice-command capture, the audio input
+service **MUST** emit:
+
+`ovos.listener.wakeword`
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `wake_word` | string | yes | The wake-word phrase that was detected, as configured (human-readable, space-separated). |
+| `lang` | string | no | BCP-47 tag associated with the detected wake word, when the deployment binds wake words to languages. |
+
+The session is identified by `context.session.session_id` of this
+Message. This signal is the observable event behind a
+wake-word-derived `session.request_lang` (**OVOS-SESSION-1
+§3.2.5**): in a multi-wakeword deployment where each wake word is
+bound to a language, the `lang` of the detected wake word is the
+hint the emitter reports as `request_lang`.
+
+The signal precedes `ovos.listener.record.started` (§6.1) — detection
+is what opens capture. Deployments that open capture without a wake
+word (push-to-talk, `ovos.mic.listen`) emit no wake-word signal.
+
+### 6.6 Bus surface
 
 | Topic | Direction | Purpose |
 |-------|-----------|---------|
+| `ovos.listener.wakeword` | audio-input → broadcast | Wake word detected; capture opening (§6.5). |
 | `ovos.listener.record.started` | audio-input → broadcast | Voice-command capture began (§6.1). |
 | `ovos.listener.record.ended` | audio-input → broadcast | Voice-command capture ended (§6.2). |
-| `ovos.listener.sleep` | controller → audio-input | Enter sleep mode and suspend capture (§6.3). |
+| `ovos.listener.sleep` | controller → audio-input | Enter device-wide sleep mode and suspend capture (§6.3). |
 | `ovos.listener.awoken` | audio-input → broadcast | Left sleep mode (§6.4). |
 | `ovos.mic.listen` | any component → audio-input | Re-open the user input channel; consumed here, defined in OVOS-AUDIO-1 §4.4. |
 
@@ -199,8 +235,12 @@ emitted when the service is already awake.
 - assign a session in `context.session` per §5.2;
 - emit `ovos.utterance.handle` with `data.utterances` and `data.lang`
   (§5);
+- emit `ovos.listener.wakeword` when a wake word triggers capture
+  (§6.5);
 - emit `ovos.listener.record.started` when voice-command capture begins and
   `ovos.listener.record.ended` when it ends (§6.1, §6.2);
+- treat sleep mode as device-scoped — suspend capture for all
+  sessions while asleep (§6.3);
 - emit `ovos.listener.awoken` on the sleep→awake transition (§6.4).
 
 ### An audio input service **SHOULD**:
@@ -221,7 +261,7 @@ emitted when the service is already awake.
   post-STT transformer chains are owned here.
 - **OVOS-AUDIO-1** — audio output service; owns dialog and TTS
   transformer chains, and defines `ovos.mic.listen` (§4.4) which the
-  audio input service consumes (§6.5).
+  audio input service consumes (§6.6).
 - **OVOS-TRANSFORM-1** — audio-transformer chain (§3.1).
 - **OVOS-SESSION-1** — `session.lang`, `session.stt_lang`,
   `session.detected_lang`, `session.request_lang`.
