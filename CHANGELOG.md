@@ -24,6 +24,13 @@ an entry here.
   the `response` derivation (OVOS-MSG-1 §5.3), i.e.
   `ovos.audio.is_speaking.response`; OVOS-TRANSFORM-1 cited by its
   canonical title.
+- Design review: format contract for base64 audio — `mime` (REQUIRED
+  whenever `audio` is present; e.g. `audio/wav`) and optional
+  `sample_rate` (Hz) added to `ovos.audio.queue` (§4.1),
+  `ovos.audio.play_sound` (§4.2), and `ovos.audio.speech` (§4.3);
+  without a format contract the b64 delivery path is
+  uninteroperable.
+
 ## OVOS-PERSONA-1 — Persona Pipeline Plugin
 
 ### 2
@@ -94,6 +101,14 @@ an entry here.
   in-place); attribution precedence stated locally after CONTEXT-1
   dropped origin stamping; future-promise phrasing made out-of-scope
   statements.
+- Design review: §4 adoption note — implementations whose plugins were
+  numbered for descending-priority chain semantics MUST renumber on
+  adoption (the orderings are inverses; mapping in the appendix
+  divergence catalogue); §5.3 fixes chain-composition timing — the
+  effective chain per injection point is composed once per utterance
+  lifecycle from the session as committed at utterance start;
+  mid-lifecycle mutations of the transformer preference/denylist
+  fields take effect on the next utterance.
 
 ## OVOS-INTENT-1 — Sentence Template Grammar
 
@@ -124,6 +139,13 @@ tool does not recognize the token and cannot expand the template.
   the slots of the best-matching template. §6.2 — the engine verifies a
   consistent slot set for `.dialog` and accepts differing slot sets for
   `.intent`.
+- Design review: §3.6 single-branch group `(word)` downgraded from
+  malformed to degenerate — loaders MUST accept, SHOULD warn, and fold
+  to the bare branch (rejecting a lossless stylistic slip breaks
+  template corpora); only the empty `()` remains malformed (§3.2
+  aligned). §3.6 also admits structural (pre-expansion) adjacent-slot
+  detection as a conformant alternative to full-expansion checking
+  when it accepts/rejects exactly the same templates.
 
 ### 1
 
@@ -132,7 +154,6 @@ tool does not recognize the token and cannot expand the template.
   as timeless out-of-scope statements; §7 conformance-corpus sentence
   removed; §4.2 step-number citation corrected; See-also resource-role
   count corrected.
-
 ## OVOS-INTENT-2 — Locale Resource Formats
 
 ### 2
@@ -228,6 +249,12 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   guarantees, session lifecycle, and the internal shape of `session`
   beyond `session_id` and `lang` are explicitly out of scope.
 - Consistency audit: §3.1 walkthrough marked informative.
+- Design review: §2 unknown top-level keys — producers MUST NOT emit
+  them; consumers SHOULD treat such a Message as malformed but MAY
+  ignore the unknown keys (a hard reject lets one over-eager emitter
+  sever valid traffic). §5.2 reply over an array `destination`:
+  selecting the first element as the new `source` is RECOMMENDED for
+  deterministic convergence; consumers still MUST NOT rely on it.
 
 ## OVOS-SESSION-2 — Session Lifecycle and State Ownership
 
@@ -248,6 +275,14 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   field-by-field on the default session; SESSION-1 registry citations
   corrected to §2.2; §8 restart-loss citation corrected to §5.2;
   companion-spec count corrected.
+- Design review: §2.5 cross-references the OVOS-BRIDGE-1 §4.1 gate
+  invariant (client authority means boundary policy must be re-applied
+  per Message). §3.2 permits thin intermediate emissions — the full
+  session object is REQUIRED on dispatch Messages and terminal
+  lifecycle events; intermediate/status emissions MAY carry only
+  `{"session_id": ...}` (fat sessions on every no-payload status event
+  multiply satellite traffic).
+
 ## OVOS-SESSION-1 — Session Carrier Wire Shape
 
 ### 1
@@ -267,6 +302,17 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 - Consistency audit: §4.1 materialization citation corrected to
   OVOS-MSG-1 §5.1–§5.2 (phantom quotation dropped); §3.2 language-signal
   count corrected to six.
+- Design review: §3.1 remote participants SHOULD use a distinct
+  `session_id`; remote use of `"default"` SHOULD be gated by an
+  elevated-privilege grant in layer-2 systems. §3.5 (new) registers
+  the user-preference fields `location` (object), `system_unit`,
+  `time_format`, `date_format` (strings) and disclaims the
+  unregistered transient `is_speaking` / `is_recording` booleans
+  (implementations MUST NOT rely on them; OVOS-AUDIO-1 lifecycle
+  signals are authoritative). §3.2.5 wake-word-derived `request_lang`
+  now cites the observable `ovos.listener.wakeword` signal
+  (AUDIO-IN-1 §6.5). §3.4 notes the SESSION-2 §3.2 thin-session
+  allowance.
 
 ## OVOS-INTENT-4 — Intent and Entity Registration Bus Contract
 
@@ -312,6 +358,13 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   §3.2; §8.5 unknown-intent enable/disable is a no-op and reload
   recovery is out of scope; §3.2 identity citation corrected to
   INTENT-3 §3.
+- Design review: §5.2/§5.3 an absent list-valued key equals an empty
+  list and MUST NOT be treated as malformed (shape-stability
+  requirement and the "positional semantics" phrasing dropped). §10
+  cold-start recovery — a skill SHOULD re-emit its registrations on
+  observing the deployment's readiness announcement; without it,
+  fire-and-forget plus a late-starting orchestrator leaves the
+  manifest permanently empty (re-emission is idempotent per §8.1).
 
 ## OVOS-AUDIO-IN-1 — Audio Input Service
 
@@ -332,6 +385,13 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 - Consistency audit: §5.1 language-resolution ordering carries a
   SHOULD; §6.3 states sleep entry is unacknowledged by design; §4
   `context.voice_match` marked illustrative.
+- Design review: §6.5 (new) wake-word detection signal
+  `ovos.listener.wakeword` `{wake_word, lang?}` plus session context,
+  emitted when a wake word opens capture; it is the observable source
+  of a wake-word-derived `session.request_lang` (SESSION-1 §3.2.5).
+  Sleep mode stated as device-scoped — a sleeping service captures
+  for no session, even though the `ovos.listener.sleep` request rides
+  a session. Bus surface renumbered to §6.6.
 
 ## OVOS-OCP-1 — OVOS Common Playback: the Virtual Media Player
 
@@ -353,6 +413,17 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 - Consistency audit: §4.2 `ovos.common_play.search.start`/`.search.end`
   given first-class rows — the orchestrator MUST emit `.start` before
   querying providers and `.end` after aggregation.
+- Design review: payload shapes added — §4.2.1
+  `ovos.common_play.play` (`media`, `playlist`, `disambiguation`,
+  `repeat`); §4.2.2 `seek` (absolute `position` in ms; relative seeks
+  resolved by the requester); §4.4 state reports share
+  `{"state": <axis value>}` with the track axis described
+  (disambiguation / queued / playing families); §4.5 (new) the media
+  entry object (`uri` required; `title`, `artist`, `image`,
+  `playback`, `status`, `media_type`, `length`, `match_confidence`,
+  `skill_id`; unknown fields ignored). Search-bracketing payloads
+  remain implementation-defined in this version.
+
 ## OVOS-GUI-1 — GUI Display Subsystem
 
 ### 1
@@ -384,6 +455,15 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   removed per the omitted-field default); §3.4 notes the duration
   sentinel conventions are template-specific and deliberate; §3.6 raw
   passthrough reworded as edge-case-only.
+- Design review: §3.4 player templates unified on one time
+  convention — `SYSTEM_audio_player` and `SYSTEM_media_player` both
+  count milliseconds with `-1` = unknown/live (two templates sharing a
+  screen role must not disagree on units). `SYSTEM_confirm` /
+  `SYSTEM_select` moved out of the normative catalogue into a
+  reserved-for-a-future-version subsection: their interaction reply
+  leg is unspecified, and a round-trip template without a specified
+  reply is unimplementable interoperably (§2.3, §7.2 adjusted;
+  producers MUST NOT emit them in this version).
 
 ## OVOS-STOP-1 — Stop Pipeline Plugin
 
@@ -404,6 +484,14 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   blacklisted-intents rule stated precisely over
   `<Match.skill_id>:<Match.intent_name>`; poll-reply field name noted as
   protocol-specific.
+- Design review: §4.1 step 5 silence handling — with no positive pong
+  but non-empty `active_handlers`, the stop plugin targets the
+  highest-`activated_at` entry with `intent_name: "stop"` instead of
+  escalating; a missed 0.5 s pong (busy skill, satellite round-trip)
+  must not trigger a session-wide wipe, and recency-targeted stop
+  degrades gracefully to a no-op dispatch. `global_stop` remains for
+  explicit global-stop vocabulary and the empty-list case (§2, §3.1,
+  §4.2, §5.1, §6.3, §9 aligned).
 
 ## OVOS-COMMON-QUERY-1 — Common Query Pipeline Plugin
 
@@ -437,6 +525,13 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   `<skill_id>.common_query.request`, matching the OVOS-MSG-1 §2.1.1
   colon-is-dispatch convention; canonical SESSION-1 title; poll-reply
   field name noted as protocol-specific.
+- Design review: §8 step 3 fast-win made deployment-opt-in, default
+  off — self-reported confidence with no calibrated cross-skill scale
+  plus first-past-the-threshold selection is a nondeterministic
+  latency race; absent opt-in the plugin SHOULD wait for all claimants
+  whose reported `latency_ms` is within the ceiling before selecting
+  (§1, §14, Appendix A aligned).
+
 ## OVOS-FALLBACK-1 — Fallback Pipeline Plugin
 
 ### 2
@@ -455,6 +550,15 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   `ovos.intent.unmatched`); §3.3 catch-all ordering made prescriptive;
   §6.3 match input defined as the first element of the candidate list;
   poll-reply field name noted as protocol-specific.
+- Design review: §6.1 per-poll ceiling made mandatory with a
+  RECOMMENDED 0.5 s default (one unresponsive skill must not stall the
+  utterance); absent or malformed pongs MUST count as
+  `can_handle: false`, uniform with CONVERSE-1/STOP-1; the
+  broadcast-ping + pool-order-selection optimisation explicitly
+  permitted as observably equivalent to the sequential cycle. §3.3
+  points band-convention migrations at the appendix divergence
+  catalogue (map by band membership, not numeric rescale).
+
 ## OVOS-CONVERSE-1 — Active Handlers and Interactive Response
 
 ### 2
@@ -476,6 +580,17 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   removed); §4.1/§9.2 gain the §2.2 membership check (a pruned holder
   MUST NOT receive delivery); §5.4 global-stop wording corrected (the
   subsequent dispatch stamps the stop plugin back onto the lists).
+- Design review: §2.1 default converse-handler cap 64 → 10 (every
+  listed owner is polled on the serial critical path of each
+  utterance). §3.2 RECOMMENDED default TTL of 600 s applied absent
+  configuration (no-TTL now an explicit deployer choice). §4.1 step 3
+  parallel polling MAY → SHOULD. §4.4 null-return `"done"` removal no
+  longer uses `ovos.session.sync` — the plugin lets the entry expire
+  per the §3.2 TTL and SHOULD remove it via `Match.updated_session`
+  on its next claiming match; a pipeline plugin writes session state
+  only through `Match.updated_session` (restores PIPELINE-1 §4.2
+  channel purity; §9.3 aligned).
+
 ## OVOS-PIPELINE-1 — Utterance Lifecycle and Pipeline
 
 ### 2
@@ -488,6 +603,19 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 - §9.6 — the OPTIONAL `listen` field on `ovos.utterance.speak`: when
   `true`, the output stage re-opens the user input channel after the
   response is delivered.
+- Design review: §4 the orchestrator is RECOMMENDED to resolve the
+  utterance language once (SESSION-1 §3.2 evidence) and pass the
+  resolved tag to every plugin's `match`; plugins MAY refine but
+  SHOULD NOT re-derive independently (per-plugin resolution lets the
+  same utterance match in different languages across stages; §9.1
+  aligned; `Match.lang` unchanged as the plugin's declaration). §4.4
+  RECOMMENDED default match-phase timeout of 10 s, which MUST be ≥
+  any stage-internal collection ceiling (COMMON-QUERY-1 §2.1). §6.5
+  liveness — the orchestrator MUST keep servicing bus subscriptions
+  (including poll replies for an in-flight plugin) while a `match`
+  call is in flight. §7.1/§7.3 stamping suppression stated to key on
+  the Match's reserved `intent_name`, never the producing
+  `pipeline_id`.
 
 ### 1
 
@@ -521,3 +649,11 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   OVOS-PIPELINE-1 §9 without enumerating topics; §4.2.4 references
   OVOS-AUDIO-1 instead of a future specification; §4.1.1 denylist
   wording made timeless.
+- Design review: §4.1 gate invariant — a boundary component that
+  injects policy fields (any `blacklisted_*`, a restricted
+  `pipeline`) MUST re-apply them to every inbound Message from the
+  governed participant; connect-time-only policy is not conformant
+  because the client is authoritative for its session object and may
+  omit the fields at any time (cross-referenced from SESSION-2 §2.5).
+  §4.2.3 distinct `session_id` per concurrent independent client is a
+  MUST for managed-mode bridges (mirroring §3.4.2).

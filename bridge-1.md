@@ -295,6 +295,17 @@ mutations to fields registered in **OVOS-SESSION-1 §3**; overwriting
 client-owned fields violates the client-authority rule of
 **OVOS-SESSION-2 §2**.
 
+**The gate invariant.** A boundary component that injects policy
+fields — any `blacklisted_*` array, or a restricted `pipeline` —
+**MUST** re-apply them to **every** inbound Message from the
+governed participant. Applying policy once at connect time is not
+conformant: the client is authoritative for its own session object
+(**OVOS-SESSION-2 §2.5**) and may legitimately send a session that
+omits the injected fields on any subsequent Message — at which
+point a connect-time-only gate has silently granted the participant
+everything the policy was meant to deny. The bridge is a gate, not
+a handshake.
+
 #### 4.1.1 Access control (denylist model)
 
 A layer-2 system MAY populate any of the `blacklisted_*` arrays
@@ -424,7 +435,12 @@ values or `session_id` NAT (§3.2) to prevent state collisions.
 does not provide isolation on its own.
 
 In a multi-satellite deployment, each satellite SHOULD use a
-distinct `session_id`. This is necessary not only for session
+distinct `session_id`; a **managed-mode bridge** (§3.4.2) fronting
+concurrent independent clients **MUST** assign each a distinct
+`session_id` — the managing bridge owns session attachment for
+opaque participants (mirroring §3.4.2), so it has no excuse for
+letting their state and routing collide. This is necessary not
+only for session
 isolation but for correct message routing: the orchestrator routes
 responses (including `ovos.utterance.speak` and
 `ovos.utterance.handled`) by deriving from the inbound message via

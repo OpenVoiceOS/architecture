@@ -215,9 +215,15 @@ participants and their audio is delivered via
 |-------|------|----------|---------|
 | `uri` | string | no | URI referencing the audio data. |
 | `audio` | string | no | Base64-encoded audio data, used when the audio source is on a different host (alternative to `uri`). |
+| `mime` | string | when `audio` present | MIME type of the encoded audio (e.g. `"audio/wav"`). |
+| `sample_rate` | number | no | Sample rate in Hz of the encoded audio, when the container does not carry it. |
 | `listen` | bool | no | When `true`, re-opens the user input channel after this item plays (§4.4). |
 
-Exactly one of `uri` or `audio` MUST be present.
+Exactly one of `uri` or `audio` MUST be present. When `audio` is
+present, `mime` is REQUIRED — base64 bytes carry no self-describing
+container hint the way a URI's extension or response headers do, and
+without a format contract the b64 path is uninteroperable across
+implementations.
 
 ### 4.2 Instant sounds
 
@@ -232,8 +238,11 @@ affected by stop signals (§6).
 |-------|------|----------|---------|
 | `uri` | string | no | URI referencing the audio data. |
 | `audio` | string | no | Base64-encoded audio data, used when the audio source is on a different host (alternative to `uri`). |
+| `mime` | string | when `audio` present | MIME type of the encoded audio (e.g. `"audio/wav"`). |
+| `sample_rate` | number | no | Sample rate in Hz of the encoded audio, when the container does not carry it. |
 
-Exactly one of `uri` or `audio` MUST be present.
+Exactly one of `uri` or `audio` MUST be present; `mime` is REQUIRED
+whenever `audio` is present (see §4.1).
 
 ### 4.3 Synthesised audio delivery — `ovos.audio.speech`
 
@@ -245,6 +254,8 @@ for decoding and playing it.
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `audio` | string | yes | Base64-encoded synthesised audio. |
+| `mime` | string | yes | MIME type of the encoded audio (e.g. `"audio/wav"`). Without it the receiving client must guess the container — the format contract is what makes the b64 delivery path interoperable. |
+| `sample_rate` | number | no | Sample rate in Hz of the encoded audio, when the container does not carry it. |
 | `listen` | bool | no | When `true`, the client SHOULD re-open its microphone after playback. |
 
 The session is identified via `context.session` as usual. A bridge

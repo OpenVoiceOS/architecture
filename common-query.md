@@ -38,7 +38,8 @@ This specification defines:
   that filters skills down to plausible answerers;
 - the **answer collection** (§7) — full-answer gathering;
 - the **filtering and selection** (§8) — confidence filtering,
-  denylist, fast-win, and ranking, applied against the live session;
+  denylist, opt-in fast-win, and ranking, applied against the live
+  session;
 - the **match construction** (§9) — the `Match`, or `None`;
 - the **plugin handler** (§10) — the trivial handler that speaks the
   selected answer;
@@ -389,10 +390,18 @@ session** (§5.1), in order:
    below the deployer-defined threshold (Appendix A).
 2. **Denylist.** Discard responses whose `skill_id` appears in the
    live `session.blacklisted_skills` (PIPELINE-1 §5.3).
-3. **Fast-win.** If any surviving response carries `conf ≥`
-   fast-win threshold (Appendix A), the plugin **SHOULD** stop waiting
-   immediately and select it. The fast-win check MAY fire during
-   collection (§7.2), short-circuiting the window.
+3. **Fast-win (deployment-opt-in, default off).** A deployment MAY
+   enable a fast-win rule: when enabled, if any surviving response
+   carries `conf ≥` the fast-win threshold (Appendix A), the plugin
+   MAY stop waiting immediately and select it, and the check MAY
+   fire during collection (§7.2), short-circuiting the window. The
+   rule is **off by default**: `conf` is self-reported and skills
+   share no calibrated confidence scale (Appendix B), so selecting
+   the first response to cross a threshold turns answer selection
+   into a nondeterministic latency race — the fastest confident
+   skill wins, not the best one. Absent explicit deployer opt-in,
+   the plugin **SHOULD** wait for all claimants whose reported
+   `latency_ms` is within the ceiling before selecting.
 4. **Selection.** Select the highest-`conf` survivor. Ties MAY be
    broken by any deployer-defined heuristic; the algorithm is not
    normative. When a reranker is configured, the plugin **SHOULD**
@@ -554,7 +563,8 @@ poll/response message carries the `utterance` as its correlation key.
   evict on every new utterance in the session (§5.1, §5.2);
 - close the poll window early when enough claimants respond (§6.3);
 - size the collection window from claimants' `latency_ms` (§7.2);
-- close the collection window on fast-win or all-responded (§7.2, §8);
+- close the collection window on all-responded, or on fast-win only
+  when the deployer has enabled it (§7.2, §8 step 3);
 - use a reranker when configured (§8 step 4).
 
 ### A skill that participates in common query **MUST**:
@@ -598,7 +608,7 @@ them is conformant.
 | Collection-window initial | 3 s | §7.2 |
 | Collection-window ceiling | 5 s | §7.2 |
 | Minimum self-confidence | 0.5 | §8 step 1 |
-| Fast-win threshold | 0.9 | §8 step 3 |
+| Fast-win threshold (only when fast-win is enabled; default off) | 0.9 | §8 step 3 |
 
 ---
 

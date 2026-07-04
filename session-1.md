@@ -213,6 +213,10 @@ session and persist across utterances.
 | `blacklisted_dialog_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `blacklisted_tts_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `site_id` | string | OVOS-BRIDGE-1 §3.3 |
+| `location` | object | §3.5 (this spec) |
+| `system_unit` | string | §3.5 (this spec) |
+| `time_format` | string | §3.5 (this spec) |
+| `date_format` | string | §3.5 (this spec) |
 
 Every field above is OPTIONAL on the wire. A producer that sets a
 field **MUST** use the wire type listed and the value space defined
@@ -243,9 +247,13 @@ device** (remote-control commands, home-automation "speak" requests,
 media injection from a layer-2 framework). Using `"default"` from a
 remote client is deliberate impersonation of the device-local
 session; whether that is authorized is a **layer-2 concern** outside
-this specification. A layer-2 authentication system **MAY** gate
-access to the default session behind an elevated-privilege flag (an
-"admin" grant or equivalent); SESSION-1 places no requirement on it.
+this specification. A remote participant **SHOULD** use a distinct
+`session_id` of its own — the default session is the device's
+persistent local state, and a remote peer writing into it collides
+with the device owner's own interactions. In layer-2 systems,
+remote use of `"default"` **SHOULD** be gated behind an
+elevated-privilege grant (an "admin" grant or equivalent);
+SESSION-1 itself places no requirement on the gate.
 
 `"default"` is also the value a consumer fills in whenever
 `session_id` is omitted (§2.1). This means an absent `session`, an
@@ -390,7 +398,9 @@ Typical sources of `request_lang`:
 - a **multi-wakeword** setup where each wake word is associated
   with a language: the wakeword that triggered the capture
   determines the reported hint (the user pressed an "English wake
-  word" so the emitter reports `en-US`);
+  word" so the emitter reports `en-US`). The detection itself is
+  observable as `ovos.listener.wakeword` (OVOS-AUDIO-IN-1 §6.5),
+  whose optional `lang` field carries the same binding;
 - a UI lang selector the user toggled before speaking;
 - a layer-2 router that knows the per-peer expected language.
 
@@ -521,6 +531,42 @@ specification places no maximum on session size.
 
 Other specifications claiming session fields via §2.2 inherit
 this rule for the fields they claim — they need not restate it.
+
+Beyond per-field omission, OVOS-SESSION-2 §3.2 permits
+intermediate/status emissions to carry a **thin** session of only
+`{"session_id": ...}`; the full object is required only on dispatch
+Messages and terminal lifecycle events.
+
+### 3.5 User-preference fields
+
+Four fields carry the session origin's presentation preferences, so
+that a skill or output stage answering a remote participant renders
+times, dates, units, and place-relative answers for the *user's*
+locale rather than the device's:
+
+- `location` — object; the session's location preferences (nested
+  keys such as `city`, `coordinate`, and `timezone.code`, e.g.
+  `"America/Los_Angeles"`). An empty object is wire-equivalent to
+  omission.
+- `system_unit` — string; measurement-system preference, e.g.
+  `"metric"` or `"imperial"`.
+- `time_format` — string; time-rendering preference identifier,
+  e.g. `"full"` (24-hour) or `"half"` (12-hour).
+- `date_format` — string; date-ordering preference identifier,
+  e.g. `"DMY"` or `"MDY"`.
+
+All four follow §2.1: absence means the consumer falls back to the
+deployment default. The §3.4 wire-weight rule applies: omit a
+preference whose value matches the deployment default.
+
+**Unregistered transient fields.** `is_speaking` and `is_recording`
+booleans sometimes appear on serialized sessions. They are mentioned
+here only to disclaim them: they are per-device transient audio
+state, not session state, and this specification does not register
+them. Implementations **MUST NOT** rely on them — the OVOS-AUDIO-1
+output-lifecycle signals are the authoritative surface for
+speaking/recording status. Consumers tolerate their presence under
+§2.4's unknown-field rule.
 
 ---
 

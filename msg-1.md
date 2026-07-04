@@ -92,8 +92,14 @@ A Message is a **JSON object** with exactly these top-level keys:
 
 Producers **MAY** omit `data` and/or `context` when they would be
 empty; consumers **MUST** treat an absent `data` or `context` as
-equivalent to `{}`. Other top-level keys **MUST NOT** appear;
-consumers **MUST** reject any Message with unknown top-level keys.
+equivalent to `{}`. Producers **MUST NOT** emit any other top-level
+key. A consumer that receives a Message with unknown top-level keys
+**SHOULD** treat it as malformed but **MAY** instead ignore the
+unknown keys and process the envelope normally — a hard reject
+would let a single over-eager emitter (or a transitional serializer
+adding a diagnostic key) sever otherwise-valid traffic across every
+strict consumer on the bus. The strictness belongs on the producer
+side.
 
 ### 2.1 `type`
 
@@ -330,9 +336,11 @@ Produces a new Message:
        `C.destination`;
      - and is an array of strings, the new context's `source` **MAY**
        be set to the identifier of the component producing the reply
-       (typically one of the array entries). The exact choice is
-       implementation-defined; consumers **MUST NOT** rely on a
-       particular member being chosen.
+       (typically one of the array entries). Selecting the **first
+       element** is RECOMMENDED, so that independently written
+       components converge on the same deterministic choice. The
+       choice remains implementation-defined; consumers **MUST
+       NOT** rely on a particular member being chosen.
   3. All other `context` keys, including `session` (§4), are
      preserved unchanged. As with `forward`, if the source Message
      has no `session`, the derivation **MAY** populate a default

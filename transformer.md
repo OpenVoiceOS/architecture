@@ -614,6 +614,15 @@ Two ordering mechanisms are defined; deployers choose:
 The orchestrator **MUST** support both mechanisms and **MUST**
 apply explicit order when configured.
 
+An implementation whose plugins were numbered for
+**descending-priority** semantics — where the chain is sorted in
+reverse, so the lowest number runs *last* and, because each
+transformer's output overwrites its predecessor's, effectively
+"wins" — **MUST** renumber plugin priorities on adoption: the two
+orderings are exact inverses, so an unrenumbered chain runs
+backwards under this spec (see the appendix's divergence
+catalogue).
+
 ---
 
 ## 5. Per-session overrides
@@ -729,6 +738,17 @@ order, mirroring OVOS-PIPELINE-1 §5.5:
 
 The result is the ordered list of transformers the orchestrator
 invokes at that injection point for this utterance.
+
+The effective chain for **each** injection point is composed
+**once per utterance lifecycle**, from the session as committed at
+utterance start. Mid-lifecycle mutations of the `<type>_transformers`
+or `blacklisted_<type>_transformers` fields — by a transformer, a
+match-phase `updated_session`, or a handler — take effect on the
+**next** utterance, not the current one. Composing per-chain from a
+live session would let an earlier chain rewrite which later chains
+run for the same utterance, making the lifecycle's transformer
+surface dependent on mutation timing rather than on the state the
+utterance arrived with.
 
 If every requested `transformer_id` is dropped by availability or
 policy, the effective chain is empty for that injection point and

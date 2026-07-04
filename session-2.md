@@ -239,7 +239,11 @@ the user's cloud, anything else.
 
 Trust and authorization are layer-2 concerns (§1); this spec
 places no constraint on what `session_id` or `session` value a
-client sends.
+client sends. The flip side of client authority: a boundary
+component that governs a client by injecting policy fields into
+its session must re-apply them on every inbound Message, not once
+at connect — the client may omit the fields at any time
+(OVOS-BRIDGE-1 §4.1, the gate invariant).
 
 ### 2.6 When session mutates in place
 
@@ -393,6 +397,20 @@ Adopting the **latest received** session is the simplest client
 policy. More elaborate policies (field-by-field merge, selecting
 by emitter identity) are also conformant; the spec does not
 prescribe.
+
+**Thin intermediate emissions.** The full session object is
+REQUIRED on dispatch Messages (PIPELINE-1 §7) and on terminal
+lifecycle events a client may adopt from (e.g.
+`ovos.utterance.handled`, `speak` / `ovos.utterance.speak`).
+Intermediate and status emissions — the handler-lifecycle trio,
+progress notifications, and other no-payload broadcast events —
+MAY instead carry only `{"session_id": ...}`. A fully-populated
+session can run to hundreds of bytes and rides every derivation
+(SESSION-1 §3.4); repeating it on every status event multiplies
+satellite and layer-2 traffic for Messages no conformant client
+needs to merge from. A client that adopts from an intermediate
+emission gets at worst a thinner snapshot; the §3.3 convergence
+point always carries the full object.
 
 ### 3.3 `ovos.utterance.handled` is the canonical convergence point
 

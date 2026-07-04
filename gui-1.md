@@ -112,10 +112,12 @@ Within a session, namespaces form a **last-activated-on-top** stack
   protocol of §4 is still emitted; it is simply observed by nobody.
   An application **MUST NOT** require a display to function and
   **MUST NOT** block waiting for a GUI-originated event (§7).
-- The display **accompanies** a spoken interaction. Templates that
-  solicit a response (`SYSTEM_confirm`, `SYSTEM_select`) are visual
-  companions to a concurrent spoken prompt; the spoken path **MUST**
-  remain sufficient on a display-only or display-less client.
+- The display **accompanies** a spoken interaction. A template that
+  solicits a response is a visual companion to a concurrent spoken
+  prompt; the spoken path **MUST** remain sufficient on a
+  display-only or display-less client. (No such template is
+  normative in this version — the round-trip names are reserved,
+  §3.4.)
 
 ---
 
@@ -203,16 +205,17 @@ template to render meaningfully, all others are optional.
 
 | Template | Keys | Meaning |
 |----------|------|---------|
-| `SYSTEM_audio_player` | `title` (string, *req*), `artist`, `album`, `image`, `position` (number, seconds), `duration` (number, seconds; `0` = unknown/streaming), `playing` (boolean) | A now-playing card for audio. Visual only; the stream is owned by the media subsystem (§7.1). |
+| `SYSTEM_audio_player` | `title` (string, *req*), `artist`, `album`, `image`, `position` (number, ms), `duration` (number, ms; `-1` = unknown/live), `playing` (boolean) | A now-playing card for audio. Visual only; the stream is owned by the media subsystem (§7.1). |
 | `SYSTEM_video_player` | `uri` (string, *req*), `title` (string), `playing` (boolean) | A video surface; the render backend renders the stream. |
 | `SYSTEM_media_player` | `media_title`, `media_artist`, `media_album`, `media_image`, `media_uri`, `media_position` (number, ms), `media_duration` (number, ms; `-1` = live), `media_playback_state` (string: `playing` \| `paused` \| `stopped` \| `loading` \| `error`), `media_playlist` (array of `{title, artist, image, uri, duration}`), `media_search_results` (array of `{title, artist, image, uri, skill_id, match_confidence}`), `media_playlist_position` (number) | The unified media-player UI (now-playing, queue, search results). Driven by the media subsystem, not by an ordinary application (§7.1). |
 
-The position/duration conventions are **template-specific and
-deliberate**: `SYSTEM_audio_player` counts in seconds with `0`
-meaning unknown/streaming; `SYSTEM_media_player` counts in
-milliseconds with `-1` meaning live. A producer **MUST** use the
-convention of the template it targets; neither convention carries
-over to the other row.
+The position/duration convention is **uniform across the player
+templates**: both `SYSTEM_audio_player` and `SYSTEM_media_player`
+count in **milliseconds**, with `-1` meaning unknown/live. Two
+templates sharing one screen role must not disagree on units — a
+producer targeting both, or an adapter rendering either, would
+otherwise need per-template unit tables for what is semantically
+the same pair of fields.
 
 #### Domain cards
 
@@ -228,16 +231,22 @@ criterion (§3.1).
 | `SYSTEM_map` | `latitude` (number, WGS-84, *req*), `longitude` (number, WGS-84, *req*), `zoom` (number, 1–20), `label` (string) | A geographic location; the backend chooses the map provider. |
 | `SYSTEM_face` | `sleeping` (boolean) | An avatar face. `sleeping` true is the resting/closed-eyes state, false the awake state. For backends that render a character rather than a screen layout. |
 
-#### Interactive companions
+#### Interactive companions — reserved for a future version
 
-These templates accompany a concurrent spoken prompt (§2.3). They emit
-an interaction event when the user acts on the visual element (§7.2);
-the spoken path remains sufficient on its own.
-
-| Template | Keys | Meaning |
-|----------|------|---------|
-| `SYSTEM_confirm` | `question` (string, *req*) | A yes/no companion to a spoken question. |
-| `SYSTEM_select` | `prompt` (string), `items` (array of `{label (req), value (req)}`) | A choice companion to a spoken set of options; `value` is the machine-readable token returned on selection. |
+**Non-normative in this version.** Two round-trip template names are
+**reserved** but not defined: `SYSTEM_confirm` (a yes/no companion to
+a spoken question, `question` string) and `SYSTEM_select` (a choice
+companion to a spoken set of options, `prompt` string plus `items`
+array of `{label, value}`). Their display leg is straightforward, but
+their **reply leg** — the interaction event carrying the user's
+answer back to the originating application (§7.2) — has no specified
+topic or payload schema, and a template whose interaction reply is
+unspecified is unimplementable interoperably: every producer/adapter
+pair would invent its own return channel. The names are reserved so
+that no application-defined template claims them; a future version
+will specify the full round trip. Producers **MUST NOT** emit them in
+this version; the spoken path (§2.3) covers the interaction on its
+own.
 
 ### 3.5 Image delivery
 
@@ -630,27 +639,18 @@ template's session data is a reflection of media state, not a command
 channel. The media-control wire surface is owned by the media
 subsystem and is out of scope here.
 
-### 7.2 Interactive companions
+### 7.2 Interactive companions (reserved)
 
-For the interactive templates (§3.4), when the user acts on the visual
-element the render backend **SHOULD** emit an interaction event back to
-the originating namespace, carrying the originating `session_id` in the
-Message context (so the application can attribute the answer to the
-session it asked in):
-
-- **`SYSTEM_confirm`** → an event reporting the boolean answer
-  (whether the user confirmed).
-- **`SYSTEM_select`** → an event reporting the `value` of the chosen
-  item (§3.4).
-
-The originating application **MUST** treat such an event as a
-*shortcut*: it registers a handler for it **and** independently
-handles the spoken response, and **MUST NOT** block waiting for the
-GUI event (§2.3). The exact event topic and payload schema are owned
-by the producing-side interface and are non-normative in this version;
-what this specification fixes is that the response **MUST** carry its
-originating `session_id` so the application can route the answer back
-to the correct session.
+The round-trip templates are reserved, not defined, in this version
+(§3.4). When a future version specifies them, the reply leg will
+follow the shape sketched here: the render backend emits an
+interaction event back to the originating namespace, carrying the
+originating `session_id` in the Message context so the application
+can attribute the answer to the session it asked in; the application
+treats the event as a *shortcut* — it independently handles the
+spoken response and never blocks waiting for the GUI event (§2.3).
+Until the event topic and payload schema are specified, there is no
+conformant way to emit or consume these templates.
 
 ---
 

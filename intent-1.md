@@ -126,8 +126,10 @@ turn on the lights
 ### 3.2 Alternatives `( | )`
 
 Parentheses enclose **branches** separated by the pipe `|`. Each combination
-takes exactly one branch from each group. A group MUST contain at least one `|`
-(that is, at least two branches); a group with no `|` is malformed (§3.6).
+takes exactly one branch from each group. A group SHOULD contain at least one
+`|` (that is, at least two branches); a single-branch group is degenerate —
+loaders accept it, warn, and fold it to the bare branch (§3.6) — and the
+empty `()` is malformed (§3.6).
 
 ```
 (turn on|switch on|enable) the lights
@@ -197,10 +199,8 @@ contains one:
 
 - **Unbalanced metacharacters** — an unmatched `(`, `)`, `[`, `]`, `{`, `}`,
   `<`, or `>`.
-- **Single-branch group** — a parenthesised group with no `|`, e.g. `(word)`
-  or the empty `()`. A group expresses a *choice between branches*; with a
-  single branch there is no choice. Write the branch as plain literal text
-  instead.
+- **Empty group** — the empty `()`. A group expresses a *choice between
+  branches*; with no branch there is nothing to choose.
 - **Empty sample** — a template whose sample set (§4) contains the empty
   string: for some combination of branches it yields a sample with no literal
   words and no slots. The simplest cases are a template consisting only of
@@ -224,6 +224,22 @@ contains one:
   vocabulary `name` is available to the expander.
 - **Cyclic vocabulary reference** — a chain of inline vocabulary references
   that includes itself; its resolution would not terminate.
+
+A **single-branch group** — a parenthesised group with no `|`, e.g.
+`(word)` — is degenerate but **not** malformed: loaders MUST accept it,
+SHOULD warn, and MUST treat it as exactly the bare branch (`(word)` ≡
+`word`). The folding is semantically lossless, and rejecting it outright
+would break existing template corpora over a purely stylistic slip; the
+warning is the author's cue to write the branch as plain literal text.
+
+**Structural adjacent-slot detection.** Because the adjacent-slots check is
+defined over the expanded sample set, a naive implementation must expand the
+full template first — potentially expensive (§4.3). A tool MAY instead
+detect adjacency **structurally**, pre-expansion: two slots are adjacent iff
+every token between them on the template surface can reduce to nothing (an
+optional segment, a group with an empty branch, or an inline reference
+resolving to such). A structural check that accepts and rejects exactly the
+same templates as the full-expansion check is a conformant alternative.
 
 Empty lines and `#`-comment lines are removed by the file reader before a
 template reaches the grammar (OVOS-INTENT-2 §3); they are not part of a

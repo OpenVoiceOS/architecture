@@ -57,7 +57,8 @@ It does **not** define:
 - **per-stage range boundaries** — which priority numbers belong to
   which stage is deployment configuration; §3.3 provides
   non-normative guidance on the recommended tiers;
-- **query timeout values** — these are deployment-defined.
+- **query timeout values** — these are deployment-tunable; §6.1
+  fixes only a recommended default ceiling.
 
 ---
 
@@ -141,7 +142,11 @@ The recommended convention divides the space into three tiers:
 
 This three-tier mapping corresponds directly to the
 `fallback_high` / `fallback_medium` / `fallback_low` multi-stage
-pipeline example in §8.2.
+pipeline example in §8.2. A deployment whose existing registrations
+follow a different band convention maps them onto these tiers by
+**band membership**, not by numeric rescale — see the appendix's
+divergence catalogue for the mapping from the reference
+implementation's bands.
 
 A skill author uncertain which tier applies **SHOULD** register at
 a higher number rather than a lower one. Pre-empting a more
@@ -263,8 +268,24 @@ and OVOS-COMMON-QUERY-1 uses `can_answer`. Each name is normative
 only within its own protocol.
 
 The plugin waits for each skill's reply before advancing to the
-next. A skill that does not respond within a deployment-defined
-timeout is treated as `can_handle: false` and skipped.
+next. The plugin **MUST** bound each per-skill wait by a ceiling;
+the **RECOMMENDED default is 0.5 s** (matching the analogous polls
+of OVOS-CONVERSE-1 §4.2 and OVOS-STOP-1 §4.1), which a deployer MAY
+raise or lower. Without a ceiling, one unresponsive skill stalls
+the entire fallback stage — and with it the utterance — forever.
+An absent or malformed pong (missing or non-boolean `can_handle`,
+mismatched `skill_id`) **MUST** be treated as `can_handle: false`
+and the skill skipped; this is uniform with the silence rules of
+OVOS-CONVERSE-1 (§4.2 there) and OVOS-STOP-1 (§4.2 there).
+
+**Broadcast-poll optimisation.** As an observably equivalent
+alternative to the sequential per-skill query, the plugin MAY emit
+a single broadcast poll to the whole effective pool, collect the
+pongs, and then select the **first willing skill in pool order** —
+not in response-arrival order. Because selection remains keyed on
+pool order and silence/malformed pongs still count as
+`can_handle: false`, the outcome is identical to the sequential
+cycle while the waits overlap instead of accumulating.
 
 **Bus-exchange exception.** The per-skill query cycle is a
 documented exception to PIPELINE-1 §4.4's low-latency guidance,
@@ -387,8 +408,11 @@ identically regardless of how many stages are present.
 - reject any registration where payload `skill_id` ≠
   `context.skill_id` (§3.1);
 - construct the effective handler pool per §5 on each match call;
-- query skills sequentially via `<skill_id>.fallback.ping` and
-  await `<skill_id>.fallback.pong` before advancing (§6.1);
+- query skills via `<skill_id>.fallback.ping` / `.pong` — either
+  sequentially in pool order or via the observably equivalent
+  broadcast-poll optimisation (§6.1);
+- bound each per-poll wait by a ceiling and treat an absent or
+  malformed pong as `can_handle: false` (§6.1);
 - select the first willing skill in pool order (§6.2);
 - return a `Match` with `intent_name: "fallback"` targeting the
   selected skill (§6.3);
@@ -396,8 +420,8 @@ identically regardless of how many stages are present.
 
 ### A fallback pipeline plugin **SHOULD**:
 
-- apply a per-skill query timeout and treat non-response as
-  `can_handle: false` (§6.1);
+- use the recommended 0.5 s default per-poll ceiling unless the
+  deployer configures otherwise (§6.1);
 - when configured with a priority range, apply it as §5 step 2.
 
 ### A fallback pipeline plugin **MAY**:

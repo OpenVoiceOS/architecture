@@ -39,7 +39,7 @@ interaction teardown (a skill-side or orchestrator-side concern).
 
 | Reserved intent_name | Meaning |
 |----------------------|---------|
-| `stop` | Cease activity for the inbound `session_id`. Dispatched on `<target_skill_id>:stop` where the target is the most recently activated (highest `activated_at`) positive pong responder (§4). |
+| `stop` | Cease activity for the inbound `session_id`. Dispatched on `<target_skill_id>:stop` where the target is the most recently activated (highest `activated_at`) positive pong responder, or — when no positive pong arrives in time — the most recently activated `active_handlers` entry (§4). |
 
 Skills and other pipelines **MUST NOT** register `stop` under
 OVOS-INTENT-4. A registration naming this intent_name is malformed per
@@ -67,8 +67,9 @@ entries are deployed, the implementation MUST ensure exactly one
 
 `Match.skill_id` MUST equal:
 
-- for `intent_name: "stop"` — the most recently activated positive pong
-  responder selected per §4;
+- for `intent_name: "stop"` — the target selected per §4 (the most
+  recently activated positive pong responder, or the recency fallback
+  of §4.1 step 5);
 - for `intent_name: "global_stop"` — the `pipeline_id` whose handler
   emits `ovos.stop`.
 
@@ -107,7 +108,21 @@ Inside `match`:
    `updated_session` removing that `skill_id` from `active_handlers`
    and clearing any `response_mode` entry it owns. Return
    `Match(skill_id=<that_skill_id>, intent_name="stop", updated_session=...)`.
-5. If no positive responder exists, return a `global_stop` Match per §5.
+5. If no positive responder exists but `active_handlers` is non-empty,
+   the stop plugin MUST fall back to recency: select the entry with the
+   highest `activated_at` in `session.active_handlers` (ties broken as
+   in step 4) and return a
+   `Match(skill_id=<that_skill_id>, intent_name="stop", updated_session=...)`
+   constructed exactly as in step 4. The plugin MUST NOT escalate to
+   `global_stop` on a missed pong: a pong can be absent for reasons
+   unrelated to stoppability — a skill busy in its handler thread, or a
+   satellite whose round-trip exceeds the 0.5 s window — and escalating
+   a missed 0.5 s reply to a session-wide wipe destroys converse state,
+   response modes, and activity belonging to unrelated skills.
+   Recency-targeted stop degrades gracefully: at worst the target has
+   nothing to stop and the dispatch is a no-op (§4.3). `global_stop`
+   remains reserved for explicit global-stop vocabulary (§3.2) and the
+   empty-`active_handlers` case (step 1).
 
 ### 4.2 Ping and pong shape
 
@@ -142,9 +157,10 @@ session-affecting activity in progress for the inbound `session_id`
 A handler with no current activity MUST respond `can_handle: false`
 or remain silent. A handler that does not subscribe to
 `ovos.stop.ping`, or does not respond within the timeout, is treated
-as `can_handle: false` and is ineligible as a stop target for that
-ping round. If no handler declares stoppability, the cascade escalates
-to `global_stop` per §4.1 step 5.
+as `can_handle: false` for that ping round. If no handler declares
+stoppability, the cascade falls back to the most recently activated
+`active_handlers` entry per §4.1 step 5 — it does not escalate to
+`global_stop`.
 
 ### 4.3 Dispatch and stop handler obligations
 
@@ -178,11 +194,14 @@ with the updated list, so that future ping rounds bypass it.
 
 ### 5.1 Trigger conditions
 
-A `global_stop` Match is returned in three cases:
+A `global_stop` Match is returned in two cases:
 
 - explicit "stop everything" vocabulary (§3.2);
-- generic stop with empty `active_handlers` (§4.1 step 1);
-- generic stop with no positive pong responders (§4.1 step 5).
+- generic stop with empty `active_handlers` (§4.1 step 1).
+
+A generic stop with no positive pong responders does **not** trigger
+`global_stop`; it falls back to the recency-selected target (§4.1
+step 5).
 
 ### 5.2 Match construction
 
@@ -266,7 +285,7 @@ A stop plugin MUST honour `session.blacklisted_skills` and
   or `"global_stop"`). A stop plugin MUST NOT return a `Match` whose
   `<Match.skill_id>:<Match.intent_name>` appears in
   `blacklisted_intents`. A `stop` utterance that
-  would resolve to `global_stop` (§4.1 steps 1 or 5) is subject to the
+  would resolve to `global_stop` (§4.1 step 1) is subject to the
   `global_stop` entry, not the `stop` entry. This list does not affect
   the ping broadcast.
 
@@ -323,7 +342,8 @@ handler-lifecycle trio. No other topic in this table does.
 - clear `session.response_mode` for the dispatch target via `Match.updated_session` (§6.1);
 - drain `active_handlers` via `Match.updated_session` (§6.2);
 - on `global_stop`, also empty `converse_handlers` via `Match.updated_session` (§6.2);
-- return `global_stop` when `active_handlers` is empty or no positive pong responder exists (§4.1 steps 1, 5);
+- return `global_stop` only for empty `active_handlers` or explicit global-stop vocabulary (§4.1 step 1, §3.2);
+- with no positive pong responder and non-empty `active_handlers`, target the highest-`activated_at` entry with `intent_name: "stop"` rather than escalating (§4.1 step 5);
 - honour `session.blacklisted_skills` and `session.blacklisted_intents` per §6.3;
 - subscribe to `<own_pipeline_id>:global_stop` and emit `ovos.stop` (§5.3);
 - emit exactly one `ovos.stop` broadcast per global stop event per session (§3.1).

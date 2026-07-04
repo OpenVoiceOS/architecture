@@ -293,10 +293,68 @@ a number of predecessor names. The mapping:
 
 | Predecessor topic | v2 replacement | Notes |
 |--------------|---------------|-------|
+| `recognizer_loop:wakeword` | `ovos.listener.wakeword` | Wake-word detection (AUDIO-IN-1 §6.5). Legacy payload's `utterance` (the key phrase with `_`/`-` folded to spaces, per `ovos-dinkum-listener/service.py`) becomes `wake_word`; optional `lang` added for multi-wakeword language binding. |
 | `recognizer_loop:record_begin` | `ovos.listener.record.started` | Capture start. `:` segment separator and implementation-role prefix dropped; no payload. |
 | `recognizer_loop:record_end` | `ovos.listener.record.ended` | Capture end; pairs with the start signal. |
 | `recognizer_loop:sleep` | `ovos.listener.sleep` | Controller-to-listener sleep request. |
 | `mycroft.awoken` | `ovos.listener.awoken` | Sleep→awake transition; moved into the `ovos.listener.*` namespace. |
+
+### 5.7.1 Numeric-convention migrations
+
+Two specs change numeric conventions relative to the reference
+implementation; both are referenced from the spec bodies as "see the
+appendix's divergence catalogue".
+
+**FALLBACK-1 §3.3 priority tiers vs ovos-core bands.**
+`ovos-core/intent_services/fallback_service.py` partitions priorities
+into `FallbackRange(0, 5)` (high), `(5, 90)` (medium), `(90, 101)`
+(low), filtered as `start < p <= stop` — half-open at the top, so a
+boundary value (5, 90) belongs to the earlier, more confident band.
+Mapping onto FALLBACK-1's tiers:
+
+| ovos-core band | ovos-core tier | FALLBACK-1 tier / range |
+|----------------|----------------|--------------------------|
+| 0 < p ≤ 5 | high | High confidence, 0–49 |
+| 5 < p ≤ 90 | medium | Medium confidence, 50–74 |
+| 90 < p ≤ 101 | low | Low confidence, 75–100 |
+
+The ovos-core bands are heavily skewed (nearly the whole space is
+"medium"), so a proportional numeric rescale would misfile most
+existing skills; migrate by band membership so each skill keeps its
+intended stage.
+
+**TRANSFORM-1 §4 ascending priority vs ovos-core descending.**
+ovos-core sorts transformer chains with `reverse=True`, so
+`priority = 1` runs *last* — and because each transformer's output
+overwrites its predecessor's, the lowest number effectively "wins".
+TRANSFORM-1 prescribes the inverse (ascending; lowest runs first).
+Deployments migrating existing plugins must renumber (e.g.
+`new = 100 − old`) or the chain runs backwards.
+
+**GUI-1 §3.4 player time units.** The reference implementation's
+audio-player GUI resources historically counted `position`/`duration`
+in seconds with `0` meaning unknown/streaming, while the media-player
+UI counted milliseconds with `-1` meaning live. GUI-1 unifies both
+player templates on milliseconds/`-1`; adapters bridging legacy
+audio-player payloads multiply by 1000 and map `0` to `-1`.
+
+**INTENT-4 §10 readiness announcement.** The spec references "the
+deployment's readiness announcement" abstractly; in the reference
+implementation this is the `mycroft.ready` broadcast.
+
+**OCP-1 §4.2.2 seek payload.** OCP-1 prescribes a single absolute
+`position` (ms). The reference implementation
+(`ovos-media/player.py handle_seek_request`) accepts two forms:
+`seconds` (relative offset, seconds, from the bus API) and
+`seekValue` (absolute ms, from the audio-player GUI). The spec keeps
+only the absolute-ms form; relative seeks are resolved by the
+requester. Other OCP-1 §4 shapes (`ovos.common_play.play`'s
+`media`/`playlist`/`disambiguation`/`repeat`, the `{"state": <int>}`
+state reports, and the media-entry fields) match
+`ovos-media/player.py` and `ovos-utils/ocp.py` (`MediaEntry`,
+`PlayerState`, `MediaState`, `TrackState`, `PlaybackType`) verbatim;
+the legacy `tracks` list alias on `play` is not carried into the
+spec.
 
 ### 5.8 Bus bridge (BRIDGE-1)
 

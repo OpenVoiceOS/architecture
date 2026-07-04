@@ -118,8 +118,14 @@ re-activation of an already-listed owner removes the prior entry
 and re-inserts at the head (§3.1).
 
 Deployments **SHOULD** bound the list length. The
-**default maximum is 64 entries**, which a deployer **MAY** raise,
-lower, or set to "unbounded". When the cap would be exceeded by an
+**default maximum is 10 entries**, which a deployer **MAY** raise,
+lower, or set to "unbounded". The cap is deliberately small: every
+listed owner is a candidate for the per-utterance poll (§4.2), and
+the poll sits on the serial critical path of every utterance — a
+large eligibility list converts directly into user-perceived
+latency, while genuine multi-turn engagement rarely involves more
+than a handful of recently active owners. When the cap would be
+exceeded by an
 insertion, the orchestrator **MUST** drop the tail entry (the
 least-recent surviving owner) before inserting the new head, and
 **SHOULD** log the eviction.
@@ -227,10 +233,13 @@ exceeds `T` at two boundaries:
 
 The orchestrator MAY run the prune at additional boundaries; doing
 so MUST NOT produce observably different behaviour from running it
-only at the two boundaries above. When no TTL is configured, no
-time-based pruning occurs and the list ages only by the §2.1 size
-cap. A deployment with no TTL is conformant but not recommended —
-it is effectively hardcoding TTL to "forever".
+only at the two boundaries above. The **RECOMMENDED default TTL is
+600 seconds**; an implementation SHOULD apply it when the deployer
+has not configured a value. Absent a TTL the list ages only by the
+§2.1 size cap — which never triggers while the owner count stays
+below the cap, so a stale owner would be polled on every utterance
+forever. A deployer MAY explicitly configure "no TTL", accepting
+that behaviour.
 
 Because `activated_at` is session-resident, TTL pruning is
 **resumption-safe**: a session re-sent after an orchestrator restart
@@ -355,10 +364,12 @@ When invoked, a converse plugin MUST proceed in this order:
    by the PIPELINE-1 §5.3–§5.4 backstop, not by this plugin.
 
 3. **Poll iteration.** The plugin polls the eligible set via
-   §4.2. The plugin MAY issue poll requests in parallel; when
-   it does, it MUST select the claimer with the **highest
-   `activated_at`** among those that returned `result: true`,
-   not by response arrival order. The plugin SHOULD skip any
+   §4.2. The plugin SHOULD issue poll requests in parallel —
+   the poll runs on the serial critical path of every utterance,
+   and sequential per-owner waits multiply the per-owner timeout
+   by the list length. When polling in parallel, it MUST select
+   the claimer with the **highest `activated_at`** among those
+   that returned `result: true`, not by response arrival order. The plugin SHOULD skip any
    owner whose `skill_id` appears in
    `session.blacklisted_skills` — doing so avoids an
    unnecessary round-trip before the PIPELINE-1 §5.3
@@ -484,8 +495,8 @@ the value SHOULD be drawn from:
 | `killed` | The poll was terminated by an interrupt signal (see §5.4) before the owner could decide. |
 | `done` | The owner explicitly signals it is finished with this conversation thread and requests removal from `session.converse_handlers`. |
 
-When a plugin receives `error_code: "done"` it **MUST** remove
-the declining owner from `session.converse_handlers`:
+When a plugin receives `error_code: "done"` it removes the
+declining owner from `session.converse_handlers`:
 
 - **When returning a `Match`** (another owner claimed on the same
   iteration): remove the `"done"` owner via `Match.updated_session`
@@ -493,12 +504,15 @@ the declining owner from `session.converse_handlers`:
 - **When returning `null`** (no owner claimed): there is no Match
   to carry `updated_session`, and in-place mutation of the inbound
   session object is not visible past the plugin boundary
-  (PIPELINE-1 §4.2). The plugin MUST instead emit
-  `ovos.session.sync` (OVOS-SESSION-2 §2.7), derived from the
-  inbound utterance Message, carrying the session with the `"done"`
-  owner removed from `converse_handlers`. The removal takes effect
-  for subsequent utterances and has no effect on the current
-  utterance's dispatch path.
+  (PIPELINE-1 §4.2). A pipeline plugin does not write session state
+  outside `Match.updated_session` — that channel discipline is what
+  makes declined-plugin mutations safely discardable (PIPELINE-1
+  §4.2). The plugin therefore MAY simply let the entry age out via
+  the §3.2 TTL, and SHOULD remember the pending removal and apply
+  it via `Match.updated_session` on its next claiming match for the
+  session. Until then the `"done"` owner may be polled again; a
+  well-behaved owner keeps answering `result: false` /
+  `error_code: "done"`, so the redundant polls are cheap.
 
 Removal is the only effect of `"done"` — it does not affect any
 other iteration step.
@@ -809,7 +823,7 @@ A **converse plugin** that claims the role defined in §4 MUST:
     `Match` on `intent_name == "response"` clearing the field via
     `Match.updated_session` (§5.2); if expired, clear via
     `Match.updated_session` and continue;
-  - conduct the §4.2 poll on the eligible set (MAY run in
+  - conduct the §4.2 poll on the eligible set (SHOULD run in
     parallel; MUST select the claimer with the highest
     `activated_at`; SHOULD skip `blacklisted_skills`); return a
     `Match` on `intent_name == "converse"` for the claimer, or
@@ -852,8 +866,10 @@ field is the wire surface.
 
 A handler that wants to be removed from
 `session.converse_handlers` SHOULD decline its next converse poll
-with `error_code: "done"` (§4.4) — the plugin will remove it
-immediately via `Match.updated_session`. Without `"done"`, a
+with `error_code: "done"` (§4.4) — the plugin removes it via
+`Match.updated_session` (immediately when another owner claims the
+same utterance, otherwise on its next claiming match or via the
+§3.2 TTL). Without `"done"`, a
 declining owner's position decays naturally once newer owners
 are activated or the §3.2 deployer TTL expires.
 
@@ -901,7 +917,7 @@ A **transformer** (OVOS-TRANSFORM-1) that mutates
 This specification deliberately does not:
 
 - prescribe **how** a converse plugin implements its poll
-  round-trips beyond §4.1 (parallelism permitted; selection
+  round-trips beyond §4.1 (parallelism recommended; selection
   by highest `activated_at`);
 - prescribe **what** a handler should say or do when it claims,
   leaves response mode, or its response window times out;

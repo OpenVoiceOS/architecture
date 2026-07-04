@@ -263,14 +263,17 @@ Field reference:
 
 | Field | Type | Required | Meaning (per INTENT-3 §4.2) |
 |-------|------|----------|----|
-| `required` | array of vocabulary descriptors | yes | Every required vocabulary MUST occur in the utterance. |
-| `optional` | array of vocabulary descriptors | yes | Captured if it occurs; absence does not prevent a match. |
-| `one_of` | array of arrays of vocabulary descriptors | yes | Each inner array is one **group**; at least one member of each group MUST occur. |
-| `excluded` | array of vocabulary descriptors | yes | If any of these occurs, the intent MUST NOT match. |
+| `required` | array of vocabulary descriptors | no (absent = `[]`) | Every required vocabulary MUST occur in the utterance. |
+| `optional` | array of vocabulary descriptors | no (absent = `[]`) | Captured if it occurs; absence does not prevent a match. |
+| `one_of` | array of arrays of vocabulary descriptors | no (absent = `[]`) | Each inner array is one **group**; at least one member of each group MUST occur. |
+| `excluded` | array of vocabulary descriptors | no (absent = `[]`) | If any of these occurs, the intent MUST NOT match. |
 
-Empty arrays are permitted. A producer **MUST** include all four keys, even
-when empty, so the payload is shape-stable and consumers can rely on
-positional semantics.
+Empty arrays are permitted, and an **absent** list-valued key is
+equivalent to an empty list — a consumer **MUST NOT** treat a payload
+as malformed merely because a list-valued key is omitted. Requiring
+empty keys on the wire would add nothing a consumer can rely on
+(the §5.3 validity rules operate on the resolved values either way)
+while turning every producer omission into a spurious rejection.
 
 ### 5.3 Constraint validity
 
@@ -291,9 +294,9 @@ malformed-payload rules:
   template that expands to a non-empty sample (OVOS-INTENT-1 §3.6).
   A descriptor that yields zero non-empty samples is malformed.
 
-A producer **MUST** include all four top-level keys (`required`,
-`optional`, `one_of`, `excluded`); a payload missing any of them is
-malformed.
+An absent `required`, `optional`, `one_of`, or `excluded` key is
+read as an empty list (§5.2); the validity rules above apply to the
+resolved values.
 
 **Unknown payload fields** are not malformed: a consumer **MUST**
 ignore fields it does not recognise and **MUST NOT** reject a
@@ -554,6 +557,19 @@ instead; the surfaces are distinct (declared vs compiled).
 Under a split orchestrator (OVOS-PIPELINE-1 §2), each process
 answers from its own slice; consumers aggregate.
 
+**Cold-start recovery.** The asymmetry cuts both ways: a skill that
+registered before the orchestrator (or a consuming plugin) started
+has emitted into the void, and because registrations are
+fire-and-forget (§2) nothing tells it so — the manifest stays
+permanently empty for that skill. A skill therefore **SHOULD**
+re-emit its full registration set when it observes the deployment's
+readiness announcement — the broadcast by which the orchestrator
+signals it is up and consuming (the topic is deployment-defined and
+not owned by this specification). Re-emission is safe by
+construction:
+replacement is implicit (§8.1), so a duplicate registration is
+idempotent.
+
 Two read-only topics:
 
 ### 10.1 `ovos.intent.list`
@@ -737,7 +753,10 @@ protocol is needed; the existing destination-based routing
   OVOS-INTENT-1 and OVOS-INTENT-2.
 
 A skill **SHOULD** query the manifest (§10) to confirm a
-registration landed; there is no acknowledgement.
+registration landed; there is no acknowledgement. A skill **SHOULD**
+re-emit its registrations on observing the deployment's readiness
+announcement (§10) — cold-start recovery for a late-starting
+orchestrator or consumer.
 
 ### A **pipeline plugin** (consumer) **MAY**:
 
