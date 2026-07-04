@@ -258,6 +258,26 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   by `(session_id, skill_id, entity_name, lang)`. §12 — the orchestrator
   keys the manifest by the quintuple and serves session-aware
   `ovos.intent.list` queries.
+- Consistency and design review: §5.2/§6.1 — an absent list-valued key
+  equals an empty list and MUST NOT be treated as malformed (the
+  all-four-keys shape-stability requirement is dropped). §5.3/§6.3 —
+  unknown payload fields are ignored and preserved, never malformed;
+  this is what carries companion-spec fields (e.g. OVOS-CONTEXT-1
+  gating declarations). §2 — manifest non-gating scoped to registration
+  processing; read-only consultation by other specifications is
+  permitted. §8.4/§11.1/§11.3 — session scoping for deregistration
+  reads exclusively from `context.session.session_id`; the
+  payload-level `session_id` field is removed. §8.5 —
+  enable/disable of an unregistered intent is a no-op; disabled-state
+  survival across a plugin reload is out of scope (recover via the
+  manifest). §10 — cold-start recovery: a skill SHOULD re-emit its
+  registration set on observing the deployment's readiness
+  announcement; re-emission is idempotent per §8.1. §10.2 — describe
+  responses are keyed on the `method` field, with `keyword`-then-
+  `template` ordering RECOMMENDED. §12 — orchestrator passivity
+  qualified by the §3.2 reserved-`intent_name` exclusion; §3.2 identity
+  citation corrected to INTENT-3 §3; language-fallback deferral
+  restated as an out-of-scope statement.
 
 ## OVOS-AUDIO-IN-1 — Audio Input Service
 
