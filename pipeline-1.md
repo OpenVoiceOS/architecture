@@ -76,7 +76,7 @@ It does **not** define:
 - **the `session` lifecycle** — `session` is carried opaquely per
   OVOS-MSG-1 §4. The session fields this spec owns are listed in §5;
   other internal fields are owned by other specifications via the
-  OVOS-SESSION-1 §2.1 registry mechanism.
+  OVOS-SESSION-1 §2.2 registry mechanism.
 - **per-plugin behavioural specs** — plugins have no behavioural
   contract beyond §4. A `converse` plugin, a `fallback` plugin, a
   persona plugin, a language-model plugin, a chatbot plugin: each
@@ -177,14 +177,23 @@ Inputs:
   language. A plugin is free to consider all candidates, only the
   first, or any subset; the orchestrator does not prescribe how
   candidates are weighted.
-- `lang` — the **optional** BCP-47 content-language hint sourced
-  from `Message.data.lang` of the entry-topic (§9.1). Present only
-  when the producer authoritatively knew the content language;
-  absent otherwise. The orchestrator **MUST NOT** synthesize a
-  value. The plugin uses this as input to its own language
-  resolution — consulting `session` (OVOS-SESSION-1 §3.2) or
-  applying any other policy — and **MUST** declare the resolved
-  language in `Match.lang`.
+- `lang` — the **optional** BCP-47 content-language tag. When the
+  entry-topic (§9.1) carried an authoritative `Message.data.lang`,
+  the orchestrator passes it through. When it did not, the
+  orchestrator MAY — and is **RECOMMENDED** to — resolve the
+  utterance language **once**, from the per-utterance evidence
+  fields of OVOS-SESSION-1 §3.2 (user preference, lang-detect
+  signals), and pass the resolved tag to **every** plugin's
+  `match` call for this utterance. Resolving once at the
+  orchestrator keeps the match round coherent: if each plugin
+  re-derives language independently, the same utterance can be
+  matched in different languages at different pipeline stages,
+  and which language "wins" becomes an accident of ordering. A
+  plugin **MAY** refine the received tag (e.g. a multilingual
+  matcher that detects a different content language) but
+  **SHOULD NOT** re-derive it independently from session
+  evidence, and **MUST** declare the language it actually
+  matched in via `Match.lang`.
 - `session` — the session carrier from `context.session` of the
   utterance Message (OVOS-MSG-1 §4, OVOS-SESSION-1).
 
@@ -294,7 +303,13 @@ value. Because §4.2 permits a plugin to communicate over the bus during
 etc.), the call can block for an unbounded time.
 
 The orchestrator **SHOULD** bound each `match` invocation by a
-deployment-defined time. If a plugin has not returned within the bound,
+deployment-defined time. The **RECOMMENDED** default is **10 s**. The
+bound **MUST** be at least as large as any collection ceiling a stage
+runs internally (e.g. OVOS-COMMON-QUERY-1 §2.1's requirement to sit
+at or above its 5 s default collection-window ceiling) — a
+match-phase timeout shorter than a stage's own internal
+wait guarantees that stage is killed mid-collection on every
+utterance it handles. If a plugin has not returned within the bound,
 the orchestrator **MUST** treat the call as if the plugin had raised an
 exception — log the timeout, skip to the next plugin per §6.2, and
 continue normally. Any partial mutation performed by the plugin during the
@@ -328,7 +343,7 @@ discipline.
 ## 5. Session fields owned by this specification
 
 This specification claims four session fields per OVOS-SESSION-1
-§2.1: one **positive** ordering field (§5.1 `pipeline`) and three
+§2.2: one **positive** ordering field (§5.1 `pipeline`) and three
 **negative** filtering fields (§5.2 `blacklisted_pipelines`, §5.3
 `blacklisted_skills`, §5.4 `blacklisted_intents`). All four are
 session-scoped, propagate with the session under OVOS-SESSION-1 §4,
@@ -599,11 +614,10 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     session = match.updated_session or session   # §4.1, §4.2
    │
    │     ┌── post-match-pre-dispatch window ──────────────┐
-   │     │ engine-side context promotion (CONTEXT-1 §5.3) │
+   │     │ engine-side context promotion (CONTEXT-1 §5.1) │
    │     │ intent-transformer chain runs (TRANSFORM-1     │
    │     │   §3.4) — may modify Match.slots, MUST NOT  │
    │     │   change skill_id / intent_name                 │
-   │     │ post-decay turns_remaining-- (CONTEXT-1 §4)    │
    │     └────────────────────────────────────────────────┘
    │
    │     ovos.intent.matched                  (§9.2)
@@ -616,9 +630,14 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     (dialog-transformer chain ← TRANSFORM-1 §3.5)
    │     (tts-transformer chain   ← TRANSFORM-1 §3.6)
    │
-   └─ if no plugin matched (or all matches filtered):
-         ovos.intent.unmatched                  (§9.3)
-         ovos.utterance.handled                   (§9.5)
+   ├─ if no plugin matched (or all matches filtered):
+   │     ovos.intent.unmatched                  (§9.3)
+   │     ovos.utterance.handled                   (§9.5)
+   │
+   └─ post-match decrement turns_remaining--   ← CONTEXT-1 §4
+      (runs after the match round whether or not any intent
+       matched; entries freshly written this round — CONTEXT-1
+       §4.1 — are exempt)
 ```
 
 The flow diagram shows where companion-spec chains plug into this
@@ -628,7 +647,7 @@ the entry topic is emitted and is therefore not visible here. The
 **utterance** and **metadata** transformer chains run after entry
 and before iteration, against the candidate utterance list. The
 **post-match-pre-dispatch window** is where
-CONTEXT-1 §5.3 sanctions engine-side `session.intent_context`
+CONTEXT-1 §5.1 sanctions engine-side `session.intent_context`
 mutation and where TRANSFORM-1 §3.4 inserts the intent-transformer
 chain over the chosen `Match`. **`ovos.utterance.handled` is emitted at handler completion** —
 immediately after `ovos.intent.handler.complete` (or `.error`).
@@ -796,6 +815,14 @@ the duration of a handler invocation will deadlock the first time
 any handler waits for a user reply. Concurrent utterance processing
 is a structural requirement, not an optimisation.
 
+The same liveness requirement applies within the match phase: the
+orchestrator **MUST** continue servicing its bus subscriptions —
+including poll replies destined for an in-flight plugin (a stop
+plugin's pongs, a converse or fallback poll's responses) — while a
+`match` call is in flight. An orchestrator whose bus loop blocks on
+the synchronous `match` return deadlocks every plugin whose match
+strategy involves a bus round-trip (§4.2).
+
 The session is the correlation key for nested lifecycles: the
 inner utterance carries the same `session_id` with
 `session.response_mode` populated (OVOS-CONVERSE-1 §5), which
@@ -869,7 +896,10 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
   termination, not a fresh activation. The orchestrator applies
   the polymorphism rule (§7.0) uniformly and does not otherwise
   distinguish skill from pipeline-plugin dispatches; suppression
-  is keyed strictly off the reserved-name registry. The push is
+  is keyed strictly off the reserved-name registry. Suppression is
+  keyed on the Match's `intent_name` appearing in the §7.3
+  reserved-name registry — never on the producing `pipeline_id`.
+  The push is
   applied after `Match.updated_session` is committed: a plugin
   that mutates `active_handlers` via `updated_session` (e.g.,
   STOP-1's global stop wiping the list) sees the stamp applied
@@ -933,11 +963,13 @@ to ordinary dispatches. The one exception is the
 `session.active_handlers` push defined in §7.1, which is
 suppressed on reserved-name dispatches — a reserved name
 represents a continuation or termination of an already-active
-skill's participation, not a fresh activation. The reserving
+skill's participation, not a fresh activation. Stamping
+suppression is keyed on the Match's reserved `intent_name` (this
+registry), never on the producing `pipeline_id`. The reserving
 specification gets exclusive use of the name across the
 deployment's skill set; it gets no other privilege.
 
-Reservations currently in force:
+Reserved intent_names:
 
 | Reserved intent_name | Reserving spec | Meaning of a Match bearing this name |
 |----------------------|----------------|--------------------------------------|
@@ -950,7 +982,7 @@ Reservations currently in force:
 This specification fixes only the registry mechanism (reservation
 listing); the per-name semantics are owned by the reserving
 specification. Other specifications MAY reserve further names by
-adding rows to this table in their own PR.
+adding rows to this table in a revision of this specification.
 
 A plain skill (§7.0) subscribes to a reserved-name dispatch topic
 via framework convention rather than OVOS-INTENT-4 registration —
@@ -1067,7 +1099,7 @@ Payload shape:
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `utterances` | array of strings | yes | One or more candidate utterance strings. |
-| `lang` | string | no | BCP-47 language tag of the utterance. **Present only when the producer authoritatively knows the content language** (e.g. a chat client emitting text it locally typed in `de-DE`, or an audio service emitting text from an STT decoder run in `en-US`). When absent, the content language is **not authoritatively known**; the orchestrator **MUST NOT** synthesize a value (in particular, **MUST NOT** fall back to `session.lang` or any per-utterance language signal of OVOS-SESSION-1 §3.2). The absence is propagated through to consumers (pipeline plugins, transformers, skills), each of which decides how to resolve language per its own policy — typically by consulting OVOS-SESSION-1 §3.2 signals (user preference, lang-detect signals) and applying its stage-appropriate consolidation. |
+| `lang` | string | no | BCP-47 language tag of the utterance. **Present only when the producer authoritatively knows the content language** (e.g. a chat client emitting text it locally typed in `de-DE`, or an audio service emitting text from an STT decoder run in `en-US`). When absent, the content language is **not authoritatively known**; producers **MUST NOT** synthesize a value on the wire. On receipt, the orchestrator SHOULD resolve the language once from OVOS-SESSION-1 §3.2 evidence fields and pass the resolved tag to every plugin's `match` call (§4) — a single resolution point keeps all stages matching in the same language; plugins MAY refine but SHOULD NOT re-derive independently. |
 
 `ovos.utterance.handle` is the only entry topic name this
 specification recognizes. A conformant orchestrator subscribes to
