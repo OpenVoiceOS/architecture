@@ -1,6 +1,6 @@
 # Bus Message Specification
 
-**Spec ID:** OVOS-MSG-1 · **Version:** 2 · **Status:** Draft
+**Spec ID:** OVOS-MSG-1 · **Version:** 1 · **Status:** Draft
 
 This document defines the **bus message** — the single unit of
 communication exchanged between components of a voice-assistant
@@ -92,14 +92,8 @@ A Message is a **JSON object** with exactly these top-level keys:
 
 Producers **MAY** omit `data` and/or `context` when they would be
 empty; consumers **MUST** treat an absent `data` or `context` as
-equivalent to `{}`. Producers **MUST NOT** emit any other top-level
-key. A consumer that receives a Message with unknown top-level keys
-**SHOULD** treat it as malformed, but **MAY** instead ignore the
-unknown keys and process the envelope normally. The asymmetry is
-deliberate: strictness belongs on the producer side, where the
-defect originates; a hard consumer-side reject would let a single
-non-conformant emitter sever otherwise-valid traffic for every
-consumer on the bus.
+equivalent to `{}`. Other top-level keys **MUST NOT** appear;
+consumers **MUST** reject any Message with unknown top-level keys.
 
 ### 2.1 `type`
 
@@ -110,51 +104,38 @@ match the syntax:
 - no whitespace;
 - lowercase RECOMMENDED for new topics.
 
-Dots segment a topic into a readable hierarchy —
-`assistant.intent.register.keyword`, `XXX.response`. The dot has no
-normative semantics in the envelope; hierarchy depth and segment
-meaning are conventions of the specifications that define topics.
-The colon, by contrast, **is** normatively reserved — §2.1.1 defines
-the rule, which every topic-defining specification inherits.
+Dot- and colon-separated segments are common in topics —
+`assistant.intent.register.keyword`, `XXX.response` — and have no
+normative semantics here; segmenting is a convention used by the
+specifications that define topics, not a feature of the envelope.
 
-#### 2.1.1 The topic convention: colon vs. dot
+#### 2.1.1 Identifiers used as topic components
 
-Two topic shapes exist on the bus, distinguished by one character:
+Some specifications define topics whose `type` string is assembled from
+named identifiers at runtime — for example `<skill_id>:<intent_name>`
+or `<component_type>.<component_id>`. For such a topic to be
+unambiguously parseable, the identifiers it uses as components **MUST
+NOT** contain the separator character(s) the topic uses structurally:
 
-1. **Dispatch topics** contain a `:` and are assembled at
-   runtime from identifiers — the canonical shape is
-   `<skill_id>:<intent_name>`, the per-intent handler-dispatch
-   topic. The `:` **is the marker** that a topic addresses a
-   specific registered handler rather than naming an event. Only a
-   formal specification **MAY** define a colon-bearing topic shape,
-   and it **MUST** define the identifier roles on each side of the
-   `:`.
-2. **All other topics** — events, requests, responses, lifecycle
-   signals — use the dotted form `<x>.<y>.<verb>` (any depth) and
-   **MUST NOT** contain `:`.
+- a topic shaped `<A>:<B>` requires A and B to not contain `:`;
+- a topic shaped `<A>.<B>` requires A and B to not contain `.`;
+- a topic shaped `<A>.<B>:<C>` requires A and B to not contain `.`
+  and B and C to not contain `:`.
 
-Consequently a consumer **MAY** classify any topic by a single test:
-a `:` anywhere in `type` means a dispatch-shaped topic per the
-specification that defined that shape; no `:` means an ordinary
-dotted topic.
-
-**Separator hygiene.** An identifier used as a component of a topic
-**MUST NOT** contain the character(s) the topic shape uses
-structurally:
-
-- in `<A>:<B>`, neither A nor B may contain `:`;
-- in `<A>.<B>`, neither A nor B may contain `.`;
-- shapes combining both separators impose both constraints on the
-  components they delimit.
-
-Each topic-defining specification declares only what its own
-separators require of its own identifiers; a character is
-constrained only where it is structural.
+Each specification declares only what its own separator requires.
+No separator character is globally forbidden in all identifiers;
+identifiers used in topics that do not use that character as a
+structural separator may contain it freely.
 
 **Recommended identifier form.** When defining a new identifier
 intended for use as a topic component, prefer values that contain only
 ASCII letters, digits, `_`, and `-`. This avoids accidental collision
 with any separator a current or future topic shape may choose.
+
+**Colon convention.** The `:` character is reserved for use by formal
+specifications as a structural separator in topic shapes. Informally
+defined or application-specific topics **SHOULD** avoid `:` in their
+topic name so the convention remains unambiguous.
 
 ### 2.2 `data`
 
@@ -198,7 +179,7 @@ any other external participant on the bus). Together they tell every
 observer which direction a Message is travelling across that boundary
 at any given moment.
 
-### 3.1 The boundary, illustrated (informative)
+### 3.1 The boundary, illustrated
 
 A typical end-to-end flow, showing how the routing pair flips as the
 Message crosses the boundary:
@@ -349,11 +330,9 @@ Produces a new Message:
        `C.destination`;
      - and is an array of strings, the new context's `source` **MAY**
        be set to the identifier of the component producing the reply
-       (typically one of the array entries). Selecting the **first
-       element** is RECOMMENDED, so that independently written
-       components converge on the same deterministic choice; the
-       choice remains implementation-defined, and consumers **MUST
-       NOT** rely on a particular member being chosen.
+       (typically one of the array entries). The exact choice is
+       implementation-defined; consumers **MUST NOT** rely on a
+       particular member being chosen.
   3. All other `context` keys, including `session` (§4), are
      preserved unchanged. As with `forward`, if the source Message
      has no `session`, the derivation **MAY** populate a default
@@ -455,10 +434,8 @@ A producer **SHOULD**:
 
 ### A **consumer** of Messages **MUST**:
 
-- treat a Message that violates §2 (wrong top-level value types,
-  missing or non-string `type`) as malformed; for unknown top-level
-  keys the consumer **SHOULD** treat the Message as malformed but
-  **MAY** ignore the unknown keys (§2);
+- reject a Message that violates §2 (wrong top-level keys, wrong
+  types, missing or non-string `type`) as malformed;
 - treat an absent `data` or `context` as equivalent to `{}` (§2);
 - tolerate any `context` shape, including an empty object, and ignore
   `context` keys it does not understand (§2.3);
