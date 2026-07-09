@@ -411,7 +411,7 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   `ovos.utterance.speak` (§9.6).
 ## OVOS-BRIDGE-1 — Bus Bridge and Opaque Relay
 
-### 3
+### 2
 
 - §4.1 — the **gate invariant** made explicit: a bridge that
   injects policy fields (any `blacklisted_*` array, a restricted
@@ -429,9 +429,6 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 - Timelessness — the hardened-minimum topic set cites
   OVOS-PIPELINE-1 §9 without enumerating its topics; repository
   gap-catalogue pointers removed from normative text.
-
-### 2
-
 - The bus bridge: a participant that terminates an external channel and
   relays Messages between the internal bus and remote participants. §3 —
   the normative core: inbound identity stamping (`source`), outbound

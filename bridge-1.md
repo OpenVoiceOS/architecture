@@ -1,6 +1,6 @@
 # Bus Bridge and Opaque Relay Specification
 
-**Spec ID:** OVOS-BRIDGE-1 · **Version:** 3 · **Status:** Draft
+**Spec ID:** OVOS-BRIDGE-1 · **Version:** 2 · **Status:** Draft
 
 This specification defines the **bus bridge** — a participant on the
 internal message bus that terminates an external communication
