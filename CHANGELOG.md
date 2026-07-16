@@ -258,6 +258,14 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   by `(session_id, skill_id, entity_name, lang)`. §12 — the orchestrator
   keys the manifest by the quintuple and serves session-aware
   `ovos.intent.list` queries.
+- §§5.3, 6.3, 7.2 — partial-malformation tolerance: an individual
+  template, vocabulary sample, or entity entry that is not parsable as
+  OVOS-INTENT-1 grammar (or expands to zero non-empty samples) is
+  skipped with a per-item WARN carrying the §5.3 fields; the consuming
+  plugin indexes the remaining valid items and rejects the registration
+  only when no valid item remains. Whole-registration rejection is
+  reserved for reserved `intent_name`, missing top-level keys, and
+  missing/empty `samples`.
 
 ## OVOS-AUDIO-IN-1 — Audio Input Service
 
