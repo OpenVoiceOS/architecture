@@ -169,6 +169,40 @@ This rule is symmetric with OVOS-MSG-1 §2.3 for `context` and is what
 makes the registry forward-compatible: a producer that adopts a
 newly-claimed field does not break consumers that predate the claim.
 
+### 2.5 Malformed carrier
+
+The tolerance rules above (§2, §2.4) govern a **malformed field** — a
+`null` or wrong-typed value on an otherwise well-formed `session`
+object. They resolve field-by-field: the offending field is treated as
+omitted and the rest of the session is consumed normally. They presume
+a `session` that **is** a JSON object.
+
+A **malformed carrier** is different: the `session` value is present in
+`context` but is **not a JSON object** at all (a string, number,
+array, or boolean). There is no field set to interpret, no
+`session_id` to key conversation state on — the carrier itself is
+unusable, so the field-by-field rules cannot apply.
+
+On a malformed carrier a consumer:
+
+- **MUST NOT** crash, and **MUST NOT** let the error tear down its
+  transport. A malformed carrier is a **per-message** producer fault,
+  never a transport fault; a consumer that drops its bus connection
+  over one bad message can be held offline indefinitely by a single
+  misbehaving producer.
+- **SHOULD** reject (drop) the offending Message and **SHOULD** log the
+  violation.
+- **MUST NOT** substitute the default session and process the Message
+  as though the carrier were valid. Absence resolves to the default
+  (§2.1); a malformed carrier does **not** — fabricating a session
+  identity for a message whose producer supplied a broken one would
+  route that message into the wrong session, which is worse than
+  dropping it.
+
+An explicit `null` for the whole `session` value is **absence**, not a
+malformed carrier: it resolves to the default session per §2.1, the
+same as an omitted `session` key.
+
 ---
 
 ## 3. Fields claimed in this version
@@ -623,11 +657,17 @@ A producer **SHOULD NOT**:
 - not reject a Message because of the presence, absence, or value
   of any single session field — invalid values for fields whose
   owner specification defines a fallback cause that fallback, never
-  Message rejection.
+  Message rejection;
+- survive a malformed `session` **carrier** — a `session` that is
+  present but not a JSON object — without crashing or tearing down its
+  transport, and **MUST NOT** substitute the default session for it
+  (§2.5).
 
 A consumer **SHOULD**:
 
-- log unknown session fields for diagnostic purposes.
+- log unknown session fields for diagnostic purposes;
+- drop (reject) a Message carrying a malformed `session` carrier and
+  log the violation (§2.5).
 
 ### A specification that **claims a new session field** **MUST**:
 
