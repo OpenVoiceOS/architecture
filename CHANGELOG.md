@@ -448,6 +448,23 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   ping/pong match contract (`<skill_id>.fallback.ping` / `.pong`, §6),
   dispatch on the reserved intent_name `fallback` (§7, OVOS-PIPELINE-1 §7.3),
   and pipeline positioning with multi-stage priority ranges (§8).
+- Consistency audit: §6.1 the per-skill wait MUST be bounded by a ceiling
+  (unbounded waits stall the utterance), with the ceiling itself a
+  RECOMMENDED default of 0.5 s matching the analogous OVOS-CONVERSE-1 /
+  OVOS-STOP-1 polls; an absent or malformed pong (missing or non-boolean
+  `can_handle`, mismatched `skill_id`) MUST be treated as
+  `can_handle: false`, uniform with the companion polls' silence rules;
+  §6.1 broadcast-poll optimisation defined as observably equivalent to
+  the sequential cycle (selection stays keyed on pool order, never
+  response-arrival order); §3.3 priority tiers remain a recommended
+  convention mapped by band membership, not numeric rescale; §3.3
+  catch-all ordering stated as SHOULD; §6.3 `utterance` defined as the
+  first element of the candidate list (OVOS-PIPELINE-1 §4.1); cross-spec
+  note that the poll boolean's field name (`can_handle`) is
+  protocol-local; citations corrected (`blacklisted_skills` →
+  OVOS-PIPELINE-1 §5.3, session registry → OVOS-SESSION-1 §2.2,
+  `ovos.intent.unmatched` → PIPELINE-1 §9.3) and OVOS-SESSION-1 cited by
+  its canonical title.
 ## OVOS-CONVERSE-1 — Active Handlers and Interactive Response
 
 ### 2
