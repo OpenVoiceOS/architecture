@@ -305,8 +305,8 @@ other (§3), distinguished only by its identifier.
 ### 3.2 Language signals
 
 A session carries up to six BCP-47 language-tag fields, each
-naming a different *kind* of language signal. All four are
-session-scoped, all four are omissible per §2, and all four are
+naming a different *kind* of language signal. All six are
+session-scoped, all six are omissible per §2, and all six are
 populated independently (typically by different stages of the
 pipeline, by different components, or by an out-of-band caller).
 
