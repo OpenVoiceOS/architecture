@@ -11,6 +11,15 @@ an entry here.
 
 ### 2
 
+- §4.0 (new) — one audio-format rule for all audio payloads: the
+  container is the single source of truth (self-describing WAV / MP3 /
+  OGG / FLAC); `mime` and `sample_rate` are OPTIONAL advisory fields on
+  `ovos.audio.queue`, `ovos.audio.play_sound`, and `ovos.audio.speech`,
+  and both become REQUIRED only for headerless raw streams (raw PCM).
+- §5.3 — `ovos.audio.is_speaking` is answered via the `response`
+  derivation (OVOS-MSG-1 §5.3), on `ovos.audio.is_speaking.response`.
+- References OVOS-TRANSFORM-1 by its title, *Transformer Plugins
+  Specification*.
 - The audio output service: the rendering pipeline (dialog-transformer
   chain, TTS synthesis, TTS-transformer chain, playback queue), the
   sequential playback queue shared by speech (`ovos.utterance.speak`) and
