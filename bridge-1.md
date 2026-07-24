@@ -174,9 +174,7 @@ In all routing modes:
 - A bridge MAY restrict topic subscription to a hardened minimum
   set for reduced attack surface. The minimum set for a
   multi-deployment topology (§4.2) is the utterance lifecycle
-  defined in **OVOS-PIPELINE-1 §9** (currently
-  `ovos.utterance.handle`, `ovos.utterance.speak`,
-  `ovos.utterance.handled`, `ovos.intent.unmatched`) plus
+  defined in **OVOS-PIPELINE-1 §9** plus
   `ovos.session.sync` (**OVOS-SESSION-2 §2.7**), and any additional
   topics the participant's pipeline plugins depend on. The same matching
   signals (`destination`, `session_id`, `site_id`) apply within
@@ -297,12 +295,23 @@ mutations to fields registered in **OVOS-SESSION-1 §3**; overwriting
 client-owned fields violates the client-authority rule of
 **OVOS-SESSION-2 §2**.
 
+**The gate invariant.** A boundary component that injects policy
+fields — any `blacklisted_*` array, or a restricted `pipeline` —
+**MUST** re-apply them to **every** inbound Message from the
+governed participant. Applying policy once at connect time is not
+conformant: the client is authoritative for its own session object
+(**OVOS-SESSION-2 §2.5**) and may legitimately send a session that
+omits the injected fields on any subsequent Message — at which
+point a connect-time-only gate has silently granted the participant
+everything the policy was meant to deny. The bridge is a gate, not
+a handshake.
+
 #### 4.1.1 Access control (denylist model)
 
 A layer-2 system MAY populate any of the `blacklisted_*` arrays
 catalogued in **OVOS-SESSION-1 §3** at the bridge boundary to
-restrict what the participant can access. As of this version the
-denylist comprises three **OVOS-PIPELINE-1 §5** fields
+restrict what the participant can access. In this version the
+registered denylist fields are three **OVOS-PIPELINE-1 §5** fields
 (`blacklisted_skills`, `blacklisted_intents`,
 `blacklisted_pipelines`) and six **OVOS-TRANSFORM-1 §5.2** fields
 (`blacklisted_audio_transformers`,
@@ -380,8 +389,8 @@ Where STT and audio output run depends on the deployment:
   dialog-transformer chain) locally before rendering audio. The
   bridge carries only bus messages.
 - **Hub-side audio stack** — raw audio is transmitted to the hub
-  (via a mechanism outside this specification's scope; see
-  `appendix/gaps.md`). The hub runs STT and injects
+  (via a mechanism outside the scope of this specification). The
+  hub runs STT and injects
   `ovos.utterance.handle` internally; it also runs the full
   audio-output layer including dialog-transformer and TTS,
   returning final audio to the satellite rather than text. In
@@ -426,7 +435,11 @@ values or `session_id` NAT (§3.2) to prevent state collisions.
 does not provide isolation on its own.
 
 In a multi-satellite deployment, each satellite SHOULD use a
-distinct `session_id`. This is necessary not only for session
+distinct `session_id`; a **managed-mode bridge** (§3.4.2) fronting
+concurrent independent clients **MUST** assign each a distinct
+`session_id` — in managed mode the bridge owns session attachment
+for its opaque participants (§3.4.2), so distinctness is its
+obligation, not theirs. This is necessary not only for session
 isolation but for correct message routing: the orchestrator routes
 responses (including `ovos.utterance.speak` and
 `ovos.utterance.handled`) by deriving from the inbound message via
@@ -472,9 +485,24 @@ configured chain.
 > rather than the satellite. The satellite in that model receives
 > final audio bytes and has no local audio-output layer. This
 > topology is outside the scope of BRIDGE-1 (§1 excludes audio
-> input and output); its bus surface is to be defined by a future
-> audio-output specification. See also: bridge-specific gaps in
-> `appendix/gaps.md`.
+> input and output); its bus surface is defined by **OVOS-AUDIO-1**
+> (see §4.2.5 for the TTS-as-a-service variant).
+
+#### 4.2.5 TTS as a service
+
+A satellite without a local TTS engine MAY request that the hub
+synthesise speech on its behalf. The bridge translates the
+`ovos.utterance.speak` Message it would normally relay back to the
+satellite into `ovos.utterance.speak.b64` before placing it on the
+hub bus. The hub's audio output service runs the full TTS pipeline
+and emits `ovos.audio.speech` (OVOS-AUDIO-1 §4.3) with the
+synthesised audio encoded as base64. The bridge relays
+`ovos.audio.speech` to the satellite; the satellite decodes and
+plays the audio directly.
+
+In this topology audio crosses the bridge as base64 data rather than
+as a local rendering obligation. The hub renders nothing locally for
+sessions owned by the satellite.
 
 ### 4.3 Out-of-utterance session sync
 
@@ -522,22 +550,6 @@ on the satellite's behalf.
 (cleanup events, health signals) rather than relaying participant
 messages, it SHOULD use the `"default"` session unless the emission
 is explicitly scoped to a specific participant's session.
-
-#### 4.2.5 TTS as a service
-
-A satellite without a local TTS engine MAY request that the hub
-synthesise speech on its behalf. The bridge translates the
-`ovos.utterance.speak` message it would normally relay back to the
-satellite into `ovos.utterance.speak.b64` before placing it on the
-hub bus. The hub's audio output service runs the full TTS pipeline
-and emits `ovos.audio.speech` (OVOS-AUDIO-1 §4.3) with the
-synthesised audio encoded as base64. The bridge relays
-`ovos.audio.speech` to the satellite; the satellite decodes and
-plays the audio directly.
-
-In this topology audio crosses the bridge as base64 data rather than
-as a local rendering obligation. The hub renders nothing locally for
-sessions owned by the satellite.
 
 ---
 

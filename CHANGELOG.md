@@ -561,6 +561,22 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 2
 
+- §4.1 — the **gate invariant** made explicit: a bridge that
+  injects policy fields (any `blacklisted_*` array, a restricted
+  `pipeline`) MUST re-apply them on every inbound Message from the
+  governed participant; connect-time-only policy is not conformant
+  under client authority (OVOS-SESSION-2 §2.5). The bridge is a
+  gate, not a handshake.
+- §4.2.4 — a managed-mode bridge (§3.4.2) fronting concurrent
+  independent clients MUST assign each a distinct `session_id`; in
+  managed mode session attachment is the bridge's obligation.
+  Relaying-mode satellites keep the SHOULD.
+- §4.2.5 — the TTS-as-a-service topology relocated next to the
+  hub-side-audio topology it complements; the hub-side audio bus
+  surface cited to OVOS-AUDIO-1.
+- Timelessness — the hardened-minimum topic set cites
+  OVOS-PIPELINE-1 §9 without enumerating its topics; repository
+  gap-catalogue pointers removed from normative text.
 - The bus bridge: a participant that terminates an external channel and
   relays Messages between the internal bus and remote participants. §3 —
   the normative core: inbound identity stamping (`source`), outbound
