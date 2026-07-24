@@ -194,6 +194,8 @@ All three share one payload shape:
 |-------|------|----------|---------|
 | `state` | number | yes | The numeric code of the new state on the topic's axis (§3.1 `PlayerState`, §3.2 `MediaState`, or the track axis below). |
 
+Currently, numeric codes are assigned only for `PlayerState` (0/1/2); `MediaState` and track-state values remain symbolic pending future assignment (see Follow-ups).
+
 `ovos.common_play.track.state` reports where the now-playing track is
 in its per-backend lifecycle. Its axis distinguishes *disambiguation*
 (a result exists but is not queued), *queued* (waiting for a backend
