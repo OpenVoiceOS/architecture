@@ -19,7 +19,7 @@ It builds on three companion specifications:
 - the *Bus Message Specification* (OVOS-MSG-1) — the envelope,
   routing keys, session carrier, and derivations every Message
   defined here travels in;
-- the *Transformer Injection Point Specification*
+- the *Transformer Plugins Specification*
   (OVOS-TRANSFORM-1) — the dialog-transformer and TTS-transformer
   chains that run before and after TTS synthesis.
 
@@ -188,6 +188,32 @@ instant-sound mechanism:
   queue: they play over whatever is currently scheduled, MAY overlap
   each other, and are not stoppable.
 
+### 4.0 Audio format
+
+Every audio payload in this specification — whether referenced by
+`uri` or carried inline as base64 in `audio` — follows one format
+rule:
+
+- **The container is the single source of truth.** Audio payloads
+  SHOULD be delivered in a self-describing container (e.g. WAV, MP3,
+  OGG, FLAC). Such containers identify themselves through their
+  leading bytes, and WAV additionally carries sample rate and channel
+  layout; the payload therefore needs no out-of-band format
+  declaration.
+- **`mime` is OPTIONAL and advisory.** A producer MAY set `mime` as a
+  hint; a consumer MAY use it to skip container detection. When the
+  hint and the payload's container disagree, the container is
+  authoritative.
+- **`sample_rate` is OPTIONAL.** It is meaningful only when the
+  container does not carry the sample rate itself.
+- **Headerless raw streams are the exception.** When the payload is a
+  raw, containerless stream (e.g. raw PCM), nothing in the bytes
+  describes the format, so the producer MUST set both `mime` and
+  `sample_rate`.
+
+These rules apply uniformly to `ovos.audio.queue` (§4.1),
+`ovos.audio.play_sound` (§4.2), and `ovos.audio.speech` (§4.3).
+
 ### 4.1 Scheduled playback queue
 
 This queue holds TTS speech (from `ovos.utterance.speak`, §3.2)
@@ -215,9 +241,13 @@ participants and their audio is delivered via
 |-------|------|----------|---------|
 | `uri` | string | no | URI referencing the audio data. |
 | `audio` | string | no | Base64-encoded audio data, used when the audio source is on a different host (alternative to `uri`). |
+| `mime` | string | no* | Advisory MIME type of the audio (§4.0). |
+| `sample_rate` | number | no* | Sample rate in Hz (§4.0). |
 | `listen` | bool | no | When `true`, re-opens the user input channel after this item plays (§4.4). |
 
-Exactly one of `uri` or `audio` MUST be present.
+Exactly one of `uri` or `audio` MUST be present. \* `mime` and
+`sample_rate` are REQUIRED when the payload is a headerless raw
+stream (§4.0).
 
 ### 4.2 Instant sounds
 
@@ -232,8 +262,12 @@ affected by stop signals (§6).
 |-------|------|----------|---------|
 | `uri` | string | no | URI referencing the audio data. |
 | `audio` | string | no | Base64-encoded audio data, used when the audio source is on a different host (alternative to `uri`). |
+| `mime` | string | no* | Advisory MIME type of the audio (§4.0). |
+| `sample_rate` | number | no* | Sample rate in Hz (§4.0). |
 
-Exactly one of `uri` or `audio` MUST be present.
+Exactly one of `uri` or `audio` MUST be present. \* `mime` and
+`sample_rate` are REQUIRED when the payload is a headerless raw
+stream (§4.0).
 
 ### 4.3 Synthesised audio delivery — `ovos.audio.speech`
 
@@ -245,7 +279,12 @@ for decoding and playing it.
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `audio` | string | yes | Base64-encoded synthesised audio. |
+| `mime` | string | no* | Advisory MIME type of the audio (§4.0). |
+| `sample_rate` | number | no* | Sample rate in Hz (§4.0). |
 | `listen` | bool | no | When `true`, the client SHOULD re-open its microphone after playback. |
+
+\* `mime` and `sample_rate` are REQUIRED when the payload is a
+headerless raw stream (§4.0).
 
 The session is identified via `context.session` as usual. A bridge
 (OVOS-BRIDGE-1 §4.2.4) subscribes by `session_id` or `destination`
@@ -317,7 +356,8 @@ Message; the service answers for that session only. An absent or
 `"default"` `session_id` asks about the device-local default session
 (OVOS-SESSION-1 §3.1); it is not a wildcard over all sessions.
 
-The service replies with:
+The service **MUST** reply via the `response` derivation
+(OVOS-MSG-1 §5.3) — on `ovos.audio.is_speaking.response` — with:
 
 ```json
 { "speaking": true }
@@ -411,7 +451,7 @@ The audio output service **MAY** scope its response to that session.
   — the pipeline iteration, `ovos.utterance.speak`, and `ovos.utterance.handled`.
 - *Bus Message Specification* (OVOS-MSG-1) — the envelope and
   derivations used for all bus communication.
-- *Transformer Injection Point Specification* (OVOS-TRANSFORM-1) —
+- *Transformer Plugins Specification* (OVOS-TRANSFORM-1) —
   the dialog-transformer and TTS-transformer chains that plug into
   the rendering pipeline.
 - *Stop Pipeline Plugin Specification* (OVOS-STOP-1) — the universal

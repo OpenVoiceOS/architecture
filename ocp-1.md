@@ -1,6 +1,6 @@
 # OVOS Common Playback: the Virtual Media Player
 
-**Spec ID:** OVOS-OCP-1 · **Version:** 1 · **Status:** Draft
+**Spec ID:** OVOS-OCP-1 · **Version:** 2 · **Status:** Draft
 
 This specification defines the **OVOS Virtual Media Player** — a single
 logical media player, scoped to a session, that every media voice command
@@ -84,11 +84,14 @@ member.
 
 ### 3.1 Player state
 
-| `PlayerState` | Meaning |
-|---|---|
-| `STOPPED` | No active playback. |
-| `PLAYING` | A track is advancing. |
-| `PAUSED` | A track is loaded and held at a position. |
+| `PlayerState` | Code | Meaning |
+|---|---|---|
+| `STOPPED` | `0` | No active playback. |
+| `PLAYING` | `1` | A track is advancing. |
+| `PAUSED` | `2` | A track is loaded and held at a position. |
+
+Every axis member has a stable numeric **code**; the code, not the
+symbolic name, is what travels on the wire (§4.4).
 
 ### 3.2 Media state
 
@@ -127,13 +130,38 @@ emit playback-mutating messages under this prefix; they observe state
 
 | Message | Meaning |
 |---|---|
-| `ovos.common_play.play` | Begin playback of a resolved result / queue. |
-| `ovos.common_play.search` | Acquire candidate media for a phrase (the pipeline's discovery step); `…search.start` / `…search.end` bracket it. |
+| `ovos.common_play.play` | Begin playback of a resolved result / queue. Payload in §4.2.1. |
+| `ovos.common_play.search` | Acquire candidate media for a phrase (the pipeline's discovery step). Bracketed by the two Messages below. |
+| `ovos.common_play.search.start` | The component orchestrating the search **MUST** emit this before querying providers. |
+| `ovos.common_play.search.end` | The component orchestrating the search **MUST** emit this after result aggregation completes. |
 
 A playback request **MAY** name a preferred output (a backend alias) in the
 utterance; absent that, the player selects an output by its configured
 preference order. Output selection is informative here and owned by the
 implementation.
+
+#### 4.2.1 `ovos.common_play.play` payload
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `media` | media entry (§4.5) | yes | The track to play now. |
+| `playlist` | array of media entries | no | The playback queue. When absent, the queue is `[media]`. |
+| `disambiguation` | array of media entries | no | The full candidate result set the queue was chosen from, kept for "play something else" style follow-ups. When absent, defaults to the playlist. |
+| `repeat` | boolean | no | When `true`, the player enters loop mode `REPEAT` (§3.3). |
+
+The search-bracketing Messages (`search`, `search.start`, `search.end`)
+carry implementation-defined payloads in this version.
+
+#### 4.2.2 `ovos.common_play.seek` payload
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `position` | number (ms) | yes | Absolute position within now-playing to move to. |
+
+Seek is **absolute**: relative "skip forward N" commands are resolved
+to an absolute position by the requester (which can read the state
+reports of §4.4), not by the player — one addressing mode keeps
+concurrent seekers from compounding each other's offsets.
 
 ### 4.3 Control requests
 
@@ -160,8 +188,46 @@ MPRIS exporters, and the pipeline's per-session tracking stay coherent:
 | `ovos.common_play.media.state` | the §3.2 value |
 | `ovos.common_play.track.state` | now-playing track transitions |
 
+All three share one payload shape:
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `state` | number | yes | The numeric code of the new state on the topic's axis (§3.1 `PlayerState`, §3.2 `MediaState`, or the track axis below). |
+
+Currently, numeric codes are assigned only for `PlayerState` (0/1/2); `MediaState` and track-state values remain symbolic pending future assignment (see Follow-ups).
+
+`ovos.common_play.track.state` reports where the now-playing track is
+in its per-backend lifecycle. Its axis distinguishes *disambiguation*
+(a result exists but is not queued), *queued* (waiting for a backend
+to start), and *playing* (a backend confirmed playback), with the
+queued/playing members qualified by backend kind (skill-internal,
+audio, video, web view, external OS player). A `playing`-family value
+implies `PlayerState.PLAYING`; pausing is a `PlayerState` /
+`MediaState` concern and never a track-state value.
+
 A consumer **MUST NOT** assume it can read player state synchronously; the
 state reports are the contract.
+
+### 4.5 The media entry
+
+Playback requests and state consumers exchange tracks as **media
+entry** objects:
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `uri` | string | yes | Where the media lives; scheme selects the backend/extractor. |
+| `title` | string | no | Display title. |
+| `artist` | string | no | Display artist. |
+| `image` | string | no | Artwork, delivered per the GUI image rules (OVOS-GUI-1 §3.5). |
+| `playback` | number | no | Requested playback kind on the `PlaybackType` axis (skill-internal, audio, video, web view, external OS player). |
+| `status` | number | no | The entry's current track-state value (§4.4). |
+| `media_type` | number | no | Content classification (music, radio, podcast, video, …) used for result ranking. |
+| `length` | number (ms) | no | Track duration in milliseconds; `-1` = unknown/live. One time convention across the media surface: durations and positions count in milliseconds with `-1` meaning unknown/live (§4.2.2, OVOS-GUI-1 §3.4). |
+| `match_confidence` | number 0–100 | no | Provider's self-reported relevance for the originating query. |
+| `skill_id` | string | no | The provider that produced this entry. |
+
+Consumers **MUST** ignore unknown media-entry fields; providers ride
+extra metadata on entries freely.
 
 ---
 

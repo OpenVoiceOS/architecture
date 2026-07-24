@@ -316,6 +316,16 @@ topic is part of the actionable signal because the same
 malformed as template (or vice versa, §3.2). Structured logging is
 **RECOMMENDED**.
 
+Within a vocabulary descriptor, an individual sample that is not
+parsable as OVOS-INTENT-1 §3 grammar, or that expands to zero
+non-empty samples, does **not** malform the registration. A consuming
+plugin **MUST NOT** reject the registration on its account: it
+**MUST** skip the offending sample, **MUST** log each skipped sample
+at WARN with the fields above plus the sample itself, and **MUST**
+index the remaining valid samples. Only a descriptor in which no
+sample expands to a non-empty sample is malformed (the zero-yield rule
+above), and only then is the registration rejected.
+
 ### 5.4 No `.blacklist`
 
 A `.blacklist` is **not** used with keyword intents. The `excluded` role is
@@ -372,10 +382,20 @@ A consuming plugin **MUST NOT** index a template registration in which:
 
 - the `intent_name` is reserved by another spec (§3.2);
 - `samples` is missing or empty;
-- a template is not parsable as OVOS-INTENT-1 §3 grammar;
-- a template expands to zero non-empty samples (OVOS-INTENT-1 §3.6);
-- `required_slots` names a slot that is not declared by any template in
-  `samples` (INTENT-3 §5.3).
+- no template in `samples` is both parsable as OVOS-INTENT-1 §3
+  grammar and expands to at least one non-empty sample
+  (OVOS-INTENT-1 §3.6);
+- `required_slots` names a slot that is not declared by any valid
+  template in `samples` (INTENT-3 §5.3).
+
+An individual template that is not parsable as OVOS-INTENT-1 §3
+grammar, or that expands to zero non-empty samples, does **not**
+malform the registration by itself. A consuming plugin **MUST NOT**
+reject the registration on its account: it **MUST** skip that
+template, **MUST** log each skipped template at WARN with the §5.3
+fields plus the template itself, and **MUST** index the remaining
+valid templates. The registration is rejected only when no valid
+template remains (third bullet above).
 
 The §5.3 WARN-log rule applies: the rejecting plugin **MUST** log
 the rejection with `skill_id`, `intent_name`, `lang`, and a
@@ -414,9 +434,17 @@ Field reference:
 ### 7.2 Malformed payloads
 
 A consuming plugin **MUST NOT** index an entity registration whose
-`samples` is missing or empty. The §5.3 WARN-log rule applies: the
-rejecting plugin **MUST** log the rejection with `skill_id`,
-`entity_name`, `lang`, and a one-line reason.
+`samples` is missing or empty, or in which no entry yields a non-empty
+value. The §5.3 WARN-log rule applies: the rejecting plugin **MUST**
+log the rejection with `skill_id`, `entity_name`, `lang`, and a
+one-line reason.
+
+An individual entry that is not parsable as OVOS-INTENT-1 §3 grammar,
+or that yields no non-empty value, does **not** malform the
+registration by itself. A consuming plugin **MUST NOT** reject the
+registration on its account: it **MUST** skip the offending entry,
+**MUST** log each skipped entry at WARN with the §5.3 fields plus the
+entry itself, and **MUST** index the remaining valid entries.
 
 ---
 
@@ -775,8 +803,10 @@ A plugin **MUST NOT** index a malformed registration (§§5.3, 6.2,
 §3.2) and **MUST** log every such rejection at WARN with `skill_id`,
 `intent_name`/`entity_name`, `lang`, the rejecting topic, and a
 one-line reason — fire-and-forget means this log is the producer's
-only debugging signal. Matching behaviour beyond that is
-OVOS-PIPELINE-1's concern.
+only debugging signal. An individual malformed template, sample, or
+entity entry within an otherwise valid registration is skipped and
+logged, never grounds for rejecting the registration (§§5.3, 6.3,
+7.2). Matching behaviour beyond that is OVOS-PIPELINE-1's concern.
 
 ### The **orchestrator** **MUST**:
 

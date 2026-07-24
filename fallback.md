@@ -18,7 +18,7 @@ It builds on four companion specifications:
 - the *Bus Message Specification* (OVOS-MSG-1) — the envelope,
   routing keys, session carrier, and derivations every Message
   defined here travels in;
-- the *Session Carrier Wire Shape Specification* (OVOS-SESSION-1) —
+- the *Session Specification* (OVOS-SESSION-1) —
   the session field registry and the omission rule;
 - the *Intent and Entity Registration Bus Contract*
   (OVOS-INTENT-4) — the session-scoped registration model.
@@ -57,7 +57,8 @@ It does **not** define:
 - **per-stage range boundaries** — which priority numbers belong to
   which stage is deployment configuration; §3.3 provides
   non-normative guidance on the recommended tiers;
-- **query timeout values** — these are deployment-defined.
+- **query timeout values** — these are deployment-tunable; §6.1
+  fixes only a recommended default ceiling.
 
 ---
 
@@ -141,7 +142,11 @@ The recommended convention divides the space into three tiers:
 
 This three-tier mapping corresponds directly to the
 `fallback_high` / `fallback_medium` / `fallback_low` multi-stage
-pipeline example in §8.2.
+pipeline example in §8.2. A deployment using a different band
+convention maps registrations onto these tiers by **band
+membership** (which confidence class a number belongs to), not by
+numeric rescale — the numbers label the classes; they are not a
+continuous scale.
 
 A skill author uncertain which tier applies **SHOULD** register at
 a higher number rather than a lower one. Pre-empting a more
@@ -153,10 +158,10 @@ produce an answer rather than silent failure. Every deployment
 SHOULD include a catch-all fallback skill — registered at the
 highest priority number in the pool (e.g. `priority: 100`) — that
 unconditionally returns `can_handle: true` and responds with a
-graceful "I don't know how to answer that" message. This skill is
-the last entry in `session.fallback_handlers` if that field is
-set, and the last resort after all higher-confidence handlers have
-declined. Without it, an utterance that no skill can handle
+graceful "I don't know how to answer that" message. When
+`session.fallback_handlers` is set, this skill **SHOULD** be its
+last entry, so it remains the last resort after all
+higher-confidence handlers have declined. Without it, an utterance that no skill can handle
 produces `ovos.intent.unmatched` with no user-facing response.
 
 ### 3.4 Session-scoped registration
@@ -172,7 +177,7 @@ available to all sessions. Skills registered under a specific
 ## 4. Session fields
 
 This specification claims one optional session field per
-**OVOS-SESSION-1 §2.1**.
+**OVOS-SESSION-1 §2.2**.
 
 | Field | Wire type | Owner |
 |-------|-----------|-------|
@@ -189,7 +194,7 @@ available are appended after the listed skills, sorted by
 registered priority ascending.
 
 Per-skill access control uses the existing
-`session.blacklisted_skills` field (**OVOS-SESSION-1 §3**) — no
+`session.blacklisted_skills` field (**OVOS-PIPELINE-1 §5.3**) — no
 separate fallback-specific denylist is needed. To block all
 fallback handling for a session, add the fallback stage(s) to
 `session.blacklisted_pipelines`, or omit them from
@@ -214,7 +219,7 @@ pool**:
    the current `session_id` (including `"default"` registrations
    per §3.4).
 4. **Policy.** Remove any `skill_id` present in
-   `session.blacklisted_skills` (**OVOS-SESSION-1 §3**).
+   `session.blacklisted_skills` (**OVOS-PIPELINE-1 §5.3**).
 
 The result is the ordered effective pool. An empty pool causes the
 plugin to return `None` immediately. No later stage adds what an
@@ -257,9 +262,30 @@ The queried skill replies with:
 | `skill_id` | string | yes | The responding skill's identity. MUST equal the topic prefix. |
 | `can_handle` | bool | yes | Whether this skill is willing to handle the current utterance. |
 
+The boolean's field name is protocol-specific: this spec and
+OVOS-STOP-1 use `can_handle`, OVOS-CONVERSE-1's poll uses `result`,
+and OVOS-COMMON-QUERY-1 uses `can_answer`. Each name is normative
+only within its own protocol.
+
 The plugin waits for each skill's reply before advancing to the
-next. A skill that does not respond within a deployment-defined
-timeout is treated as `can_handle: false` and skipped.
+next. The plugin **MUST** bound each per-skill wait by a ceiling;
+the **RECOMMENDED default is 0.5 s** (matching the analogous polls
+of OVOS-CONVERSE-1 §4.2 and OVOS-STOP-1 §4.1), which a deployer MAY
+raise or lower. Without a ceiling, one unresponsive skill stalls
+the entire fallback stage — and with it the utterance — forever.
+An absent or malformed pong (missing or non-boolean `can_handle`,
+mismatched `skill_id`) **MUST** be treated as `can_handle: false`
+and the skill skipped; this is uniform with the silence rules of
+OVOS-CONVERSE-1 (§4.2 there) and OVOS-STOP-1 (§4.2 there).
+
+**Broadcast-poll optimisation.** As an observably equivalent
+alternative to the sequential per-skill query, the plugin MAY emit
+a single broadcast poll to the whole effective pool, collect the
+pongs, and then select the **first willing skill in pool order** —
+not in response-arrival order. Because selection remains keyed on
+pool order and silence/malformed pongs still count as
+`can_handle: false`, the outcome is identical to the sequential
+cycle while the waits overlap instead of accumulating.
 
 **Bus-exchange exception.** The per-skill query cycle is a
 documented exception to PIPELINE-1 §4.4's low-latency guidance,
@@ -274,7 +300,7 @@ per-skill converse poll.
 The plugin selects the first skill in pool order whose
 `can_handle` reply is `true`. If the pool is exhausted with no
 willing skill the plugin returns `None`, and the pipeline emits
-`ovos.intent.unmatched` (**PIPELINE-1 §9.4**).
+`ovos.intent.unmatched` (**PIPELINE-1 §9.3**).
 
 ### 6.3 Match shape
 
@@ -283,7 +309,7 @@ willing skill the plugin returns `None`, and the pipeline emits
 | `skill_id` | The selected skill's `skill_id`. |
 | `intent_name` | `"fallback"` — reserved per PIPELINE-1 §7.3. |
 | `lang` | The resolved BCP-47 language tag. |
-| `utterance` | The utterance string passed to `match`. |
+| `utterance` | The first element of the input candidate list (PIPELINE-1 §4.1 fallback rule). |
 | `slots` | Empty. |
 | `updated_session` | Present if the plugin mutates session state. |
 
@@ -382,8 +408,11 @@ identically regardless of how many stages are present.
 - reject any registration where payload `skill_id` ≠
   `context.skill_id` (§3.1);
 - construct the effective handler pool per §5 on each match call;
-- query skills sequentially via `<skill_id>.fallback.ping` and
-  await `<skill_id>.fallback.pong` before advancing (§6.1);
+- query skills via `<skill_id>.fallback.ping` / `.pong` — either
+  sequentially in pool order or via the observably equivalent
+  broadcast-poll optimisation (§6.1);
+- bound each per-poll wait by a ceiling and treat an absent or
+  malformed pong as `can_handle: false` (§6.1);
 - select the first willing skill in pool order (§6.2);
 - return a `Match` with `intent_name: "fallback"` targeting the
   selected skill (§6.3);
@@ -391,8 +420,8 @@ identically regardless of how many stages are present.
 
 ### A fallback pipeline plugin **SHOULD**:
 
-- apply a per-skill query timeout and treat non-response as
-  `can_handle: false` (§6.1);
+- use the recommended 0.5 s default per-poll ceiling unless the
+  deployer configures otherwise (§6.1);
 - when configured with a priority range, apply it as §5 step 2.
 
 ### A fallback pipeline plugin **MAY**:
@@ -419,8 +448,8 @@ identically regardless of how many stages are present.
 - **OVOS-PIPELINE-1** — pipeline-plugin contract, Match shape,
   dispatch, reserved intent-name registry (§7.3).
 - **OVOS-MSG-1** — envelope, derivations, and routing keys.
-- **OVOS-SESSION-1** — session field registry;
-  `session.blacklisted_skills`.
+- **OVOS-SESSION-1** — session field registry and the omission
+  rule.
 - **OVOS-INTENT-4** — session-scoped registration model (§11).
 - **OVOS-CONVERSE-1** — the dotted-addressed per-skill query
   pattern this specification follows.
