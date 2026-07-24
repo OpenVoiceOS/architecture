@@ -73,6 +73,29 @@ an entry here.
   out of scope.
 ## OVOS-TRANSFORM-1 — Transformer Plugins
 
+### 2
+
+- §4 — chain order restated cleanly: ascending priority, `1` runs
+  first, default `50`; a priority assignment authored for the
+  inverse (descending) convention MUST be renumbered, since the two
+  orderings are exact inverses.
+- §5.3 — the effective chain per injection point is composed once
+  per utterance lifecycle from the session as committed at
+  utterance start; mid-lifecycle mutations of the preference or
+  denylist fields take effect on the next utterance.
+- §3.4 — the `Match` slot map is named `slots` (aligned with
+  OVOS-PIPELINE-1 §4.1); all `captures` wording renamed.
+- Terminal-event topics — `ovos.intent.unmatched` replaces the
+  retired failure topic on the no-transcription and cancellation
+  paths (OVOS-PIPELINE-1 §9.3).
+- OVOS-CONTEXT-1 pathway citations repointed (§5.1 engine-side,
+  §5.2 in-place transformer mutation, §5.3 `ovos.session.sync`);
+  the bus-event mutation topics dropped in favour of the sync
+  pathway; attribution precedence and cancellation-stamp rationale
+  stated locally.
+- SESSION-1 registry claims corrected to §2.2; slot-typing
+  deferrals restated as timeless out-of-scope statements.
+
 ### 1
 
 - Initial draft. Defines six transformer chains at six injection
