@@ -38,7 +38,8 @@ This specification defines:
   that filters skills down to plausible answerers;
 - the **answer collection** (§7) — full-answer gathering;
 - the **filtering and selection** (§8) — confidence filtering,
-  denylist, fast-win, and ranking, applied against the live session;
+  denylist, opt-in fast-win, and ranking, applied against the live
+  session;
 - the **match construction** (§9) — the `Match`, or `None`;
 - the **plugin handler** (§10) — the trivial handler that speaks the
   selected answer;
@@ -136,9 +137,10 @@ This intent_name is **not** registered via OVOS-INTENT-4. A
 registration naming `common_query` via `ovos.intent.register.*` is
 malformed per PIPELINE-1 §7.3.
 
-The `<skill_id>:common_query` topic shape (colon form) is used by the
-plugin during `match` to request full answers from claiming skills
-(§7). These are sent by the plugin, not by the orchestrator.
+Full-answer requests during `match` use the dotted topic
+`<skill_id>.common_query.request` (§7). They are sent by the plugin,
+not by the orchestrator, and are not dispatches — the colon form is
+reserved for the PIPELINE-1 §7 dispatch shape (OVOS-MSG-1 §2.1.1).
 
 ---
 
@@ -207,7 +209,7 @@ iteration starts. When this subscription is active, the plugin begins
 the contest (gate → poll → answer collection) immediately, **in
 parallel** with the upstream pipeline stages (stop, converse, intent
 matchers). By the time the orchestrator calls `match` for the common
-query stage, the raw responses are often already collected.
+query stage, the raw responses MAY already be collected.
 
 ### 5.1 What is cached, and what is not
 
@@ -286,6 +288,11 @@ A skill that believes it can answer responds on
 | `can_answer` | boolean | yes | Whether the skill claims it can answer. |
 | `latency_ms` | number | no | Expected time in milliseconds to produce a full answer. Sizes the collection window (§7.2). |
 
+The boolean's field name is protocol-specific: this spec's poll uses
+`can_answer`, while the analogous polls of OVOS-FALLBACK-1 /
+OVOS-STOP-1 use `can_handle` and OVOS-CONVERSE-1 uses `result`. Each
+name is normative only within its own protocol.
+
 **The pong check is a fast local decision.** A skill **MUST** base
 `can_answer` on local, synchronous operations only — keyword
 matching, vocabulary lookup, cached knowledge — and **MUST NOT**
@@ -320,7 +327,8 @@ all claiming skills **in parallel**.
 
 ### 7.1 Full-answer request and response
 
-The plugin sends `<skill_id>:common_query` to each claiming skill:
+The plugin sends `<skill_id>.common_query.request` (dotted addressed,
+non-dispatch) to each claiming skill:
 
 ```json
 { "utterance": "what is the capital of France" }
@@ -382,10 +390,18 @@ session** (§5.1), in order:
    below the deployer-defined threshold (Appendix A).
 2. **Denylist.** Discard responses whose `skill_id` appears in the
    live `session.blacklisted_skills` (PIPELINE-1 §5.3).
-3. **Fast-win.** If any surviving response carries `conf ≥`
-   fast-win threshold (Appendix A), the plugin **SHOULD** stop waiting
-   immediately and select it. The fast-win check MAY fire during
-   collection (§7.2), short-circuiting the window.
+3. **Fast-win (deployment-opt-in, default off).** A deployment MAY
+   enable a fast-win rule: when enabled, if any surviving response
+   carries `conf ≥` the fast-win threshold (Appendix A), the plugin
+   MAY stop waiting immediately and select it, and the check MAY
+   fire during collection (§7.2), short-circuiting the window. The
+   rule is **off by default**: `conf` is self-reported and skills
+   share no calibrated confidence scale (Appendix B), so selecting
+   the first response to cross a threshold turns answer selection
+   into a nondeterministic latency race — the fastest confident
+   skill wins, not the best one. Absent explicit deployer opt-in,
+   the plugin **SHOULD** wait for all claimants whose reported
+   `latency_ms` is within the ceiling before selecting.
 4. **Selection.** Select the highest-`conf` survivor. Ties MAY be
    broken by any deployer-defined heuristic; the algorithm is not
    normative. When a reranker is configured, the plugin **SHOULD**
@@ -447,7 +463,7 @@ surface):
    likely answer. If yes, respond on `ovos.common_query.pong` with
    `can_answer: true`, the echoed `utterance`, and optionally
    `latency_ms`. If no, stay silent.
-2. On `<own_skill_id>:common_query`, produce the best answer — network
+2. On `<own_skill_id>.common_query.request`, produce the best answer — network
    calls, DB queries, and full generation are appropriate here — and
    emit it on `<own_skill_id>.common_query.response` (via `reply`,
    OVOS-MSG-1 §5) with the echoed `utterance`, `answer`, and `conf`.
@@ -493,14 +509,15 @@ early start, the stage blocks for the full collection window.
 |-------|-----------|---------|------------|
 | `ovos.common_query.ping` | plugin → all skills | Wants-to-answer poll | §6.1 |
 | `ovos.common_query.pong` | skill → plugin | Claim, via `reply` | §6.2 |
-| `<skill_id>:common_query` | plugin → claiming skill | Full-answer request (during match) | §7.1 |
+| `<skill_id>.common_query.request` | plugin → claiming skill | Full-answer request (during match) | §7.1 |
 | `<skill_id>.common_query.response` | claiming skill → plugin | Full answer or decline, via `reply` | §7.1, §11 |
 | `<pipeline_id>:common_query` | orchestrator → plugin | Handler dispatch (reserved intent_name) | §3, §10 |
 
-Colon-form topics (`<skill_id>:common_query`, `<pipeline_id>:common_query`)
-follow the PIPELINE-1 §7 dispatch shape. Dotted-form topics
-(`<skill_id>.common_query.response`) are skill-emitted events per
-MSG-1 §2.1.1. `ovos.common_query.ping` is a broadcast. Pong and
+The one colon-form topic (`<pipeline_id>:common_query`) is the
+orchestrator's dispatch and follows the PIPELINE-1 §7 dispatch shape.
+Dotted-form topics (`<skill_id>.common_query.request`,
+`<skill_id>.common_query.response`) are plugin- and skill-emitted
+non-dispatch messages per MSG-1 §2.1.1. `ovos.common_query.ping` is a broadcast. Pong and
 answer responses are both derived via `reply` (OVOS-MSG-1 §5). Every
 poll/response message carries the `utterance` as its correlation key.
 
@@ -516,7 +533,7 @@ poll/response message carries the `utterance` as its correlation key.
   `ovos.common_query.pong` within a bounded poll window (§6.3);
 - discard pongs and responses whose `utterance` or session does not
   match the active contest (§6.3, §7.1);
-- request full answers via `<skill_id>:common_query` from all
+- request full answers via `<skill_id>.common_query.request` from all
   claimants in parallel and collect within a bounded window
   (§7.1, §7.2);
 - apply confidence filtering and the denylist against the **live
@@ -546,7 +563,8 @@ poll/response message carries the `utterance` as its correlation key.
   evict on every new utterance in the session (§5.1, §5.2);
 - close the poll window early when enough claimants respond (§6.3);
 - size the collection window from claimants' `latency_ms` (§7.2);
-- close the collection window on fast-win or all-responded (§7.2, §8);
+- close the collection window on all-responded, or on fast-win only
+  when the deployer has enabled it (§7.2, §8 step 3);
 - use a reranker when configured (§8 step 4).
 
 ### A skill that participates in common query **MUST**:
@@ -564,7 +582,7 @@ poll/response message carries the `utterance` as its correlation key.
 - not call `ovos.utterance.speak` from the `common_query` handler
   (§11);
 - not emit handler-lifecycle signals in response to
-  `<own_skill_id>:common_query` (§7.1).
+  `<own_skill_id>.common_query.request` (§7.1).
 
 ### A skill that participates in common query **SHOULD**:
 
@@ -590,7 +608,7 @@ them is conformant.
 | Collection-window initial | 3 s | §7.2 |
 | Collection-window ceiling | 5 s | §7.2 |
 | Minimum self-confidence | 0.5 | §8 step 1 |
-| Fast-win threshold | 0.9 | §8 step 3 |
+| Fast-win threshold (only when fast-win is enabled; default off) | 0.9 | §8 step 3 |
 
 ---
 
@@ -621,7 +639,7 @@ calibration matters.
 - *Bus Message Specification* (OVOS-MSG-1) — the envelope,
   `context.session` carrier, and `reply` derivation used for pong and
   answer responses.
-- *Session Carrier Wire Shape Specification* (OVOS-SESSION-1) — the
+- *Session Specification* (OVOS-SESSION-1) — the
   field-registry mechanism, the omission rule, and `session.lang`.
 - *Session Lifecycle and State Ownership Specification*
   (OVOS-SESSION-2) — session-keyed state and mutation boundaries.
