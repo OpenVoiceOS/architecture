@@ -218,6 +218,25 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ## OVOS-MSG-1 — Bus Message
 
+### 2
+
+- §2.1.1 — the topic convention made the single authoritative rule
+  every topic-defining specification inherits: a `:` in a topic marks
+  a **dispatch-shaped** topic assembled from identifiers (canonical
+  shape `<skill_id>:<intent_name>`), definable only by a formal
+  specification; all other topics use the dotted
+  `<x>.<y>.<verb>` form and MUST NOT contain `:`. Separator-hygiene
+  rules for identifiers used as topic components restated per shape.
+- §2 — unknown top-level keys: producers MUST NOT emit them;
+  consumers SHOULD treat such a Message as malformed but MAY ignore
+  the unknown keys, keeping strictness on the producer side. §7
+  consumer conformance aligned.
+- §5.2 — `reply` over an array `destination`: selecting the first
+  element as the new `source` is RECOMMENDED for deterministic
+  convergence; the choice remains implementation-defined and
+  consumers still MUST NOT rely on it.
+- §3.1 walkthrough marked informative.
+
 ### 1
 
 - Initial draft. Formalizes existing OVOS bus behaviour as a single
