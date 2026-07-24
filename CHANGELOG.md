@@ -24,6 +24,20 @@ an entry here.
 
 ### 2
 
+- §7.1 — embedded persona commands (summon, release, one-off query,
+  list, check) are ordinary intents: expressed as locale intent/entity
+  resources and matched with the standard intent machinery
+  (OVOS-INTENT-2), no bespoke matching layer.
+- §8.5 — the out-of-band query always answers: on an unsupported
+  `persona_id` the plugin replies on `ovos.persona.answer` with the
+  `error` field set and `response` omitted, never silently dropping
+  the request; `response` and `error` are mutually exclusive.
+- §6 — dismissal mechanics per session class: default sessions need an
+  explicit clear (empty-string `persona_id`, a release intent, or a
+  committed `Match.updated_session` without the field); named-session
+  clients dismiss by removing the field from the state they carry.
+- §3 — `persona_id` character-set constraint relaxed to a RECOMMENDED
+  ASCII letters/digits/`_`/`-` convention.
 - Initial draft. Defines persona as a scoped match+handler layer with
   its own pipeline position, `persona_id` session field, summon and
   dismiss bus messages, match contract (MAY return `None` for pass-
