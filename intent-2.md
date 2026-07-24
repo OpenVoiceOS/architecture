@@ -126,9 +126,9 @@ an override file replaces the corresponding lower-precedence file entirely.
 
 This specification does not mandate behaviour when the requested language has no
 directory. A loader **SHOULD** prefer an exact match. As a *suggestion*, a
-loader MAY fall back to the nearest available language; the `langcodes` library
-provides a `tag_distance()` function for this, and treats a distance below `10`
-as a usable regional match. Any such fallback is an **implementation choice**,
+loader MAY fall back to the nearest available language, as measured by any
+language-tag distance metric that treats close regional variants as usable
+matches. Any such fallback is an **implementation choice**,
 not a requirement of this specification, because cross-region substitution can
 produce wording a user would not expect.
 

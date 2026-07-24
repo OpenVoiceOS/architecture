@@ -178,6 +178,11 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   engine extracts only the slots of the matched template. The prior "every line
   MUST declare the same set of slots; use a separate file" rule is dropped for
   `.intent` (it still holds for `.dialog`, §4.2).
+- Consistency review: §2.2 language-fallback suggestion made
+  implementation-neutral — a loader MAY fall back to the nearest
+  available language as measured by any language-tag distance metric
+  that treats close regional variants as usable matches; the reference
+  to one particular library and its numeric threshold is removed.
 
 ### 1
 
