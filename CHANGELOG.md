@@ -474,6 +474,23 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 - §9.6 — the OPTIONAL `listen` field on `ovos.utterance.speak`: when
   `true`, the output stage re-opens the user input channel after the
   response is delivered.
+- Consistency and design review: §4/§9.1 — when the entry topic carries
+  no authoritative `lang`, the orchestrator MUST resolve the utterance
+  language once (OVOS-SESSION-1 §3.2 evidence) and pass the resolved tag
+  to every plugin's `match` call; plugins MAY refine but MUST NOT
+  re-derive independently (`Match.lang` remains the plugin's
+  declaration). §4.4 — RECOMMENDED default match-phase timeout of 10 s;
+  an applied bound MUST be at least any stage-internal collection
+  ceiling. §6.1 — context decay aligned with OVOS-CONTEXT-1 §4: the
+  post-match `turns_remaining` decrement runs after the match round
+  whether or not any intent matched, with freshly written entries
+  exempt; promotion citations corrected to CONTEXT-1 §5.1. §6.5 —
+  orchestrator liveness: the bus loop MUST keep servicing subscriptions
+  (including poll replies for an in-flight plugin) while a `match` call
+  is in flight. §7.1/§7.3 — `active_handlers` stamping suppression MUST
+  key on the Match's reserved `intent_name`, never the producing
+  `pipeline_id`. SESSION-1 registry citations corrected to §2.2;
+  reservation wording made timeless.
 
 ### 1
 
