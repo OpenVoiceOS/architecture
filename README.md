@@ -107,6 +107,7 @@ pre-spec status quo, `2` for one that is not backwards compatible.
 | OVOS-SESSION-1 | [Session Carrier Wire Shape](session-1.md) | 1 | Draft |
 | OVOS-SESSION-2 | [Session Lifecycle and State Ownership](session-2.md) | 1 | Draft |
 | OVOS-BRIDGE-1 | [Bus Bridge and Opaque Relay](bridge-1.md) | 2 | Draft |
+| OVOS-USER-ID-1 | [User Identity Resolution](user-id-1.md) | 1 | Draft |
 
 ### Orchestrator stack — what processes utterances
 

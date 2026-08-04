@@ -247,6 +247,14 @@ session and persist across utterances.
 | `blacklisted_dialog_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `blacklisted_tts_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `site_id` | string | OVOS-BRIDGE-1 §3.3 |
+| `user_id` | string | OVOS-USER-ID-1 §2 |
+| `speaker_id` | string | OVOS-USER-ID-1 §2 |
+| `face_id` | string | OVOS-USER-ID-1 §2 |
+| `name_id` | string | OVOS-USER-ID-1 §2 |
+| `passphrase_id` | string | OVOS-USER-ID-1 §2 |
+| `default_user_id` | string | OVOS-USER-ID-1 §2 |
+| `auth_level` | number | OVOS-USER-ID-1 §2 |
+| `authenticated_at` | number | OVOS-USER-ID-1 §2 |
 
 Every field above is OPTIONAL on the wire. A producer that sets a
 field **MUST** use the wire type listed and the value space defined
@@ -703,3 +711,6 @@ any field not claimed under §2.2 by a normative specification.
 - **OVOS-FALLBACK-1** — owns `session.fallback_handlers`.
 - **OVOS-PERSONA-1** — owns `session.persona_id`.
 - **OVOS-BRIDGE-1** — owns `session.site_id`.
+- **OVOS-USER-ID-1** — owns the identity fields: `user_id`,
+  `speaker_id`, `face_id`, `name_id`, `passphrase_id`,
+  `default_user_id`, `auth_level`, and `authenticated_at`.
