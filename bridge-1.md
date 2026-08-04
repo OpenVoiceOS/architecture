@@ -136,6 +136,29 @@ the participant's session but no explicit destination. A bridge that
 routes by `session_id` SHOULD also route by `destination`; the two
 signals are complementary, not alternatives.
 
+`session_id` matching is deliberately broad: it matches any Message
+carrying the participant's session, including Messages that were
+never meant to leave the deployment. A bridge **MUST NOT** relay a
+Message by `session_id` match when the topic belongs to a family
+that its owning specification defines as **internal coordination**
+between the orchestrator and locally-loaded components. In this
+version those families are:
+
+- `<skill_id>.converse.ping` / `.pong` (**OVOS-CONVERSE-1 §4.2**);
+- `ovos.common_query.ping` / `.pong` and
+  `<skill_id>.common_query.request` / `.response`
+  (**OVOS-COMMON-QUERY-1 §6, §7**);
+- `<skill_id>.fallback.ping` / `.pong` (**OVOS-FALLBACK-1 §6.1**).
+
+These topics carry poll traffic whose recipients are the components
+holding the corresponding registrations; relaying them to an external
+participant exposes internal handler enumeration and invites the
+participant to answer polls it does not own. A bridge MAY relay such
+a topic only when it matches by `destination` — that is, when the
+orchestrator addressed the external participant explicitly, which is
+the case for a satellite that registered the polled `skill_id`
+(§4.4).
+
 **Group signal: `site_id`.** If the bridge groups participants into
 logical or physical clusters (a household, an office, a tenant), it
 **MUST** use `context.session.site_id` (§3.3) to identify the group.
@@ -171,14 +194,22 @@ In all routing modes:
 - A bridge MAY overwrite the `source` of outbound messages with a
   generic assistant ID ("topology hiding") when the identity of the
   emitting component is not meaningful to the external participant.
-- A bridge MAY restrict topic subscription to a hardened minimum
-  set for reduced attack surface. The minimum set for a
+- A bridge **SHOULD** restrict topic subscription to a hardened
+  minimum set for reduced attack surface. This applies to every
+  deployment — relaying and managing mode alike — not only to the
+  multi-deployment topology of §4.2. The minimum set for a
   multi-deployment topology (§4.2) is the utterance lifecycle
   defined in **OVOS-PIPELINE-1 §9** plus
   `ovos.session.sync` (**OVOS-SESSION-2 §2.7**), and any additional
-  topics the participant's pipeline plugins depend on. The same matching
-  signals (`destination`, `session_id`, `site_id`) apply within
-  this restricted set.
+  topics the participant's pipeline plugins depend on.
+- The hardened set is an **allowlist of `(topic, allowed-signals)`
+  pairs**, not a flat set of topics. Each entry names a topic and the
+  subset of the routing signals of this section (`destination`,
+  `session_id`, `site_id`) that MAY match it. A topic admitted for
+  `destination` matching only is not thereby admitted for
+  `session_id` or `site_id` matching. The internal-coordination
+  families named above are the motivating case: they are admissible
+  with `destination` alone.
 
 ### 3.3 `site_id` assignment
 
@@ -225,6 +256,35 @@ unchanged, and copies the session from outbound bus Messages back
 into the external payload. The client is the authority for its own
 session state per **OVOS-SESSION-2 §2**; the bridge MUST NOT inspect
 or modify the session content.
+
+**Session-identity carve-out.** The non-inspection rule covers
+session **content** — the field values the client is authoritative
+for. It does **not** cover `session_id`, which is not content but the
+**trust anchor** the deployment keys state and registrations on. The
+orchestrator reads `session_id` from `context` precisely so that a
+producer cannot register or address state under a session it does not
+own (**OVOS-INTENT-4 §11.1**); a bridge that accepts any `session_id`
+an external participant asserts re-opens exactly that hole from
+outside the deployment. Accordingly:
+
+- A bridge **MUST NOT** place a Message on the internal bus carrying
+  a `session_id` that the external participant does not own. In
+  particular the participant **MUST NOT** be able to assert
+  `"default"` — the global registration scope (**OVOS-INTENT-4
+  §11.2**) — or any hub-side `session_id` the bridge assigned to a
+  different participant.
+- On receiving such an assertion, the bridge **MUST** either replace
+  the value with the identifier it owns for that participant
+  (`session_id` NAT, §3.2) or reject the Message. It MUST NOT relay
+  the asserted value unchanged.
+- A participant-supplied `session_id` MAY be used verbatim only when
+  the bridge has established that the participant owns it — for
+  example a satellite whose identifier the bridge itself assigned at
+  connect time, or one the layer-2 system authenticated it for.
+
+Rewriting `session_id` under this rule is not a violation of
+transparency: the session content still crosses unchanged, and the
+bijection requirements of §3.2 apply.
 
 A layer-2 system (§4.1) MAY apply policy mutations to the session
 after extraction and before bus injection — this is an additional
@@ -306,6 +366,21 @@ point a connect-time-only gate has silently granted the participant
 everything the policy was meant to deny. The bridge is a gate, not
 a handshake.
 
+Identity fields claimed by other specifications are policy fields for
+the purposes of this rule: where a deployment adopts the participant
+identity fields proposed by **OVOS-USER-ID-1** (`user_id`,
+`auth_level`), those fields are gated fields and fall under the same
+re-application obligation as the `blacklisted_*` arrays.
+
+**Ordering.** Policy re-application **MUST** complete before the
+Message is placed on the internal bus. There is no point at which a
+Message from a governed participant is visible to any other bus
+participant carrying the session as the participant sent it. A bridge
+that injects the Message first and mutates the session afterwards —
+or that applies policy asynchronously — is not conformant, however
+short the window: the orchestrator may already have read the session
+and started the round.
+
 #### 4.1.1 Access control (denylist model)
 
 A layer-2 system MAY populate any of the `blacklisted_*` arrays
@@ -323,6 +398,12 @@ registered denylist fields are three **OVOS-PIPELINE-1 §5** fields
 by default. The denylist is the only access-control mechanism —
 there are no allowlist equivalents. Policy can only narrow, never
 expand, a participant's capabilities.
+
+This denylist and the hardened topic allowlist of §3.2 are different
+axes and do not contradict each other: the denylist governs which
+**capabilities** the deployment will run for the participant's
+session, while the allowlist governs which **topics** the bridge will
+carry across the transport.
 
 #### 4.1.2 Pipeline and transformer preference
 
@@ -534,10 +615,13 @@ session-scoped intent is matched, the hub dispatches it as a
 to the satellite's `source`; the bridge routes it back per §3.2.
 
 **Disconnect.** When the satellite disconnects, the bridge SHOULD
-emit `ovos.skill.deregister` (**OVOS-INTENT-4 §8.4**) with the
-satellite's `session_id` for each skill the satellite registered.
-When the bridge uses `session_id` NAT (§3.2), it MUST use the
-hub-side `session_id` in the deregister payload.
+emit `ovos.skill.deregister` (**OVOS-INTENT-4 §8.4**) for each skill
+the satellite registered, carrying the satellite's session in the
+Message **context**. The deregistration is scoped to the `session_id`
+the orchestrator reads from `context.session.session_id`, never from
+`Message.data` (**OVOS-INTENT-4 §8.4, §11.1**); the payload carries
+`skill_id` only. When the bridge uses `session_id` NAT (§3.2), the
+`session_id` it places in that context MUST be the hub-side value.
 
 **Reconnect.** When the satellite reconnects, its session-scoped
 registrations are gone. The satellite is responsible for
@@ -579,6 +663,13 @@ buffer them indefinitely.
 
 - stamp a unique identifier in `context.source` for every inbound
   message (§3.1);
+- NAT-stamp or reject any inbound Message asserting a `session_id`
+  the external participant does not own, including `"default"`
+  (§3.4.1);
+- complete policy re-application before placing the Message on the
+  internal bus (§4.1);
+- not relay internal-coordination topics by `session_id` match
+  (§3.2);
 - preserve the `session` object's content and structure during relay
   (§3.4);
 - relay every matched message to the corresponding external
@@ -591,13 +682,15 @@ buffer them indefinitely.
 ### A bridge **SHOULD**:
 
 - maintain FIFO ordering per `source` and per `session_id`, where
-  the transport supports it (§5).
+  the transport supports it (§5);
+- restrict topic subscription to a hardened minimum set, expressed
+  as `(topic, allowed-signals)` pairs, in every deployment (§3.2).
 
 ### A bridge **MAY**:
 
 - use any routing signal combination described in §3.2
-  (`destination`, `session_id`, `site_id`), including restricting
-  to a hardened minimum topic set or performing `session_id` NAT;
+  (`destination`, `session_id`, `site_id`), including performing
+  `session_id` NAT;
 - perform "topology hiding" by overwriting the `source` of outbound
   messages with a generic assistant ID (§3.2);
 - mutate the `session` object to inject layer-2 policy or metadata
@@ -627,3 +720,8 @@ buffer them indefinitely.
   intent gating.
 - **OVOS-AUDIO-1** — `ovos.utterance.speak.b64` and `ovos.audio.speech`
   for TTS-as-a-service (§4.2.5).
+- **OVOS-INTENT-4** — session-keyed registration, the `"default"`
+  global scope, and `ovos.skill.deregister` (§3.4.1, §4.4).
+- **OVOS-CONVERSE-1**, **OVOS-COMMON-QUERY-1**, **OVOS-FALLBACK-1** —
+  the internal-coordination poll families excluded from `session_id`
+  routing (§3.2).
