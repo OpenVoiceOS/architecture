@@ -38,7 +38,7 @@ training-data contract. It does **not** cover matching, generalization, scoring,
 confidence, or how an engine ranks competing intents — those are
 engine-specific.
 
-This draft is deliberately **unopinionated about slot value types** — see §5.3.
+This specification is deliberately **unopinionated about slot value types** — see §5.3.
 
 ### 1.1 Where this grammar is used
 
@@ -79,8 +79,8 @@ by the time it reaches the engine, be **normalized** to:
 
 Normalization (lowercasing, punctuation and apostrophe stripping, whitespace
 collapsing, locale-specific transliteration) is performed **upstream** of the
-intent engine and is **out of scope** for this grammar. A future specification
-will define text normalization in detail. An engine MAY assume its input
+intent engine and is **out of scope** for this grammar; it belongs to a
+separate text-normalization specification. An engine MAY assume its input
 already satisfies the contract.
 
 Two consequences follow:
@@ -126,8 +126,10 @@ turn on the lights
 ### 3.2 Alternatives `( | )`
 
 Parentheses enclose **branches** separated by the pipe `|`. Each combination
-takes exactly one branch from each group. A group MUST contain at least one `|`
-(that is, at least two branches); a group with no `|` is malformed (§3.6).
+takes exactly one branch from each group. A group SHOULD contain at least one
+`|` (that is, at least two branches); a single-branch group is degenerate —
+loaders accept it, warn, and fold it to the bare branch (§3.6) — and the
+empty `()` is malformed (§3.6).
 
 ```
 (turn on|switch on|enable) the lights
@@ -197,10 +199,8 @@ contains one:
 
 - **Unbalanced metacharacters** — an unmatched `(`, `)`, `[`, `]`, `{`, `}`,
   `<`, or `>`.
-- **Single-branch group** — a parenthesised group with no `|`, e.g. `(word)`
-  or the empty `()`. A group expresses a *choice between branches*; with a
-  single branch there is no choice. Write the branch as plain literal text
-  instead.
+- **Empty group** — the empty `()`. A group expresses a *choice between
+  branches*; with no branch there is nothing to choose.
 - **Empty sample** — a template whose sample set (§4) contains the empty
   string: for some combination of branches it yields a sample with no literal
   words and no slots. The simplest cases are a template consisting only of
@@ -224,6 +224,23 @@ contains one:
   vocabulary `name` is available to the expander.
 - **Cyclic vocabulary reference** — a chain of inline vocabulary references
   that includes itself; its resolution would not terminate.
+
+A **single-branch group** — a parenthesised group with no `|`, e.g.
+`(word)` — is degenerate but **not** malformed: loaders MUST accept it,
+SHOULD warn, and MUST treat it as exactly the bare branch (`(word)` ≡
+`word`). The folding is semantically lossless — the template denotes the
+same sample set with or without the parentheses — and a construct with an
+unambiguous meaning is a stylistic slip, not an error; the warning is the
+author's cue to write the branch as plain literal text.
+
+**Structural adjacent-slot detection.** Because the adjacent-slots check is
+defined over the expanded sample set, a naive implementation must expand the
+full template first — potentially expensive (§4.3). A tool MAY instead
+detect adjacency **structurally**, pre-expansion: two slots are adjacent iff
+every token between them on the template surface can reduce to nothing (an
+optional segment, a group with an empty branch, or an inline reference
+resolving to such). A structural check that accepts and rejects exactly the
+same templates as the full-expansion check is a conformant alternative.
 
 Empty lines and `#`-comment lines are removed by the file reader before a
 template reaches the grammar (OVOS-INTENT-2 §3); they are not part of a
@@ -323,7 +340,7 @@ an engine cannot train on an empty sample.
 
 After replacing `[the]` with `(the|)`, three groups of 2 branches each give
 `2 × 2 × 2 = 8` combinations. When the empty `the` branch is taken, whitespace
-normalization (step 3) collapses the resulting double space. The sample set is:
+normalization (step 4) collapses the resulting double space. The sample set is:
 
 ```
 switch fan          turn fan
@@ -385,18 +402,18 @@ caller-supplied fill the value is whatever string the caller provides.
 
 ### 5.3 Slot value types — deliberately unspecified
 
-This draft does **not** define slot *value types* (numbers, dates, durations,
-enumerations) and does **not** define any coercion of a slot value. A slot value
-is an opaque sequence of words, as in §5.2.
+This specification does **not** define slot *value types* (numbers, dates,
+durations, enumerations) and does **not** define any coercion of a slot value.
+A slot value is an opaque sequence of words, as in §5.2.
 
 Interpreting a slot value as a typed datum is inseparable from **text
 normalization** of ASR output — for example, whether a spoken `"forty two"`
 should become the integer `42` depends entirely on how numerals are normalized
-upstream, which this draft does not prescribe (§2). Specifying typing without
-first specifying normalization would be incoherent.
+upstream, which this grammar does not prescribe (§2). Specifying typing
+without first specifying normalization would be incoherent.
 
-Slot value types and the normalization they depend on are therefore deferred to
-a **future, separate specification**. Until then there is exactly one slot form,
+Slot value types are therefore **out of scope** for this specification, as is
+the normalization they depend on (§2). There is exactly one slot form,
 `{name}`, with no `{name:type}` variant.
 
 ### 5.4 Value sets
@@ -411,7 +428,10 @@ and a slot referencing an undefined value set is **not** an error.
 ### 5.5 Slot consistency across a definition
 
 A `.dialog` file — and equivalently any set of inline caller-supplied-fill
-phrases registered together (§6.1) — defines **one** dialog. Every template in
+phrases treated by a dialog renderer as one definition — defines **one**
+dialog. This specification does not define how such a definition is
+delivered to a renderer; that is a renderer-specific or host-application
+concern. Every template in
 that definition MUST declare the **identical set of slot names**. A `.dialog`
 definition MUST NOT mix templates that declare different slots, and MUST NOT mix
 slot-bearing templates with slot-free ones.
@@ -442,7 +462,12 @@ the same slot set.
 ## 6. Training-data contract
 
 This grammar is the contract for handing intent and entity training data from a
-skill to an intent pipeline plugin.
+skill to an intent pipeline plugin. This section covers only the
+**input-direction, engine-trained** resource roles — `.intent`, `.entity`,
+`.voc`, and `.blacklist` (§1.1). `.dialog` is output-direction and
+caller-filled (§5.1); no intent engine trains on it, so it is out of scope
+here. The obligations a `.dialog` consumer takes on are defined in §7's
+Dialog renderer role instead.
 
 ### 6.1 Delivery
 
@@ -462,13 +487,13 @@ On receiving training data a conformant engine **MUST**:
 
 1. Read the file or take the inline samples.
 2. Verify the templates conform to §2–§3 (normalized form, valid tokens).
-3. For `.dialog` training data, verify the templates declare a consistent
-   slot set per §5.5; for `.intent` training data, accept templates with
-   differing slot sets.
+3. For `.intent` training data, accept templates with differing slot sets
+   (§5.5); `.entity`, `.voc`, and `.blacklist` data carry no named slots and
+   are unaffected by §5.5.
 4. Expand each template to its sample set per §4.
-5. Use the resulting samples as training data, treating `{...}` slots as
-   match-time-filled slots. How the engine learns from and generalizes beyond
-   those samples is its own concern (§4).
+5. Use the resulting samples as training data; for `.intent` data, treat
+   `{...}` slots as match-time-filled (§5.1–§5.2). How the engine learns from
+   and generalizes beyond those samples is its own concern (§4).
 
 ---
 
@@ -493,20 +518,21 @@ expanded, and filled* — never how an engine *matches*.
   (`.voc`, `.entity`, `.blacklist`) — for example a keyword-based engine — does
   not take on this role; it needs only the **Expander** role above.
 
-- **Dialog renderer.** A tool that consumes `.dialog` templates. It MUST embed a
-  conformant expander, verify that all phrases in a dialog definition declare
-  the same slot set (§5.5), fill `{name}` slots by caller-supplied values before
-  rendering, and MUST NOT emit a phrase containing an unfilled slot (§5.1).
+- **Dialog renderer.** A tool that consumes `.dialog` templates. It MUST read
+  the `.dialog` file or take the inline phrases, embed a conformant expander,
+  verify that all phrases in a dialog definition declare the same slot set
+  (§5.5), fill `{name}` slots by caller-supplied values before rendering, and
+  MUST NOT emit a phrase containing an unfilled slot (§5.1). Unlike the
+  Intent engine role, no slot in a `.dialog` template is ever filled at
+  match time (§5.1) — dialog training data is out of §6's scope.
 
-No tool may change the meaning of the tokens defined here. A machine-checkable
-conformance corpus of `template → sample set` pairs is planned for a future
-revision of this specification.
+No tool may change the meaning of the tokens defined here.
 
 ---
 
 ## See also
 
 - *Locale Resource Formats Specification* (OVOS-INTENT-2) — the locale folder
-  layout and the five resource roles. All of them — `.intent`, `.entity`,
+  layout and the six resource roles, five of which — `.intent`, `.entity`,
   `.voc`, `.dialog`, `.blacklist` — carry templates written in this grammar
   (§1.1).
