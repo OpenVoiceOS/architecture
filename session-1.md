@@ -11,14 +11,17 @@ it may be consumed**. Lifecycle (when a session begins, ends,
 expires, resumes), storage, authorization, and the semantics of
 fields owned by other specifications are out of scope.
 
-This specification is **prescriptive, not descriptive**. The field set
-it lists in §3 is the closed set of fields with normative meaning in
-this version. A field that no normative specification claims is not a
-field of `session`; a consumer that encounters such a field treats it
-per §2.4.
+This specification is **prescriptive, not descriptive**. The closed
+set of fields with normative meaning is the set claimed under the §2.2
+registry mechanism; §3 enumerates that set as it stands at the
+publication of this version. A field that no normative specification
+claims is not a field of `session`; a consumer that encounters such a
+field treats it per §2.4.
 
-The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and
-**MAY** are used as in RFC 2119.
+The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
+**MAY**, **OPTIONAL**, and **RECOMMENDED** are used as in RFC 2119 and
+RFC 8174 — they carry their normative meaning only when written in all
+capitals.
 
 ---
 
@@ -32,13 +35,17 @@ This specification defines:
 - the **closed set of fields claimed in this version** (§3), each
   cited to its owner specification;
 - the **propagation behaviour** of fields across the Message
-  derivations of OVOS-MSG-1 §5 (§4);
+  derivations of OVOS-MSG-1 §5.1–§5.3, and the strengthening of
+  OVOS-MSG-1 §4.1 that this specification applies to them (§4);
 - **serialization** (§5) and **conformance** (§6).
 
 It does **not** define:
 
-- the **semantics** of any field — owned by the citing
-  specification;
+- the **semantics** of any field owned by another specification —
+  those are owned by the citing specification. The exception is the
+  fields this specification owns itself: `session_id` (§3.1), the six
+  language signals (§3.2), and the user-preference fields (§3.5),
+  whose semantics are defined here;
 - session **lifecycle** — when a session begins or ends, how it
   expires, how it is created, how it is resumed (owned by
   OVOS-SESSION-2);
@@ -74,6 +81,13 @@ as if the field were omitted (§2.1). A consumer **MUST NOT** reject
 the Message solely because of a `null` field — fall back to the
 omitted-field rule instead.
 
+The same rule governs a **wrong-typed** value. A field whose value is
+not of the wire type fixed for it (§3, or the claiming specification
+under §2.2) is malformed: the consumer **MUST** behave as if the field
+were omitted (§2.1), **SHOULD** log the violation, and **MUST NOT**
+reject the Message because of it. `null` is the special case of this
+rule that a producer is additionally forbidden to emit.
+
 A session with only `session_id` is well-formed. A session with the
 empty object `{}` is well-formed and is interpreted per §2.1.
 
@@ -103,12 +117,32 @@ This applies uniformly across the whole field set:
   equivalent to an empty session — same resolution, including
   `session_id: "default"`.
 
-The consumer's deployment defaults are the values it would apply when
-no override is set: the deployment-configured `pipeline` ordering,
-the deployment language, the deployment-configured transformer
-chains, an empty `context`, and so on. This is a **read-side**
-behaviour — every consumer arrives at the same effective session by
-filling its own defaults.
+What "the consumer's own default" is depends on which of **two
+resolution classes** the field belongs to. The owner specification
+fixes the class when it claims the field (§2.2 item 3):
+
+- **Override fields** — fields by which the session origin overrides
+  a deployment-configured behaviour: `pipeline`, the six
+  `*_transformers` chains, the `blacklisted_*` denylists, `lang` and
+  the other language signals, `fallback_handlers`
+  (OVOS-FALLBACK-1 §4), the §3.5 user preferences. An omitted
+  override field resolves to the value the consumer would apply when
+  no override is set: the deployment-configured `pipeline` ordering,
+  the deployment language, the deployment-configured transformer
+  chains, and so on.
+- **State-record fields** — fields that record state accumulated
+  within the session rather than a preference over deployment
+  configuration: `active_handlers` (OVOS-PIPELINE-1 §7.1),
+  `converse_handlers` and `response_mode` (OVOS-CONVERSE-1 §2.1,
+  §2.2), `intent_context` (OVOS-CONTEXT-1 §2). There is no deployment
+  default to fall back to: an omitted state-record field resolves to
+  the **empty value the owner specification names** — `[]` for the
+  recency lists, `{}` for `intent_context`, "no holder" for
+  `response_mode`. A consumer **MUST NOT** substitute deployment
+  configuration for an omitted state record.
+
+Either way this is a **read-side** behaviour — every consumer arrives
+at the same effective session by filling its own defaults.
 
 A consumer **MUST NOT** treat an absent or empty `session`, or any
 omitted field, as an unknown or untrusted origin. Absence and the
@@ -130,6 +164,12 @@ fields. A specification that claims a field **MUST**:
    identifier (no `:`, no whitespace, no nested dotted paths).
 2. **Fix** the field's wire type — one of: string, boolean, number,
    array, object — and document its full shape and permitted values.
+   JSON has one numeric type; a specification that needs an integer
+   claims the type as **number** and states the integer constraint in
+   its own value space (a consumer treats a non-integral value for
+   such a field as malformed per §2). An **array** claim states the
+   element type; an **object** claim states every key it defines, each
+   key's own type, and whether unlisted keys are permitted.
 3. **Specify** the **deployment-default value** the consumer falls
    back to when the field is omitted (§2.1). The default **MAY** be
    "no behaviour" (the consumer skips the field-dependent action) or
@@ -209,11 +249,23 @@ same as an omitted `session` key.
 
 This version of the specification recognizes the following fields.
 The "Owner" column names the specification that defines the field's
-semantic meaning and permitted values. This specification fixes only
-the field name and the wire type; everything else is owned by the
-cited specification. All fields propagate unchanged on derivation
-(MSG-1 §4); all fields are session-scoped — they travel with the
-session and persist across utterances.
+semantic meaning and permitted values. For a field owned by another
+specification this specification fixes only the field name and the
+wire type; everything else is owned by the cited specification. For
+the fields whose owner column names a section of *this* document
+(§3.1, §3.2, §3.5) the semantics below are normative here.
+
+All fields propagate unchanged on derivation (§4, over the
+OVOS-MSG-1 §5.1–§5.3 derivations); all fields are session-scoped —
+they travel with the session rather than with one Message payload.
+
+Session scope is not uniform persistence. The **per-utterance
+observation** fields — `stt_lang`, `request_lang`, `detected_lang`
+(§3.2.4–§3.2.6) — record what a stage observed about the **current**
+utterance and are overwritten by the next stage that makes the same
+observation. They ride on the session as the current reading, not as
+an accumulated history; a consumer **MUST NOT** read a surviving
+value as a description of an older utterance.
 
 | Field | Wire type | Owner |
 |-------|-----------|-------|
@@ -247,6 +299,10 @@ session and persist across utterances.
 | `blacklisted_dialog_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `blacklisted_tts_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `site_id` | string | OVOS-BRIDGE-1 §3.3 |
+| `location` | object | §3.5 (this spec) |
+| `system_unit` | string | §3.5 (this spec) |
+| `time_format` | string | §3.5 (this spec) |
+| `date_format` | string | §3.5 (this spec) |
 
 Every field above is OPTIONAL on the wire. A producer that sets a
 field **MUST** use the wire type listed and the value space defined
@@ -270,16 +326,29 @@ string equality, with one exception: the value **`"default"`** is
 
 A Message bearing `session_id: "default"` is processed as part of
 the device's default session — the persistent, locally-held session
-described in OVOS-SESSION-2 §6. This is the normal path for
+described in OVOS-SESSION-2 §5. This is the normal path for
 messages that originate from the device itself, but it is equally
 valid for **remote clients that wish to interact with the local
 device** (remote-control commands, home-automation "speak" requests,
 media injection from a layer-2 framework). Using `"default"` from a
 remote client is deliberate impersonation of the device-local
 session; whether that is authorized is a **layer-2 concern** outside
-this specification. A layer-2 authentication system **MAY** gate
-access to the default session behind an elevated-privilege flag (an
-"admin" grant or equivalent); SESSION-1 places no requirement on it.
+this specification.
+
+A remote participant that **carries a session identity of its own**
+(a chat thread, a satellite's own conversation, a per-peer session
+minted by a layer-2 framework) **SHOULD** send that identifier rather
+than `"default"` for its own conversational traffic: the default
+session is the device's persistent local state, and writing another
+participant's conversation into it collides with the device owner's
+interactions. This does not restrict the case above: a participant
+with no session identity of its own, and a participant deliberately
+acting **on** the device-local session, use `"default"` and are fully
+conformant.
+
+A layer-2 authentication system **MAY** gate access to the default
+session behind an elevated-privilege flag (an "admin" grant or
+equivalent); SESSION-1 places no requirement on it.
 
 `"default"` is also the value a consumer fills in whenever
 `session_id` is omitted (§2.1). This means an absent `session`, an
@@ -298,17 +367,33 @@ session (audio routing, presence sensing, output locality) **MAY**
 branch on `session_id == "default"`. No other policy hook is defined
 by this specification on the value of `session_id`.
 
-The reserved value is not a distinguished kind of session in the
-schema; it is a normal session that carries the same field set as any
-other (§3), distinguished only by its identifier.
+*Informative:* the reserved value is not a distinguished kind of
+session in the schema; it is a normal session that carries the same
+field set as any other (§3), distinguished only by its identifier.
 
 ### 3.2 Language signals
 
 A session carries up to six BCP-47 language-tag fields, each
-naming a different *kind* of language signal. All six are
-session-scoped, all six are omissible per §2, and all six are
-populated independently (typically by different stages of the
-pipeline, by different components, or by an out-of-band caller).
+naming a different *kind* of language signal — one purpose per
+field, no overlaps:
+
+| Field | The one thing it records |
+|-------|--------------------------|
+| `lang` | the user's stable input-side language preference (§3.2.1) |
+| `secondary_langs` | the ordered fallback pool of additional languages the user accepts (§3.2.2) |
+| `output_lang` | the language the user wants responses rendered in, when it differs from the input side (§3.2.3) |
+| `stt_lang` | the language the speech-to-text stage assumed for the audio (§3.2.4) |
+| `request_lang` | the emitter's per-utterance hint of the expected language (§3.2.5) |
+| `detected_lang` | a language detector's classification of the most recent utterance (§3.2.6) |
+
+All six are session-scoped, all six are omissible per §2, and all
+six are populated independently (typically by different stages of
+the pipeline, by different components, or by an out-of-band
+caller). Preference (`lang`, `secondary_langs`, `output_lang`) is
+declared by the session origin and stable; observation (`stt_lang`,
+`request_lang`, `detected_lang`) is written per utterance by the
+stage that made it and may disagree with the preferences and with
+each other — disagreement is signal, not error.
 
 Their **meanings** are normative; how a consumer **consolidates**
 them into a single language for any given operation is not — that
@@ -364,9 +449,7 @@ prescribed.
 `output_lang` — string — the BCP-47 tag the participant wants the
 **assistant's responses rendered in**, independently of the input
 language. It is an output-side preference: a user who speaks German
-but always wants English replies sets `output_lang: "en-US"`; a
-language learner who speaks English but wants Spanish responses to
-practise with sets `output_lang: "es-ES"`.
+but always wants English replies sets `output_lang: "en-US"`.
 
 When `output_lang` is **omitted**, the assistant replies in whatever
 language naturally falls out of input-side signals (consumer's
@@ -394,9 +477,11 @@ preference field controls the language of every output stage.
 
 A consumer that **cannot** render in `output_lang` and has no fallback
 strategy **MUST NOT** silently render in another language without
-recording the divergence; it **SHOULD** include the actually-used
-language in the rendered Message's `data.lang` so downstream TTS
-voices the text correctly.
+recording the divergence: it **MUST** set the rendered Message's
+`data.lang` (§3.2.8) to the language it actually rendered in, so that
+downstream TTS voices the text correctly. Setting `data.lang` is the
+only means this specification gives for recording the divergence, so
+the obligation above is discharged by that field and no other.
 
 #### 3.2.4 `stt_lang`
 
@@ -424,7 +509,9 @@ Typical sources of `request_lang`:
 - a **multi-wakeword** setup where each wake word is associated
   with a language: the wakeword that triggered the capture
   determines the reported hint (the user pressed an "English wake
-  word" so the emitter reports `en-US`);
+  word" so the emitter reports `en-US`). The detection itself is
+  observable as `ovos.listener.wakeword` (OVOS-AUDIO-IN-1 §6.5),
+  whose optional `lang` field carries the same binding;
 - a UI lang selector the user toggled before speaking;
 - a layer-2 router that knows the per-peer expected language.
 
@@ -505,26 +592,35 @@ A consumer that needs the payload's content language reads
 `site_id` is an opaque group identifier. Its full normative
 definition — assignment rules, bridge behaviour, and consumer
 constraints — is owned by **OVOS-BRIDGE-1 §3.3**. This section is
-a registry pointer only.
+a registry pointer only; it states no rule of its own.
 
 Consumers of `site_id` within the orchestrator pipeline (audio
 routing, output-locality policy) **MAY** use it to scope decisions
-to a physical or logical group. They **MUST NOT** parse or ascribe
-structure beyond string equality, and **MUST NOT** overwrite a
-`site_id` already present on an inbound Message.
+to a physical or logical group. The consumer constraints are
+OVOS-BRIDGE-1's, restated here verbatim for the reader's
+convenience and normative only there:
+
+> Once `site_id` is present on an inbound message after bridge
+> processing, downstream components **MUST NOT** overwrite it.
+
+> Consumers **MUST NOT** parse or ascribe structure to `site_id`
+> beyond string equality.
+
+Note the precondition in the first sentence: the ban applies **after
+bridge processing**, which is precisely what leaves OVOS-BRIDGE-1
+§3.3 step 1 free to override a client-supplied value.
 
 ### 3.4 Wire weight
 
-Sessions carrying every per-component override populated may add
-several hundred bytes to each Message. Because §4 propagates
-`session` across every `forward` / `reply` / `response` derivation,
-the override bytes ride along on every handler emission, on every
-observer notification, on every cross-process hop. This section
-defines the **canonical wire-weight rule** consumed by every
-other field-claiming specification in the registry.
+Because §4 propagates `session` across every `forward` / `reply` /
+`response` derivation, every populated override rides along on every
+handler emission, on every observer notification, and on every
+cross-process hop. This section defines the **canonical wire-weight
+rule** consumed by every other field-claiming specification in the
+registry.
 
 **Omit-when-wire-equivalent-to-omission.** A producer **SHOULD**
-omit any field whose value is wire-equivalent to omission. Three
+omit any field whose value is wire-equivalent to omission. Four
 canonical cases:
 
 1. **`session_id == "default"`.** Per §3.1, an omitted `session_id`,
@@ -547,6 +643,14 @@ canonical cases:
    **SHOULD** omit the field rather than emit `[]`. This includes
    the three denylists (`blacklisted_*`), the six
    `*_transformers` chains, and the `pipeline` ordering.
+4. **An empty object on an object-valued override field.** For every
+   object-valued override field claimed by §3 (and by other specs via
+   the §2.2 registry), an empty object (`{}`) is wire-equivalent to
+   omission on the same grounds: both resolve to the deployment
+   default at consumption (§2.1). A producer **SHOULD** omit the field
+   rather than emit `{}`. This covers `location` (§3.5). It does not
+   cover the state-record fields of §2.1, for which the empty value is
+   the owner-specified resolution rather than a deferral.
 
 The rule is **SHOULD**, not **MUST**: a producer that emits a
 redundant default-valued field is non-optimal but conformant. A
@@ -556,13 +660,72 @@ specification places no maximum on session size.
 Other specifications claiming session fields via §2.2 inherit
 this rule for the fields they claim — they need not restate it.
 
+### 3.5 User-preference fields
+
+Four fields carry the session origin's **presentation preferences**,
+so that a component answering a remote participant renders times,
+dates, units, and place-relative answers for the *user's* locale
+rather than the device's:
+
+- `system_unit` — string; measurement-system preference. The value
+  space is exactly `"metric"` or `"imperial"`; no other value is
+  defined by this specification.
+- `time_format` — string; time-rendering preference. The value space
+  is exactly `"full"` (24-hour clock) or `"half"` (12-hour clock).
+- `date_format` — string; date-ordering preference. The value space
+  is exactly `"DMY"` or `"MDY"`.
+- `location` — object; the session origin's location preferences.
+  Every key is OPTIONAL and every key this specification defines is
+  listed here; unlisted keys are tolerated but carry no normative
+  meaning (§2.3, §2.4):
+
+  | Key | Type | Meaning |
+  |-----|------|---------|
+  | `city` | object | `{"name": string, "state": {"name": string, "country": {"name": string, "code": string}}}` — the place name and its administrative parents. `code` is the ISO 3166-1 alpha-2 country code. |
+  | `coordinate` | object | `{"latitude": number, "longitude": number}` — decimal degrees, WGS 84. |
+  | `timezone` | object | `{"code": string}` — an IANA time-zone name, e.g. `"America/Los_Angeles"`. |
+
+A value outside the value space fixed above is malformed and is
+treated as omitted (§2).
+
+All four follow §2.1 as **override fields**: absence means the
+consumer falls back to its deployment default (the deployment's
+configured units, clock, date order, and location). The §3.4
+wire-weight rule applies: a producer **SHOULD** omit a preference
+whose value matches the deployment default, and **SHOULD** omit
+`location` rather than emit `{}` (§3.4 case 4).
+
+**Deliberately unregistered: transient audio state.** This
+specification does not register per-device transient audio-state
+fields such as `is_speaking` / `is_recording` booleans. They describe
+the device at an instant, not the session, and a value snapshotted
+into a propagating session object is stale by the time any consumer
+reads it. Such a field is therefore not a field of `session`
+(§2.3): a consumer that encounters one tolerates it under §2.4 and
+**SHOULD NOT** act on its value. The authoritative surface for
+speaking status is OVOS-AUDIO-1: the output-lifecycle signals of
+OVOS-AUDIO-1 §5.1–§5.2, and the `ovos.audio.is_speaking` query of
+OVOS-AUDIO-1 §5.3 for a component that needs the status on demand.
+
 ---
 
 ## 4. Propagation
 
 The Message-level propagation rule of OVOS-MSG-1 §4.1 — that
-`session` rides unchanged across `forward`, `reply`, and `response`
-derivations — applies unmodified to every field of §3.
+`session` rides unchanged across the `forward`, `reply`, and
+`response` derivations of OVOS-MSG-1 §5.1–§5.3 — applies to every
+field of §3, with one deliberate **strengthening**.
+
+OVOS-MSG-1 §4.1 states propagation as a **SHOULD** for consumers, so
+that a producer with no session awareness is still conformant at the
+envelope level. Within the field set §3 claims, this specification
+raises it to a **MUST**: a consumer that derives a Message from one
+carrying a `session` **MUST** propagate that `session` unchanged. The
+registry only works if a field survives every hop between the
+component that sets it and the component that reads it, and a
+consumer that silently drops the carrier breaks fields it has never
+heard of. Nothing else about OVOS-MSG-1 §4.1 is modified; a producer
+originating a Message is still free to emit no `session` at all.
 
 For the avoidance of doubt:
 
@@ -580,11 +743,12 @@ For the avoidance of doubt:
 
 ### 4.1 Default materialization
 
-OVOS-MSG-1 §4.1 permits an implementation to **materialize** a
-default session on a derived Message when the source Message had no
-`session`. That section permits "any device-local fields the
-implementation chooses"; this specification narrows that permission
-for the field set §3 claims. A materialized default **MUST** set `session_id: "default"`. A
+The derivations of OVOS-MSG-1 §5.1–§5.3 permit an implementation to
+**materialize** a default session on a derived Message when the source
+Message had no `session`; this specification narrows that permission
+for the field set §3 claims.
+
+A materialized default **MUST** set `session_id: "default"`. A
 materialized default **MUST NOT** populate any field whose
 deployment default is a deployment-configured or "no behaviour"
 value — those fields carry meaning only when explicitly set by the
@@ -592,7 +756,7 @@ session origin, and materializing them would falsely declare a
 divergence from deployment defaults that the origin never requested.
 Fields whose default is a fixed normative value (`session_id:
 "default"`) MUST be set. Fields outside the §3 closed set remain
-governed by OVOS-MSG-1 §4.1 alone.
+governed by OVOS-MSG-1 §4.1 and §5.1–§5.3 alone.
 
 ---
 
@@ -610,7 +774,11 @@ follows OVOS-MSG-1 §6 serialization rules:
   string-encoded JSON blob.
 
 A consumer that cannot parse `session` as a JSON object **MUST**
-treat the Message as malformed per OVOS-MSG-1 §2 and §6.
+treat the Message as malformed. Where the failure is that `session`
+parses but is not an object, §2.5 governs — including its guarantee
+that the consumer **MUST NOT** substitute the default session for the
+broken carrier. OVOS-MSG-1 §2 and §6 govern only the case where the
+envelope itself fails to parse.
 
 ---
 
@@ -622,8 +790,9 @@ treat the Message as malformed per OVOS-MSG-1 §2 and §6.
 - give `session_id` a non-empty string value when set;
 - when setting any field listed in §3, use the wire type fixed by §3
   and the value space fixed by the owner specification;
-- propagate `session` unchanged across Message derivations per
-  OVOS-MSG-1 §5 and §4 of this specification, except when acting as
+- propagate `session` unchanged across the Message derivations of
+  OVOS-MSG-1 §5.1–§5.3, per §4 of this specification (which raises
+  OVOS-MSG-1 §4.1's SHOULD to a MUST), except when acting as
   the owner of a session field and mutating it at a permitted
   boundary (OVOS-SESSION-2 §2.6);
 - not strip session fields it does not understand (§2.4, §4).
@@ -649,8 +818,9 @@ A producer **SHOULD NOT**:
 - treat an omitted field, an empty session object `{}`, and an
   absent `session` identically — all mean "let the orchestrator
   decide" and resolve to deployment defaults at consumption (§2.1);
-- treat an explicit `null` as a malformed value: behave as if the
-  field were omitted and **SHOULD** log the violation (§2);
+- treat an explicit `null`, or a value of the wrong wire type, as a
+  malformed value: behave as if the field were omitted and **SHOULD**
+  log the violation (§2);
 - tolerate any field it does not recognize and propagate it
   unchanged on derived Messages (§2.4, §4);
 - key per-session state on `session_id`;
