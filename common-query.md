@@ -158,10 +158,7 @@ A plugin **SHOULD** apply a gate — a sentence-type classifier or any
 other cheap short-circuit — to avoid running the contest for
 utterances that are not question-like. Weather requests, music
 commands, timers, and plain statements have no business reaching a
-knowledge skill, and querying them wastes the full ping/pong-plus-
-collection latency on every such utterance. A cheap up-front reject is
-the single largest latency win available to a deployment that sees
-mixed traffic.
+knowledge skill.
 
 A deployment that omits the gate is still conformant — the confidence
 filter guarantees correctness either way — but pays the broadcast cost
@@ -187,15 +184,22 @@ rely on an upstream classifier.
 
 ### 4.2 Gate conformance
 
-The gate **MUST** accept utterances that express a factual question
-("what is the capital of France", "who invented electricity", "tell
-me about France") and **SHOULD NOT** accept unambiguous action
-commands with no information intent ("play music", "set a timer",
-"turn off the lights").
+The gate **SHOULD** accept utterances that express a factual question
+and **SHOULD NOT** accept unambiguous action commands with no
+information intent.
 
-The question/command boundary is fuzzy. Over-acceptance wastes a
-round-trip; under-acceptance silently fails the user. When in doubt,
-accept.
+The question/command boundary is fuzzy, so neither side of the gate
+can be stated as a testable MUST over the whole utterance space. The
+examples below are **informative** — they illustrate the intended bias,
+they do not enumerate a conformance set:
+
+| Bias | Informative examples |
+|------|----------------------|
+| accept | "what is the capital of France", "who invented electricity", "tell me about France" |
+| reject | "play music", "set a timer", "turn off the lights" |
+
+Over-acceptance wastes a round-trip; under-acceptance silently fails
+the user. When in doubt, accept.
 
 ---
 
@@ -211,21 +215,46 @@ parallel** with the upstream pipeline stages (stop, converse, intent
 matchers). By the time the orchestrator calls `match` for the common
 query stage, the raw responses MAY already be collected.
 
+**Language carve-out.** OVOS-PIPELINE-1 §9.1 forbids a plugin to
+re-derive the content language independently: the orchestrator
+resolves it once and passes the resolved tag to every `match` call.
+An early start runs *before* that resolution exists, so a plugin that
+early-starts **MUST** treat the tag it starts under as **provisional**
+— derived for speculative work only, never published. Specifically it
+**MUST NOT** emit the provisional tag in any `Match.lang`, and it
+**MUST** discard the whole cached contest when the provisional tag is
+not equal to the `lang` argument the orchestrator later passes to
+`match` (§5.1). The results of an early start are void unless the two
+tags are equal. This is the only sanctioned pre-resolution language
+derivation in this specification, and it is sanctioned because its
+output can never reach the wire un-revalidated.
+
 ### 5.1 What is cached, and what is not
 
 The early-start cache holds only the **raw skill responses** (§7) and
 the **utterance** they were collected for. It does **not** hold a
 selected answer. All filtering and selection (§8) is performed at
 `match` time against the **live session** the orchestrator passes in —
-never against the session snapshot the early start began with. This
-makes the optimisation transparent: an upstream stage that blacklists
-a skill or changes session state still takes full effect, because the
-denylist and confidence filters run on the live session after
-collection.
+never against the session snapshot the early start began with.
 
-If the live session's `lang` differs from the language the early
-start collected under, the cached responses **MUST** be discarded and
-the contest re-run.
+**Transparency is scoped to selection.** Because the denylist and the
+confidence filter run on the live session after collection, the
+*selected answer* is exactly the answer a non-early-started contest
+would have selected: an upstream stage that blacklists a skill or
+changes session state still takes full effect on the outcome. The
+optimisation is **not** transparent in *invocation*: an early start
+requests full answers before the upstream stages run, so a skill that
+a later stage blacklists has already executed its full-answer path —
+network calls, database queries, third-party lookups — and its answer
+is discarded only afterwards. A deployment **MUST** accept that cost
+and that exposure: enabling early start means blacklisted and
+otherwise-losing skills still see the utterance and still perform
+their I/O. Deployments where skill invocation itself is
+privacy-sensitive or billable **SHOULD NOT** enable early start.
+
+If the `lang` argument passed to `match` differs from the provisional
+tag the early start collected under (§5), the cached responses
+**MUST** be discarded and the contest re-run.
 
 ### 5.2 Cache keying and lifetime
 
@@ -234,10 +263,33 @@ with `session_id` read from `context.session`. A cache entry is
 consumed and evicted when `match` reads it. An entry is evicted
 unconditionally when a new utterance arrives in the same session.
 
-A cache entry **MUST NOT** be returned for any utterance other than
-the exact string it was collected for. There is no time-based
-expiry — the cache exists to bridge a single pipeline iteration, and
-the new-utterance eviction bounds its lifetime precisely.
+**Abandoned contests.** An early start whose `match` call never
+arrives — the orchestrator bounded the stage out (PIPELINE-1 §4.4),
+an earlier stage claimed the utterance, the pipeline denylisted this
+plugin, or the utterance lifecycle ended for any other reason — leaves
+a cache entry no `match` will ever consume. The plugin **MUST** evict
+such an entry rather than hold it: an entry **MUST** be evicted when
+the utterance lifecycle it belongs to terminates (`ovos.utterance.handled`
+or `ovos.intent.unmatched`, PIPELINE-1 §9.3, §9.5), and a plugin
+**SHOULD** additionally bound every entry by a wall-clock lifetime at
+or above its own collection ceiling (§7.2). Together with
+new-utterance eviction this makes the cache self-draining without
+introducing a semantic expiry.
+
+**Utterance is the exact-match key.** A cache entry **MUST NOT** be
+returned for any utterance other than the exact string it was
+collected for.
+
+**Which candidate is broadcast (n-best).** `match` receives a list of
+candidate utterances, while the ping, the request, and the cache key
+carry a single string. The plugin **MUST** run the contest for the
+**first** candidate in the list and **MUST** use that same string as
+`Match.utterance`. This is the same rule PIPELINE-1 §4.1 states for a
+plugin that does not track which candidate won, so a common query
+`Match` is always consistent with the payload the orchestrator
+forwards. A plugin **MAY** internally consider other candidates, but
+the broadcast string, the cache key, and `Match.utterance` **MUST**
+remain the first candidate.
 
 ---
 
@@ -256,14 +308,24 @@ justification.
 The plugin broadcasts on `ovos.common_query.ping`:
 
 ```json
-{ "utterance": "what is the capital of France" }
+{
+  "utterance": "what is the capital of France",
+  "query_id": "cq-8f3a1c72"
+}
 ```
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `utterance` | string | yes | The utterance being broadcast. Also the correlation key for the pong and the answer (§6.2, §7.1). |
+| `utterance` | string | yes | The utterance being broadcast (§5.2, first candidate). |
+| `query_id` | string | yes | The **contest identifier** (§6.4). Plugin-generated, opaque to skills, echoed verbatim in the pong (§6.2) and in the answer response (§7.1). |
 
-The language is read from `context.session.lang` per OVOS-SESSION-1.
+The language the plugin runs the contest in is the `lang` **argument**
+the orchestrator passed to `match` (PIPELINE-1 §9.1), or — during an
+early start — the provisional tag of §5, which is revalidated against
+that argument before anything is published. The plugin **MUST NOT**
+re-derive the language from `context.session` when a `lang` argument
+is available.
+
 The broadcast carries no `destination`; any subscribed skill MAY
 respond. The session rides in `context.session` per OVOS-MSG-1 §4.
 
@@ -275,6 +337,7 @@ A skill that believes it can answer responds on
 ```json
 {
   "utterance": "what is the capital of France",
+  "query_id": "cq-8f3a1c72",
   "skill_id": "wiki.test",
   "can_answer": true,
   "latency_ms": 800
@@ -283,10 +346,11 @@ A skill that believes it can answer responds on
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `utterance` | string | yes | Echo of the ping's utterance; correlates the pong to its poll. |
-| `skill_id` | string | yes | The responding skill's identifier. |
+| `utterance` | string | yes | Echo of the ping's utterance. |
+| `query_id` | string | yes | Verbatim echo of the ping's `query_id`; the correlation key (§6.4). |
+| `skill_id` | string | yes | The responding skill's identifier. **MUST** be the skill's own identifier (§6.5). |
 | `can_answer` | boolean | yes | Whether the skill claims it can answer. |
-| `latency_ms` | number | no | Expected time in milliseconds to produce a full answer. Sizes the collection window (§7.2). |
+| `latency_ms` | number | no | Expected time in milliseconds to produce a full answer. A **hint** for sizing the collection window (§7.2), never a commitment or an extension of any bound. |
 
 The boolean's field name is protocol-specific: this spec's poll uses
 `can_answer`, while the analogous polls of OVOS-FALLBACK-1 /
@@ -311,12 +375,86 @@ not respond in time is treated as not claiming.
 ### 6.3 Poll window and early close
 
 The plugin **MUST** enforce a maximum poll window (Appendix A) and
-**SHOULD** close it early once enough claimants are identified — a
-deployment MAY proceed as soon as one claims.
+**MUST** stop waiting when it elapses.
 
-State is keyed by `session_id` from `context.session`; pongs whose
-`utterance` or session does not match the active poll **MUST** be
-discarded.
+The plugin **MAY** close the window early, but **only** on a condition
+that is **order-independent** — a condition whose truth value does not
+depend on the order in which pongs arrived. The only such condition
+this specification recognises is **completeness**: every skill the
+plugin knows is subscribed to `ovos.common_query.ping` has answered
+the poll (claiming or declining), so no further pong can arrive. A
+deployment that cannot enumerate its subscribers **MUST** wait for the
+full poll window.
+
+The plugin **MUST NOT** close the poll window on a count of claimants,
+on the first claimant, or on any other arrival-order predicate.
+Closing on arrival order makes the contest a race between skills'
+response latencies rather than between their answers: the same
+utterance, in the same deployment, would select different answers on
+different runs. Determinism of selection is the property §8.1 exists
+to protect, and an order-dependent early close destroys it before
+selection is ever reached.
+
+### 6.4 The contest identifier
+
+Each contest — each ping and the collection that follows it — carries
+a `query_id`, generated by the plugin. OVOS-MSG-1 §5.4 provides no
+central correlation and directs a component that needs richer
+discrimination than topic-plus-session to carry it itself; `query_id`
+is that carrier. Session plus utterance is not sufficient: a user who
+repeats a question, and any deployment where several clients share the
+default session, produce concurrent or consecutive contests
+indistinguishable by those two keys alone.
+
+- The plugin **MUST** generate a `query_id` per contest and **MUST NOT**
+  reuse one across contests. The value is opaque; uniqueness within the
+  plugin's own outstanding contests is the only requirement.
+- A skill **MUST** echo the `query_id` verbatim in its pong (§6.2) and
+  in its answer response (§7.1).
+- The plugin **MUST** discard any pong or response whose `query_id`
+  does not equal the active contest's `query_id`.
+- A pong or response that carries **no** `query_id` at all **SHOULD**
+  be accepted when its `utterance` and session match the active
+  contest, so that skills written against the pre-`query_id` protocol
+  keep working. A deployment that requires strict correlation MAY
+  reject them instead.
+
+Contest state remains keyed by `session_id` from `context.session`
+alongside `query_id`; a pong or response whose session does not match
+the active contest **MUST** be discarded.
+
+### 6.5 Responder identity, duplicates, malformed pongs, and late arrivals
+
+`ovos.common_query.pong` is a shared topic with a free-form
+`skill_id` field, so the plugin **MUST** treat that field as a claim
+about identity, not as proof of it:
+
+- The plugin **MUST** validate the pong's `skill_id` against the
+  responding component's own identifier as carried by the envelope
+  (OVOS-MSG-1 §3.2 `source`), when the deployment's substrate makes
+  that identifier available, and **MUST** discard a pong whose payload
+  `skill_id` disagrees with it.
+- The plugin **MUST** accept at most **one** pong per `skill_id` per
+  contest. The **first** pong from a `skill_id` decides that skill's
+  participation; later pongs from the same `skill_id` in the same
+  contest **MUST** be discarded, whatever they say. Without
+  first-wins deduplication a skill could claim twice and take two
+  slots in the collection round.
+
+A **malformed pong** — one missing `utterance`, `skill_id`, or
+`can_answer`, or carrying values of the wrong type — **MUST** be
+treated as **not claiming**: the plugin discards it and the skill is
+not sent a full-answer request. The plugin **MUST NOT** infer a claim
+from a malformed message, and **MUST NOT** fail the contest because
+of one; other skills' pongs are unaffected.
+
+**Late pongs.** A pong that arrives after the poll window has closed
+**MUST** be discarded. It **MUST NOT** add a claimant to the contest
+that is already collecting, and it **MUST NOT** be retained to seed,
+pre-populate, or influence any later contest — including a later
+contest for the same utterance in the same session. The same rule
+applies to late responses (§7.1). A skill that misses the window is
+simply absent from that contest.
 
 ---
 
@@ -331,14 +469,19 @@ The plugin sends `<skill_id>.common_query.request` (dotted addressed,
 non-dispatch) to each claiming skill:
 
 ```json
-{ "utterance": "what is the capital of France" }
+{
+  "utterance": "what is the capital of France",
+  "query_id": "cq-8f3a1c72"
+}
 ```
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `utterance` | string | yes | The utterance to answer. Correlation key for the response. |
+| `utterance` | string | yes | The utterance to answer. |
+| `query_id` | string | yes | The contest identifier (§6.4); echoed verbatim in the response. |
 
-The language is read from `context.session.lang`. These are direct
+The language is the `lang` argument passed to `match` (§6.1), not a
+value re-derived from the session. These are direct
 plugin-to-skill messages: the orchestrator does not participate, does
 not emit the handler-lifecycle trio for them, and skills **MUST NOT**
 emit lifecycle signals in response.
@@ -349,6 +492,7 @@ Each skill emits its result on `<skill_id>.common_query.response`
 ```json
 {
   "utterance": "what is the capital of France",
+  "query_id": "cq-8f3a1c72",
   "skill_id": "wiki.test",
   "answer": "Paris is the capital of France.",
   "conf": 0.85
@@ -357,27 +501,98 @@ Each skill emits its result on `<skill_id>.common_query.response`
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `utterance` | string | yes | Echo of the request's utterance; correlates the response to its request. |
-| `skill_id` | string | yes | The responding skill's identifier. |
+| `utterance` | string | yes | Echo of the request's utterance. |
+| `query_id` | string | yes | Verbatim echo of the request's `query_id`; the correlation key (§6.4). |
+| `skill_id` | string | yes | The responding skill's identifier. **MUST** equal the topic's `<skill_id>` prefix (§7.1.1). |
 | `answer` | string | conditional | The natural-language answer. **MUST** be present when the skill has one. |
 | `conf` | number | conditional | Self-reported confidence in `[0, 1]`. **MUST** be present when `answer` is present (Appendix B). |
 
 A skill that cannot produce an answer after all **MUST** still
 respond, with no `answer` field, so early termination can fire.
-Responses whose `utterance` or session does not match the active
-collection **MUST** be discarded.
+Responses whose session does not match the active collection, or whose
+`query_id` does not match it (§6.4), **MUST** be discarded.
+
+#### 7.1.1 Topic prefix, payload identity, duplicates, and malformed responses
+
+The response topic carries the responder's identity structurally, and
+the payload repeats it. The two **MUST** agree:
+
+- **Prefix extraction.** The `<skill_id>` of a
+  `<skill_id>.common_query.request` / `.response` topic is
+  **everything before the `.common_query.` infix** — not the first
+  dot-separated segment. A dotted `skill_id` such as `wiki.test`
+  therefore yields the topic `wiki.test.common_query.response` and
+  parses back unambiguously, because `.common_query.` occurs exactly
+  once in a well-formed topic of this family. This is the rule any
+  consumer **MUST** use to recover the identity.
+- **Separator hygiene.** OVOS-MSG-1 §2.1.1 constrains an identifier
+  only where the separator is structural. In this family the
+  structural marker is the `.common_query.` infix, not the bare dot,
+  so a `skill_id` containing dots is well-formed here; a `skill_id`
+  containing `.common_query.` is not, and a skill **MUST NOT** use
+  one. The MSG-1 recommendation to prefer ASCII letters, digits, `_`,
+  and `-` still stands for new identifiers.
+- **Binding.** The plugin **MUST** discard a response whose payload
+  `skill_id` does not equal the prefix extracted from the topic it
+  arrived on. Without this check the topic prefix and the payload can
+  name different skills, and every downstream decision that consumes
+  `skill_id` — the denylist (§8 step 2), deduplication, tie-breaking
+  (§8.1), the answering-skill slot (§9) — acts on an identity the
+  responder chose freely.
+- **Duplicates.** The plugin **MUST** accept at most **one** response
+  per `skill_id` per contest; the first response wins and later ones
+  **MUST** be discarded.
+- **Malformed responses.** A response missing `utterance` or
+  `skill_id`, carrying values of the wrong type, carrying `answer`
+  without `conf`, or carrying a `conf` outside `[0, 1]`, **MUST** be
+  discarded whole. The plugin **MUST NOT** clamp an out-of-range
+  `conf` into `[0, 1]`: a skill reporting `1.7` has not reported
+  "certain", it has reported nothing this specification can compare
+  against the other survivors. A discarded response counts as the
+  claimant having responded for the purposes of early termination
+  (§7.2), and the contest continues on the remaining responses.
+- **Late responses.** A response arriving after the collection window
+  has closed **MUST** be discarded, **MUST NOT** reopen or extend the
+  window, and **MUST NOT** be retained to seed or influence any later
+  contest (§6.5).
 
 ### 7.2 Collection window
 
-The plugin **MUST** enforce a collection window with a hard ceiling
-(Appendix A). When `latency_ms` values are available from pongs
-(§6.2), the plugin **SHOULD** size the initial window to the maximum
-`latency_ms` across claimants, clamped to the ceiling; otherwise it
-**SHOULD** use the fixed initial window.
+The collection window has two values (Appendix A): an **initial
+window** and a **hard ceiling**. The plugin **MUST** enforce the
+ceiling. The window closes at the earliest of: every claimant has
+responded (early termination, which the plugin **MUST** support), the
+current window expiring with no outstanding claimant, or the ceiling.
 
-The plugin **MUST** support early termination and **SHOULD** close
-the window as soon as every claiming skill has responded. A claimant
-that does not respond before the ceiling is treated as declining.
+**Extension trigger.** The window starts at the initial value and
+extends toward the ceiling **only while at least one claimant is still
+outstanding** — a skill that sent a claiming pong and has sent no
+response yet. When the initial window expires with no outstanding
+claimant, the plugin **MUST** select immediately at that point; it
+**MUST NOT** wait out the remaining time to the ceiling. When
+claimants are still outstanding, the plugin **MAY** keep waiting, up
+to and never beyond the ceiling. A claimant that has not responded by
+the ceiling is treated as declining, and the ceiling is the absolute
+bound on the stage's contribution to response latency.
+
+**Sizing from `latency_ms`.** When `latency_ms` values are available
+from pongs (§6.2), the plugin **SHOULD** size the initial window to
+the maximum `latency_ms` across claimants, clamped to the ceiling;
+otherwise it **SHOULD** use the fixed initial window. `latency_ms` is
+a **hint only**:
+
+- it **MUST NOT** extend the window beyond the ceiling, whatever value
+  a skill reports — the ceiling is a deployer decision and a skill
+  cannot raise it;
+- the plugin **MUST** ignore implausible values — negative, non-numeric,
+  or above the ceiling — and fall back to the fixed initial window for
+  that claimant;
+- the plugin **MAY** ignore `latency_ms` entirely and always use the
+  fixed initial window.
+
+A skill therefore cannot inflate the stage's latency budget by
+reporting a large `latency_ms`; the worst it can do is fail to be
+waited for.
 
 ---
 
@@ -389,7 +604,14 @@ session** (§5.1), in order:
 1. **Minimum self-confidence.** Discard responses whose `conf` is
    below the deployer-defined threshold (Appendix A).
 2. **Denylist.** Discard responses whose `skill_id` appears in the
-   live `session.blacklisted_skills` (PIPELINE-1 §5.3).
+   live `session.blacklisted_skills` (PIPELINE-1 §5.3). **This step is
+   load-bearing, not defence in depth.** PIPELINE-1 §5.3 makes the
+   orchestrator a backstop by checking `Match.skill_id` against the
+   denylist after a plugin returns; for common query that check can
+   never fire, because `Match.skill_id` is the plugin's own
+   `pipeline_id` (§9), never the answering skill's. A common query
+   plugin that skips this step silently speaks answers from
+   blacklisted skills and nothing downstream will catch it.
 3. **Fast-win (deployment-opt-in, default off).** A deployment MAY
    enable a fast-win rule: when enabled, if any surviving response
    carries `conf ≥` the fast-win threshold (Appendix A), the plugin
@@ -402,14 +624,55 @@ session** (§5.1), in order:
    skill wins, not the best one. Absent explicit deployer opt-in,
    the plugin **SHOULD** wait for all claimants whose reported
    `latency_ms` is within the ceiling before selecting.
-4. **Selection.** Select the highest-`conf` survivor. Ties MAY be
-   broken by any deployer-defined heuristic; the algorithm is not
-   normative. When a reranker is configured, the plugin **SHOULD**
+4. **Selection.** Select the highest-`conf` survivor, with ties broken
+   per §8.1. When a reranker is configured, the plugin **SHOULD**
    pass all survivors to it and use its ranking in place of raw
-   `conf` ordering; the reranker interface is a deployment concern.
+   `conf` ordering; the reranker interface is a deployment concern,
+   but the reranker itself **MUST** be deterministic — the same
+   survivor set **MUST** produce the same ranking — and §8.1 breaks
+   ties in its output exactly as it breaks ties in `conf` ordering.
 
 If no response survives, the contest has no winner — `match` returns
 `None` (§9).
+
+### 8.1 Deterministic selection
+
+Selection **MUST** be a deterministic function of the surviving
+response set. The same set of survivors **MUST** always yield the same
+winner, in any implementation of this specification, regardless of the
+order in which the responses arrived.
+
+The ordering is:
+
+1. `conf`, **descending** — the highest self-reported confidence wins.
+2. `skill_id`, **lexicographic ascending** over the payload
+   `skill_id` (§7.1.1), as the tie-break at equal `conf`.
+
+Because `skill_id` is unique within a contest (§7.1.1 deduplication),
+these two keys always resolve to exactly one winner; no third key is
+needed and arrival order is never consulted.
+
+A deployment **MAY** insert additional keys between `conf` and
+`skill_id`, or after `skill_id`, **only if** each such key is a
+deterministic function of the response set alone — of the response
+payloads and the survivors' identities. A key that reads arrival
+order, timestamps, wall-clock time, a random source, or any state
+outside the response set is **not** conformant. A deployer-defined
+preference order over `skill_id`s is conformant; "whichever answered
+first" is not.
+
+Determinism is the property this whole section exists to produce.
+An assistant that answers the same question with a different skill's
+answer on different runs is not diagnosable, not testable, and not
+reproducible for the user who reports it — and the §6.3 restriction on
+early close and the default-off fast-win rule (step 3) are both
+worthless if selection itself is a race.
+
+The opt-in fast-win rule (step 3) is the **only** sanctioned departure
+from determinism, and that is exactly why it is off by default: a
+deployment that enables it has explicitly traded reproducible
+selection for latency. Everything else in this section is
+order-independent.
 
 ---
 
@@ -424,14 +687,35 @@ After selection (§8):
 - If **an answer won**, the plugin **MUST** return a `Match` with:
   - `skill_id`: the plugin's own `pipeline_id`
   - `intent_name`: `"common_query"` (reserved, §3)
-  - `lang`: from `context.session.lang`
-  - `utterance`: the candidate string
-  - `slots`: `{ "answer": "<the selected answer string>" }` — the
-    only field the handler needs (§10)
-  - `updated_session`: the inbound session, unmodified
+  - `lang`: the `lang` **argument** the orchestrator passed to `match`
+    — the contest was run in that language (§6.1), so the plugin
+    reports it back verbatim. The plugin **MUST NOT** report a value
+    it derived itself, and in particular **MUST NOT** report an
+    early-start provisional tag (§5).
+  - `utterance`: the first candidate from the input list, which is the
+    string the contest was run for (§5.2)
+  - `slots`:
+    `{ "answer": "<the selected answer string>", "skill_id": "<the answering skill_id>" }`
+  - `updated_session`: omitted
+
+The `slots.skill_id` entry names the skill whose answer won. The
+handler does not need it (§10), but without it the answering skill is
+invisible to every downstream consumer: `Match.skill_id` is the
+plugin's `pipeline_id`, so `ovos.intent.matched` (PIPELINE-1 §9.2) and
+the dispatch payload (§7.1) otherwise attribute the answer to the
+plugin alone. Surfacing it in `slots` makes the contest's outcome
+auditable — which is also why the denylist filter in §8 step 2 cannot
+be delegated to the orchestrator's backstop.
+
+`updated_session` is **omitted**, not set to a copy of the inbound
+session: PIPELINE-1 §4.1 defines an absent `updated_session` as
+"carry the inbound session unchanged", which is precisely this
+plugin's intent, and an echoed snapshot would claim a mutation the
+plugin did not make.
 
 The plugin **MUST NOT** mutate the session: common query does not
-activate handlers, change `persona_id`, or modify any session field.
+activate handlers, change `persona_id`, or modify any session field —
+so it never emits an `updated_session` at all.
 
 ---
 
@@ -444,7 +728,9 @@ handler runs and fires the handler-lifecycle trio per PIPELINE-1 §8
 The handler is intentionally trivial — all contest work completed
 during `match` (§6–§8). It:
 
-1. Reads `answer` from `slots` in the dispatch payload.
+1. Reads `answer` from `slots` in the dispatch payload. The
+   `slots.skill_id` entry (§9) is attribution for observers; the
+   handler does not act on it.
 2. Speaks it via `ovos.utterance.speak` per OVOS-PIPELINE-1.
 3. Emits `ovos.intent.handler.complete`.
 
@@ -461,12 +747,18 @@ surface):
 
 1. On `ovos.common_query.ping`, perform a **fast local check** for a
    likely answer. If yes, respond on `ovos.common_query.pong` with
-   `can_answer: true`, the echoed `utterance`, and optionally
-   `latency_ms`. If no, stay silent.
+   `can_answer: true`, the echoed `utterance`, the echoed `query_id`,
+   its own `skill_id`, and optionally `latency_ms`. If no, stay
+   silent. Exactly one pong per contest — a second one is discarded
+   (§6.5).
 2. On `<own_skill_id>.common_query.request`, produce the best answer — network
    calls, DB queries, and full generation are appropriate here — and
    emit it on `<own_skill_id>.common_query.response` (via `reply`,
-   OVOS-MSG-1 §5) with the echoed `utterance`, `answer`, and `conf`.
+   OVOS-MSG-1 §5) with the echoed `utterance`, the echoed `query_id`,
+   its own `skill_id`, `answer`, and `conf`. The payload `skill_id`
+   **MUST** equal the topic prefix the skill emits on (§7.1.1), and
+   `conf` **MUST** lie in `[0, 1]` — an out-of-range value discards
+   the whole response.
    If no answer can be produced, emit the response with no `answer`
    field so early termination can fire.
 3. The skill **MUST NOT** call `ovos.utterance.speak` from its
@@ -517,9 +809,12 @@ The one colon-form topic (`<pipeline_id>:common_query`) is the
 orchestrator's dispatch and follows the PIPELINE-1 §7 dispatch shape.
 Dotted-form topics (`<skill_id>.common_query.request`,
 `<skill_id>.common_query.response`) are plugin- and skill-emitted
-non-dispatch messages per MSG-1 §2.1.1. `ovos.common_query.ping` is a broadcast. Pong and
+non-dispatch messages per MSG-1 §2.1.1; their `<skill_id>` component
+is everything before the `.common_query.` infix (§7.1.1).
+`ovos.common_query.ping` is a broadcast. Pong and
 answer responses are both derived via `reply` (OVOS-MSG-1 §5). Every
-poll/response message carries the `utterance` as its correlation key.
+poll/response message carries the `query_id` as its correlation key
+(§6.4) and echoes the `utterance`.
 
 ---
 
@@ -531,23 +826,57 @@ poll/response message carries the `utterance` as its correlation key.
   per PIPELINE-1 §4 (§2.1);
 - broadcast `ovos.common_query.ping` and collect
   `ovos.common_query.pong` within a bounded poll window (§6.3);
-- discard pongs and responses whose `utterance` or session does not
-  match the active contest (§6.3, §7.1);
+- generate a fresh `query_id` per contest, carry it in the ping and
+  the full-answer request, and discard pongs and responses whose
+  `query_id` or session does not match the active contest (§6.1,
+  §6.4, §7.1);
+- discard a late pong or response — one arriving after its window has
+  closed — and never let it seed or influence a later contest
+  (§6.5, §7.1.1);
+- validate a pong's `skill_id` against the envelope's `source` where
+  the substrate provides it, and accept at most one pong and one
+  response per `skill_id` per contest, first wins (§6.5, §7.1.1);
+- discard a response whose payload `skill_id` does not equal the
+  `<skill_id>` prefix of the topic it arrived on — everything before
+  the `.common_query.` infix (§7.1.1);
+- treat a malformed pong as not claiming, and discard a malformed
+  response, including any response whose `conf` falls outside
+  `[0, 1]`, without clamping (§6.5, §7.1.1);
 - request full answers via `<skill_id>.common_query.request` from all
   claimants in parallel and collect within a bounded window
   (§7.1, §7.2);
+- close the poll window on the ceiling, or early **only** on an
+  order-independent sufficiency condition — never on the first
+  claimant or any other arrival-order predicate (§6.3);
+- extend the collection window past the initial value only while a
+  claimant is outstanding, never past the ceiling, and never on the
+  strength of a reported `latency_ms` (§7.2);
 - apply confidence filtering and the denylist against the **live
   session** passed to `match`, not against any early-start snapshot
   (§5.1, §8);
-- honour the live `session.blacklisted_skills` (§8 step 2);
+- honour the live `session.blacklisted_skills` itself (§8 step 2) —
+  the PIPELINE-1 §5.3 orchestrator backstop cannot see the answering
+  skill, because `Match.skill_id` is the plugin's `pipeline_id`;
+- select deterministically: `conf` descending, then `skill_id`
+  lexicographic ascending, with any deployer-defined key admitted only
+  when it is a deterministic function of the response set, and any
+  configured reranker deterministic (§8.1);
+- run the contest for the first candidate utterance and report that
+  same string as `Match.utterance` (§5.2, §9);
 - return `None` when no response survives, letting the pipeline reach
   fallback (§9);
 - return a `Match` with `skill_id` = its own `pipeline_id`,
-  `intent_name` = `"common_query"`, and `slots.answer` = the selected
-  answer when one wins (§9);
-- not mutate the session — `Match.updated_session` MUST equal the
-  inbound session (§9);
-- key all contest state by `session_id` from `context.session` (§6.3);
+  `intent_name` = `"common_query"`, `lang` = the `lang` argument
+  passed to `match`, `slots.answer` = the selected answer, and
+  `slots.skill_id` = the answering skill when one wins (§9);
+- not mutate the session — `Match.updated_session` is omitted (§9);
+- treat any language tag derived before the orchestrator's resolution
+  as provisional, never publish it, and discard the early-start
+  contest unless it equals the `lang` argument (§5, §5.1);
+- key all contest state by `session_id` from `context.session`,
+  alongside `query_id` (§6.4);
+- evict an early-start cache entry on a new utterance in the session
+  and on an abandoned contest (§5.2);
 - speak the selected answer from `slots.answer` in the handler
   without re-dispatching to skills (§10).
 
@@ -559,24 +888,29 @@ poll/response message carries the `utterance` as its correlation key.
   utterance (§4);
 - subscribe to the utterance-arrival event and run the contest early,
   in parallel with upstream stages (§5);
-- discard early-start cache entries when the live `lang` differs, and
-  evict on every new utterance in the session (§5.1, §5.2);
-- close the poll window early when enough claimants respond (§6.3);
-- size the collection window from claimants' `latency_ms` (§7.2);
+- bound early-start cache entries by a wall-clock lifetime at or above
+  the collection ceiling, as a backstop to the eviction rules (§5.2);
+- size the collection window from claimants' `latency_ms`, treating it
+  as a hint and ignoring implausible values (§7.2);
 - close the collection window on all-responded, or on fast-win only
   when the deployer has enabled it (§7.2, §8 step 3);
-- use a reranker when configured (§8 step 4).
+- use a reranker when configured (§8 step 4);
+- not enable early start where skill invocation is itself
+  privacy-sensitive or billable (§5.1).
 
 ### A skill that participates in common query **MUST**:
 
 - on `ovos.common_query.ping`, perform only a fast local check;
   **MUST NOT** perform network requests or blocking I/O during the
   pong phase (§6.2);
-- echo the `utterance` in every pong and response for correlation
-  (§6.2, §7.1);
+- echo the `utterance` and the `query_id` verbatim in every pong and
+  response for correlation (§6.2, §6.4, §7.1);
+- send at most one pong and one response per contest (§6.5, §7.1.1);
 - emit answers on `<own_skill_id>.common_query.response` via `reply`
   (§7.1, §11);
-- include `conf` whenever `answer` is present (§7.1);
+- report its own `skill_id` in the payload, equal to the topic prefix
+  it emits on, and never another skill's (§6.5, §7.1.1);
+- include `conf` whenever `answer` is present, within `[0, 1]` (§7.1);
 - respond even when no answer can be produced (no `answer` field), so
   early termination can fire (§7.2);
 - not call `ovos.utterance.speak` from the `common_query` handler
