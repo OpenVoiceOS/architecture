@@ -49,6 +49,7 @@ that need no change:
 | PIPELINE-1 | `mycroft.skill.handler.start` / `.complete` / `.error` | `ovos.intent.handler.start` / `.complete` / `.error` | Renamed into the `ovos.intent.*` namespace for uniformity. Breaks every existing handler-lifecycle observer; the migration cost is real. |
 | PIPELINE-1 | `recognizer_loop:utterance` | `ovos.utterance.handle` | See §5.4 entry. Migration touches `ovos-dinkum-listener`, `ovos-simple-listener`, `ovos-audio`, and `ovos-core/intent_services/service.py`. |
 | PIPELINE-1 | `complete_intent_failure` | `ovos.intent.unmatched` | Follows `ovos.intent.*` namespace; pairs with `ovos.intent.matched`. |
+| COMMON-QUERY-1 | `<skill_id>:common_query` | `<skill_id>.common_query.request` | The full-answer request is a plugin-emitted addressed message, not a dispatch; MSG-1 §2.1.1 reserves the colon for dispatch-shaped topics, so it moves to the dotted form and pairs with `<skill_id>.common_query.response`. The one colon topic kept is the dispatch `<pipeline_id>:common_query`. |
 
 ### 5.2.1 Topics to remove from ovos-core
 
@@ -177,12 +178,22 @@ defined by any spec** and should be removed or replaced:
   is real — every audio-input service and intent-service
   handler is affected. A transitional deployment MAY
   subscribe to both names during migration.
+- **Transformer priority is ascending** (TRANSFORM-1 §4).
+  The reference implementation sorts transformer chains
+  descending (`reverse=True`), where the lowest number runs
+  *last* and — because each transformer's output overwrites
+  its predecessor's — effectively "wins". That is the exact
+  inverse of the spec's ascending convention (lower = earlier,
+  default 50); an inverse-convention priority assignment MUST
+  be renumbered, since run unrenumbered the chain executes
+  backwards. The TRANSFORM-1 notes in
+  [rationale.md](rationale.md) record why ascending was chosen.
 
 ### 5.5 New topics with no direct precedent
 
 - **`ovos.intent.matched`** (PIPELINE-1 §9.2). The
   positive-match broadcast notification. No current equivalent.
-- **`ovos.intent.unmatched`** (PIPELINE-1 §9.4). Renamed from
+- **`ovos.intent.unmatched`** (PIPELINE-1 §9.3). Renamed from
   `complete_intent_failure`; follows the `ovos.intent.*`
   namespace for symmetry with `ovos.intent.matched`.
 - **`ovos.utterance.speak`** (PIPELINE-1 §9.6). The NL output
@@ -228,7 +239,7 @@ defined by any spec** and should be removed or replaced:
 
 - The session object's internal shape is owned by
   OVOS-SESSION-1; the field set is the closed set defined
-  there plus whatever future specs claim via SESSION-1 §2.1.
+  there plus whatever future specs claim via SESSION-1 §2.2.
   The "extra" fields current OVOS Session carries
   (`persona_id`, `system_unit`, `time_format`, `date_format`,
   …) ride through as non-normative pass-through and may be

@@ -8,7 +8,7 @@ tables that don't fit cleanly in any single normative spec.
 
 ### 6.1 Topic-name conventions across the family
 
-The naming conventions of OVOS-MSG-1 v2 §2.1.2 — dot-separated
+The naming conventions of OVOS-MSG-1 v2 §2.1.1 — dot-separated
 hierarchy, stable root, verb-tense pattern for the trailing
 segment, request/terminal pairs sharing a root verb,
 `.response` suffix, per-instance
@@ -38,7 +38,7 @@ accidentally parse responses from another.
 ### 6.2 Session-field cheat-sheet
 
 Every spec in the family that claims a `session` field does
-so via the OVOS-SESSION-1 §2.1 registry mechanism. The full
+so via the OVOS-SESSION-1 §2.2 registry mechanism. The full
 set spans four specs; this table consolidates them. All
 fields follow the canonical SHOULD-omit /
 `[]`-equivalent-to-omission wire-weight rule of
@@ -152,5 +152,5 @@ layer-2 transports (see appendix/patterns.md §3.1.2).
 | Handler-lifecycle trio `.start` / `.complete` / `.error` (PIPELINE-1 §8) | `forward` | Same direction as the inbound dispatch |
 | `ovos.session.sync` emitted inside a handler (SESSION-2 §2.7) | `forward` | Session update travels toward the originating client |
 | `ovos.stop.pong` (STOP-1 §4.2) | `reply` | Skill answers back to the stop plugin that sent the ping |
-| `<owner_id>.converse.response` (CONVERSE-1 §4.2) | `reply` | Owner answers back to the converse plugin that polled |
+| `<skill_id>.converse.pong` (CONVERSE-1 §4.2) | `reply` | Owner answers back to the converse plugin that polled |
 | Pipeline introspection response (PIPELINE-1 §10.2) | `reply` | Plugin answers back to the observer that requested |

@@ -113,7 +113,7 @@ The specs enforce this consistently:
 | Handler lifecycle trio (PIPELINE-1 §8) | `forward` | Travels toward the client alongside the dispatch |
 | `ovos.session.sync` from a handler (SESSION-2 §2.7) | `forward` | Session update travels toward the client |
 | `ovos.stop.pong` (STOP-1 §4.2) | `reply` | Response back to the stop plugin that pinged |
-| `<owner_id>.converse.response` (CONVERSE-1 §4.2) | `reply` | Response back to the converse plugin that polled |
+| `<skill_id>.converse.pong` (CONVERSE-1 §4.2) | `reply` | Response back to the converse plugin that polled |
 | Pipeline introspection response (PIPELINE-1 §10.2) | `reply` | Response back to the observer that requested |
 
 #### 3.1.3 No central correlation, no central state
@@ -218,15 +218,15 @@ introducing a new abstraction. It:
 
 The high/medium/low confidence-tier convention is
 **compatible** with PIPELINE-1 and out of scope for the spec.
-From the bus's perspective each tier is a distinct
-`pipeline_id` in the session's pipeline list (e.g.
-`padatious_high`, `padatious_medium`, `padatious_low`), which
-is exactly what the spec prescribes. How a Python plugin
-class internally serves multiple `pipeline_id`s — one class
-with `match_high` / `match_medium` / `match_low` methods,
-three separate plugin instances, an orchestrator-side
-suffix-decoding helper — is implementation choice the spec
-does not constrain.
+Each tier is a separate entry in the session's pipeline list
+(e.g. `padatious_high`, `padatious_medium`,
+`padatious_low`), but an entry is a reference to a match
+configuration, not an actor: a plugin instance has one
+`pipeline_id` whichever entry invoked it (PIPELINE-1 §3).
+Whether a deployment runs one class with
+`match_high` / `match_medium` / `match_low` methods or three
+separate instances each with their own `pipeline_id` is
+implementation choice the spec does not constrain.
 
 Three properties make the resulting model unusually
 expressive:

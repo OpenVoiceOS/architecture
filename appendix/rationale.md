@@ -85,7 +85,7 @@ the normative sections.
   on `session.session_id`. Multi-turn conversation, intent
   context, cross-skill state, and similar concerns are
   deferred to other specifications.
-- **Topic naming conventions** (MSG-1 v2 §2.1.2). The
+- **Topic naming conventions** (MSG-1 v2 §2.1.1). The
   conventions other specs in the family follow are
   codified as SHOULD-rules: dot-separated hierarchy
   with `:` reserved for component-pair shapes; stable
@@ -198,16 +198,18 @@ the normative sections.
   selective plugins are expected to be conservative and trust
   their position.
 - **Tier conventions are out of scope.** The
-  high / medium / low suffix is implementation strategy:
-  from the bus, each tier is a distinct `pipeline_id` in
-  `Session.pipeline`. The convention is compatible with
+  high / medium / low suffix is implementation strategy: each
+  tier is a separate entry in `Session.pipeline`, referencing
+  a match configuration rather than a distinct actor
+  (PIPELINE-1 §3). The convention is compatible with
   PIPELINE-1.
 - **Skills and plugins are equivalent handler owners.**
   The dispatch topic `<skill_id>:<intent_name>` is uniform:
   for a pure-matcher plugin the `skill_id` is the matched
   skill's id; for a plugin that bundles its own handler
   (e.g. a language-model persona) `skill_id == pipeline_id`.
-  Both are addressed the same way.
+  The two identifiers are one namespace, so both are addressed
+  the same way.
 - **Universal `ovos.utterance.handled` end-marker on every
   terminal path.** One reserved invariant lets observers
   count turns, route fallbacks, and know "the assistant
