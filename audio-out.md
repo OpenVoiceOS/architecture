@@ -139,8 +139,15 @@ Language is taken from `data.lang` in the received Message
 (PIPELINE-1 §9.6); when absent, the service resolves it from the
 session (OVOS-SESSION-1 §3.2).
 
-When synthesis fails, the service **SHOULD** attempt a fallback.
-Selection and fallback logic are deployment concerns.
+When synthesis fails for a segment — the whole utterance, or one
+sentence-segmented chunk of it (§4.9) — the service **SHOULD**
+attempt a fallback for that segment. Selection and fallback logic
+are deployment concerns. Beyond that, this spec fixes no bus
+contract for partial-utterance failure: whether a failed segment is
+skipped, retried, or aborts the remaining segments is not
+observable on the bus. The one guarantee is §5.2 — `ovos.audio.output.ended`
+fires once the queue empties, whether it emptied by completing every
+segment or by giving up on the failed ones.
 
 For `ovos.utterance.speak`, the synthesised audio is enqueued for
 local playback (§4). For `ovos.utterance.speak.b64`, the synthesised
@@ -287,19 +294,26 @@ for decoding and playing it.
 headerless raw stream (§4.0).
 
 The session is identified via `context.session` as usual. A bridge
-(OVOS-BRIDGE-1 §4.2.4) subscribes by `session_id` or `destination`
+(OVOS-BRIDGE-1 §4.2.5) subscribes by `session_id` or `destination`
 and relays this message to the client.
 
 ### 4.4 Listen flag
 
 The `listen` field on `ovos.utterance.speak` is defined by
-OVOS-PIPELINE-1 §9.6. When a received Message carries `listen: true`,
-the audio output service **MUST** emit `ovos.mic.listen` after all
-audio for that utterance has completed and after
-`ovos.audio.output.ended` (§5.2).
+OVOS-PIPELINE-1 §9.6. This timing — gated on `ovos.audio.output.ended`
+— applies to the **local-playback path** (`ovos.utterance.speak`,
+§3, §4.1). When a received Message carries `listen: true`, the audio
+output service **MUST** emit `ovos.mic.listen` after all audio for
+that utterance has completed and after `ovos.audio.output.ended`
+(§5.2).
 
 On a stop-initiated end (§6), `ovos.mic.listen` is **NOT** emitted
 regardless of the `listen` flag.
+
+The remote-client path (`ovos.utterance.speak.b64`) does not enqueue
+into the scheduled queue and so never reaches `ovos.audio.output.ended`;
+its `listen` handling is the exception fixed by §3.4, which emits
+`ovos.mic.listen` immediately after `ovos.audio.speech`.
 
 ---
 
@@ -367,6 +381,9 @@ The service **MUST** reply via the `response` derivation
 |-------|------|----------|---------|
 | `speaking` | bool | yes | Whether audio is currently playing for the session identified by `context.session.session_id` of the request. |
 
+`is_speaking` is deliberately session-scoped; this version defines
+no aggregate query to ask whether any session is speaking.
+
 ---
 
 ## 6. Stop integration
@@ -390,6 +407,14 @@ The stop signal topics are:
 
 Both signals carry `context.session.session_id` (OVOS-MSG-1 §4).
 The audio output service **MAY** scope its response to that session.
+
+**Barge-in is deployer policy.** Whether wake-word detection during
+active playback interrupts that playback ("barge-in") is not fixed
+by this spec. A controller MAY subscribe to `ovos.listener.wakeword`
+(OVOS-AUDIO-IN-1 §6.5) and, on receipt while playback is in progress,
+emit `ovos.audio.stop` to interrupt it. This spec mandates neither
+that behaviour nor its absence — the audio output service's only
+obligation on receiving a stop signal is the sequence above.
 
 ---
 
