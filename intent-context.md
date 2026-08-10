@@ -16,11 +16,12 @@ It builds on five companion specifications:
 - the *Bus Message Specification* (OVOS-MSG-1) — the envelope, the
   `session` carrier in which context lives (§4), and the
   `forward` derivation used by the `ovos.session.sync` mutation
-  pathway (§5.3);
-- the *Session Carrier Wire Shape Specification* (OVOS-SESSION-1) —
+  pathway (§5.1);
+- the *Session Specification* (OVOS-SESSION-1) —
   the field-registry mechanism under which this spec claims
-  `session.intent_context` (§2);
-- the *Session Lifecycle Specification* (OVOS-SESSION-2) — the
+  `session.intent_context` (§2.2);
+- the *Session Lifecycle and State Ownership Specification*
+  (OVOS-SESSION-2) — the
   `ovos.session.sync` topic and its merge semantics (§5.3);
 - the *Intent Definition Specification* (OVOS-INTENT-3) — the intent
   definition this spec extends with a `requires_context` declaration;
@@ -521,8 +522,9 @@ received on its last dispatch.
 *Default decay.* An orchestrator **MAY** apply a
 deployer-configurable default decay (turn-based, wall-clock, or
 both) to entries written without an explicit `turns_remaining` or
-`expires_at`, to bound state accumulation. If applied, the default
-values are implementation-defined; deployers **SHOULD** consider
+`expires_at`, to bound state accumulation. Any particular default
+values are tuning guidance — **RECOMMENDED** at most, never a
+conformance requirement; deployers **SHOULD** consider
 both interactive latency (turn-based decay is deterministic across
 pauses) and idle expiry (wall-clock decay bounds a device sitting
 idle).
@@ -598,8 +600,8 @@ The `requires_context` and `excludes_context` (§6.1) fields travel
 with the rest of the intent definition. In-process engines read
 them from the registration record they receive locally. They are
 **optional** declarations of the OVOS-INTENT-3 intent definition,
-not enumerated by the OVOS-INTENT-4 registration payload (§6.1 of
-that spec): a skill that uses them attaches them to the
+not enumerated by the OVOS-INTENT-4 registration payloads (§5.2 /
+§6.1 of that spec): a skill that uses them attaches them to the
 `ovos.intent.register.template` / `.keyword` payload as additional
 fields, which OVOS-INTENT-4 §6.3 / §5.3 carry without rejecting
 (unknown fields are tolerated, not malformed). An engine that does
@@ -792,8 +794,8 @@ This is the same threat surface the session identifier already
 has. Authenticating session-bound state — proving that a private
 entry stored at `<skill_id>:<key>` was actually set by that
 `<skill_id>`, in the session named by its identifier, at the time
-it claims — is **out of scope** for this specification and belongs
-to a future session-security specification.
+it claims — is **out of scope** for this specification; it is a
+session-security concern, not a context concern.
 
 Deployments that need stronger guarantees (multi-tenant assistants,
 hostile-network bus deployments) **SHOULD NOT** rely on intent
@@ -815,6 +817,7 @@ a **classification primitive**, not an authorization primitive.
 - *Session Specification* (OVOS-SESSION-1) — the wire shape of
   `session`, the registry mechanism under which this specification
   claims the `intent_context` field, and propagation semantics.
-- *Session Lifecycle Specification* (OVOS-SESSION-2) — session
+- *Session Lifecycle and State Ownership Specification*
+  (OVOS-SESSION-2) — session
   lifecycle responsibilities; cited by §4.2 for client-side
   session management.
