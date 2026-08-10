@@ -146,11 +146,28 @@ Constraints on `pipeline_id` strings:
   and **SHOULD** log the rejection.
 - Unique within a deployment's loaded-plugin set.
 
-A plugin **MAY** appear in a session's pipeline more than once
-under different `pipeline_id`s if the plugin chooses to expose
-multiple matching modes (for example, a strict mode and a
-permissive mode). The orchestrator treats each `pipeline_id` as a
-distinct stage.
+A plugin instance has **exactly one** `pipeline_id`. That
+identifier is the plugin's **actor identity**, and it lives in the
+same namespace as a `skill_id` — the two are indistinguishable by
+construction, which is exactly what makes the uniform dispatch of
+§7.0 work. A plugin never carries a second or alternate identifier.
+
+An entry in `session.pipeline` is a **reference to a matcher**, not
+an actor. A plugin that offers several match configurations — a
+strict mode and a permissive mode, confidence tiers, a
+range-restricted variant — is referenced by several entries, and
+every one of them resolves to the same plugin instance and the same
+`pipeline_id`. Match configurations have no identity of their own:
+they are configuration, not participants on the bus.
+
+How a deployment names a match configuration in `session.pipeline`,
+and how the orchestrator resolves an entry to a
+`(plugin, configuration)` pair, is deployment configuration and is
+not fixed here. What **is** fixed is the attribution: the dispatch
+topic (§7), `Match.skill_id` for a self-matching plugin (§7.0), the
+`session.active_handlers` stamp (§7.1), the introspection topic
+(§10.1) and a `blacklisted_pipelines` entry (§5.2) all name the
+plugin's single `pipeline_id` — never an entry-specific string.
 
 ### 3.1 Pipeline attribution
 
@@ -285,37 +302,12 @@ safe under §6.2 first-match-wins iteration — a declined
 plugin's exploratory mutations never reach later plugins or
 downstream stages.
 
-For that discard to be real rather than aspirational, the
-orchestrator **SHOULD** hand each plugin an **independent copy** of
-the session snapshot for the duration of its `match` call. A plugin
-handed the orchestrator's own object can mutate it in place and have
-the mutation survive its own declination, which is exactly what this
-section forbids. The copy makes the boundary enforceable instead of
-merely stated.
-
-**Policy fields are re-imposed, not inherited.** The session fields
-this specification claims as **policy** — `blacklisted_pipelines`,
-`blacklisted_skills`, `blacklisted_intents` (§5.2–§5.4) — are
-authorization state, not plugin working state. After committing an
-`updated_session`, the orchestrator **MUST** re-impose the inbound
-session's values for those three fields onto the committed snapshot,
-overwriting whatever the plugin returned. A plugin that widens or
-clears a denylist through `updated_session` therefore changes
-nothing: the denylists that governed this utterance keep governing
-every downstream stage of it. Without this rule any loaded plugin
-could grant itself and its successors the permissions the session's
-policy layer (§5.6) denied, and the authorization model of §5.6
-would rest on plugin good behaviour.
-
 The orchestrator-side pattern is uniform:
 
 ```
-match = plugin.match(utterances, lang, session.copy())
+match = plugin.match(utterances, lang, session)
 if match is not None:
     session = match.updated_session or session
-    session.blacklisted_pipelines = inbound.blacklisted_pipelines
-    session.blacklisted_skills    = inbound.blacklisted_skills
-    session.blacklisted_intents   = inbound.blacklisted_intents
     # dispatch and downstream stages use this session
 ```
 
@@ -510,6 +502,12 @@ its effective pipeline (per §5.5), it **MUST** skip any
 `pipeline_id` listed here as if it were not loaded. No `match` call
 is made; no bus event is emitted for the skip. The filtering is
 observable only as a non-invocation.
+
+Entries here name **plugins**, not `session.pipeline` entries (§3).
+Denying a `pipeline_id` therefore removes every entry that resolves
+to that plugin, whichever match configuration the entry selects: a
+plugin cannot be denied in one tier and invoked in another, because
+there is only one actor to deny.
 
 Unknown `pipeline_id`s in `blacklisted_pipelines` are harmless and
 **MUST NOT** cause the utterance to abort — they simply match
@@ -720,7 +718,6 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     if filtered:  continue
    │
    │     session = match.updated_session or session   # §4.1, §4.2
-   │     re-impose inbound §5 policy fields on session  # §4.2
    │
    │     ── match round closes here ──
    │     post-match decrement turns_remaining--   ← CONTEXT-1 §4
@@ -993,7 +990,8 @@ dispatched handler has the same obligations as any skill
 
 A pipeline plugin that returns matches where `skill_id` equals its
 own `pipeline_id` is simply a component whose `skill_id` and
-`pipeline_id` happen to be the same identifier. It skips the
+`pipeline_id` are the same identifier — the two are one namespace
+(§3), so this is the ordinary case rather than a coincidence. It skips the
 OVOS-INTENT-4 registration step because it consumes no external
 intent registry — its `match` implementation decides directly
 whether to claim the utterance. There is no architectural
@@ -1410,7 +1408,11 @@ defines a pull-query / scatter-response pattern keyed on
 `pipeline_id`.
 
 Every pipeline plugin **MUST** answer the query topic below with
-the set of `intent_name` values it currently owns (§10.4) — a
+the set of `intent_name` values it currently owns (§10.4). The
+topic is keyed on the plugin's `pipeline_id` (§3), so a plugin
+referenced from several `session.pipeline` entries answers **once**,
+for the actor — there is no per-entry query and no per-entry
+answer. A
 plugin with no bundled handlers and nothing loaded answers with an
 empty `intents` array rather than staying silent, because silence is
 how a consumer detects an unloaded plugin. What a plugin **MAY**
@@ -1543,9 +1545,6 @@ from the hosting process.
   plugin filters (§5.3, §5.4);
 - verify every slot listed in the matched intent's `required_slots`
   is present, and treat a shortfall as a declination (§6.2);
-- re-impose the inbound session's `blacklisted_pipelines`,
-  `blacklisted_skills` and `blacklisted_intents` onto any committed
-  `updated_session` (§4.2);
 - ignore any `Match` returned by a `match` call that already timed
   out, and never dispatch it (§4.4);
 - skip unknown `pipeline_id`s without failing the utterance (§5);
