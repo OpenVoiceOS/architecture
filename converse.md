@@ -127,10 +127,16 @@ re-activation of an already-listed owner removes the prior entry
 and re-inserts at the head (§3.1).
 
 Deployments **SHOULD** bound the list length. The
-**default maximum is 64 entries**, which a deployer **MAY** raise,
-lower, or set to "unbounded". The cap is a tuning value, not an
-interoperability invariant — any bound (or none) is conformant.
-When the cap would be exceeded by an
+**RECOMMENDED default maximum is 10 entries**, which a deployer
+**MAY** raise, lower, or set to "unbounded". The cap is a tuning
+value, not an interoperability invariant — any bound (or none)
+is conformant. The default is deliberately small: every
+listed owner is a candidate for the per-utterance poll (§4.2), and
+the poll sits on the serial critical path of every utterance — a
+large eligibility list converts directly into user-perceived
+latency, while genuine multi-turn engagement rarely involves more
+than a handful of recently active owners. When the cap would be
+exceeded by an
 insertion, the orchestrator **MUST** drop the tail entry (the
 least-recent surviving owner) before inserting the new head, and
 **SHOULD** log the eviction.
@@ -249,13 +255,33 @@ exceeds `T` at two boundaries:
 
 The orchestrator MAY run the prune at additional boundaries; doing
 so MUST NOT produce observably different behaviour from running it
-only at the two boundaries above. When no TTL is configured, no
-time-based pruning occurs and the list ages only by the §2.1 size
-cap — which never triggers while the owner count stays below the
-cap, so a stale owner would be polled on every utterance forever.
+only at the two boundaries above. The **RECOMMENDED default TTL is
+600 seconds**; an implementation SHOULD apply it when the deployer
+has not configured a value. Absent a TTL the list ages only by the
+§2.1 size cap — which never triggers while the owner count stays
+below the cap, so a stale owner would be polled on every utterance
+forever. A deployer MAY explicitly configure "no TTL", accepting
+that behaviour.
 
 The prune **MUST NOT** remove the owner named by a present,
 non-expired `session.response_mode` (the §2.1 exemption).
+
+**Additional decay triggers.** Two optional triggers shorten the
+dead-skill poll tax:
+
+- An orchestrator or converse plugin **MAY** prune an entry whose
+  owner has failed to answer `N` consecutive polls with
+  `error_code: "timeout"` (§4.4). `N` is deployer-configured; the
+  RECOMMENDED value is 3. The prune is applied through the same
+  session-mutation channels as any other list change — the
+  orchestrator at a §3.2 boundary, the plugin via
+  `Match.updated_session`.
+- The orchestrator **SHOULD** remove an owner's entry from
+  `session.converse_handlers` on `ovos.skill.deregister`
+  (OVOS-INTENT-4 §8.4) for that `skill_id`, scoped to the
+  `session_id` the deregistration carries. An unloaded skill
+  cannot answer a poll, and INTENT-4 §8.4 makes the removal a
+  no-op when no entry exists.
 
 Because `activated_at` is session-resident, TTL pruning is
 **resumption-safe**: a session re-sent after an orchestrator restart
@@ -524,6 +550,7 @@ cheaper signal stands in for the answer. The exchange is bounded
 twice over — per-owner timeout and aggregate ceiling — and
 terminates as soon as the eligible set is exhausted. OVOS-FALLBACK-1
 §6.1 documents the same exception for its own per-skill query.
+
 
 ### 4.3 The match for a converse claim
 
