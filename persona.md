@@ -406,42 +406,9 @@ standard dispatch payload (PIPELINE-1 §7.1): `lang`, `utterance`,
 `slots`. The handler generates a natural-language response and emits
 it via `ovos.utterance.speak` (PIPELINE-1 §9.6).
 
-A claimed utterance **MUST** produce speech. A persona claim is
-exclusive — the stage consumes the utterance, and no later stage,
-including fallback, ever sees it — so a dispatch that emits nothing
-leaves the user with silence and no error. For every dispatch
-resulting from a claiming match (§7.1 routes 1–3), the handler
-**MUST** emit at least one `ovos.utterance.speak`. A handler **MAY**
-emit more than one; multiple emissions are conveyed in order and the
-output stage **SHOULD** preserve that order.
-
-The obligation holds on failure paths as well. When generation cannot
-produce an ordinary answer — a backend error, an exhausted retry, a
-refused request, or a generation timeout — the handler **MUST** emit
-a degraded or error utterance that tells the user the request could
-not be answered.
-
-The handler-lifecycle trio stays with the orchestrator: the handler
-emits none of it (PIPELINE-1 §8), and the terminal event is
-`ovos.intent.handler.error` only when the handler raises
-(PIPELINE-1 §8.1). A persona handler that catches a generation
-failure, speaks a degraded utterance, and returns normally therefore
-produces `ovos.intent.handler.complete`, which records a successful
-dispatch. So that a failed generation is observable on the bus and
-not merely audible, a handler that could not produce the answer it
-was asked for **SHOULD** speak the degraded utterance and then
-propagate the failure, letting the orchestrator emit
-`ovos.intent.handler.error` with the exception. Speaking a degraded
-answer never substitutes for that signal, and the signal never
-substitutes for speaking.
-
-The generation timeout itself is deployment-defined; this
-specification fixes only what the handler owes the user when the
-timeout expires.
-
-Stop is not a failure. A generation that ceases because a stop signal
-arrived for its session (§8.6) is exempt from the speech obligation —
-the user asked for silence.
+A handler **MAY** emit zero, one, or multiple `ovos.utterance.speak`
+Messages. Multiple emissions are conveyed in order and the output stage
+**SHOULD** preserve that order.
 
 ### 8.2 Handler-side session mutation
 
@@ -468,19 +435,15 @@ utterance the converse plugin (OVOS-CONVERSE-1) polls the persona and,
 if the persona claims the turn, dispatches `<pipeline_id>:converse`
 to it.
 
-Eligibility for that poll comes from the dispatch itself. The
-orchestrator stamps every dispatch target onto
-`session.converse_handlers` (CONVERSE-1 §3.1) — the converse
-plugin's eligibility list (CONVERSE-1 §2.1), which is distinct from
-`session.active_handlers` (PIPELINE-1 §7.1). A persona plugin
+Eligibility falls out of the dispatch, with no persona-specific
+rule. The orchestrator stamps every dispatch target onto
+`session.converse_handlers` (CONVERSE-1 §3.1) — a different list
+from `session.active_handlers` (PIPELINE-1 §7.1). A persona plugin
 self-matches, so `Match.skill_id` is its own `pipeline_id`
-(PIPELINE-1 §7.0); the stamp therefore enters the persona's
-`pipeline_id` into `converse_handlers` as an ordinary eligible owner,
-with no persona-specific rule involved. Stamping is not suppressed
-for the reserved `converse` intent_name (CONVERSE-1 §3.1), so a
-persona that handles a converse turn stays eligible for the next
-poll. Eligibility decays by the CONVERSE-1 §3.2 TTL prune and is
-cleared by a global stop (STOP-1 §6.2).
+(PIPELINE-1 §7.0) and that is what gets stamped, as an ordinary
+eligible owner. Stamping is not suppressed for `converse`, so a
+persona stays eligible for the next poll. Eligibility decays by the
+CONVERSE-1 §3.2 TTL and is cleared by a global stop (STOP-1 §6.2).
 
 A persona plugin that supports multi-turn **SHOULD** subscribe to
 `<own_pipeline_id>:converse` to receive follow-up utterances.
@@ -533,27 +496,17 @@ echoes `persona_id` and `utterance`, omits `response`, and sets the
 `error` field. Silently dropping a request is never conformant: the
 caller cannot distinguish a dropped request from a slow one.
 
-**Request timeout.** The window a caller waits for an answer, and the
-budget after which a plugin gives up generating and replies with
-`error`, are both deployment-defined. This specification fixes only
-that the plugin replies rather than falls silent; deployments
-**SHOULD** document the budget they configure, and a plugin
-**SHOULD** set its own generation budget below the caller-side
-window so that its `error` reply arrives before the caller stops
-waiting.
+**Request timeout.** The caller's wait and the plugin's generation
+budget are deployment-defined. A plugin **SHOULD** keep its budget
+below the caller's window so the `error` reply arrives before the
+caller gives up.
 
-**Correlation across plugins.** `ovos.persona.query` is a broadcast
-topic — every loaded persona plugin receives every query, and each
-one that subscribes replies. A caller in a deployment with N persona
-plugins therefore **MUST** tolerate receiving multiple
-`ovos.persona.answer` replies to a single query, typically one
-success and N−1 `error` replies for the unsupported identity. The
-correlation key is `persona_id`: a caller matches replies to its
-request by the echoed `persona_id` and `utterance`, accepts the reply
-carrying `response`, and treats the `error` replies from
-non-supporting plugins as expected traffic rather than as failures.
-A caller that receives only `error` replies learns that no loaded
-plugin serves that identity.
+**Several replies per query.** `ovos.persona.query` is a broadcast,
+so a caller **MUST** tolerate one reply per loaded persona plugin —
+typically one success and N−1 `error` replies for an identity the
+others do not serve. The caller matches on the echoed `persona_id`
+and `utterance` and takes the reply carrying `response`. Only
+`error` replies means no loaded plugin serves that identity.
 
 The response payload:
 
@@ -759,12 +712,18 @@ at all — no `persona`, no `persona_fallback` — is fully conformant;
 the pipeline in that case is purely the deterministic, skill-driven
 system described in §4.
 
-A persona plugin's main `pipeline_id` (active-persona catch-all,
-§7.1 route 2) SHOULD appear after skill stages. Its optional
-`fallback_pipeline_id` (persona-fallback, §7.1 route 3), when
-present, SHOULD appear after all skill stages and near the end of
-the pipeline, but it MUST NOT be the final stage: it sits before
-`fallback_low`, not in its place.
+A persona plugin instance has **one** `pipeline_id`
+(OVOS-PIPELINE-1 §3). The catch-all position (§7.1 route 2) and the
+persona-fallback position (§7.1 route 3) are two `session.pipeline`
+entries referencing that one plugin under two match configurations —
+`fallback_pipeline_id` names the second entry, not a second actor,
+and every dispatch, stamp and attribution uses the plugin's single
+`pipeline_id`.
+
+The catch-all entry SHOULD appear after skill stages. The
+persona-fallback entry, when present, SHOULD appear after all skill
+stages and near the end of the pipeline, but MUST NOT be the final
+stage: it sits before `fallback_low`, not in its place.
 
 A typical ordering with both persona positions present:
 
@@ -890,9 +849,6 @@ listing the intent names it dispatches on.
 - set `Match.lang` to the resolved language of the match;
 - subscribe to `<own_pipeline_id>:<intent_name>` to receive its own
   dispatch;
-- emit at least one `ovos.utterance.speak` for every dispatch
-  resulting from a claiming match, including a degraded or error
-  utterance when generation fails or times out (§8.1);
 - derive each `ovos.utterance.speak` emission from the dispatch
   Message per OVOS-MSG-1 §5 derivation semantics (PIPELINE-1 §9.6);
 - cease generation and return promptly on stop signals for its session
@@ -918,9 +874,6 @@ listing the intent names it dispatches on.
 - include `tags` per persona in its `ovos.persona.list` response so
   that routing skills and UIs can make informed summon decisions (§8.7,
   §9);
-- speak the degraded utterance and then propagate a generation
-  failure, so the orchestrator emits `ovos.intent.handler.error`
-  (§8.1);
 - document whether an out-of-band query enters the session's
   conversation history (§8.5).
 
