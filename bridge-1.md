@@ -136,6 +136,32 @@ the participant's session but no explicit destination. A bridge that
 routes by `session_id` SHOULD also route by `destination`; the two
 signals are complementary, not alternatives.
 
+`session_id` matching is deliberately broad, and the reply swap
+(OVOS-MSG-1 §5.2) makes it broader: an internal poll derived from
+the participant's utterance carries the participant's routing pair,
+so it matches on `destination` too. Neither primitive can tell an
+internal poll from a user-facing Message — by design, since both are
+part of the same exchange — so the bridge is the only place the
+distinction can be drawn.
+
+A bridge **MUST NOT** relay a Message whose topic belongs to a
+family its owning specification defines as **internal coordination**
+between the orchestrator and locally-loaded components. In this
+version those families are:
+
+- `<skill_id>.converse.ping` / `.pong` (**OVOS-CONVERSE-1 §4.2**);
+- `ovos.common_query.ping` / `.pong` and
+  `<skill_id>.common_query.request` / `.response`
+  (**OVOS-COMMON-QUERY-1 §6, §7**);
+- `<skill_id>.fallback.ping` / `.pong` (**OVOS-FALLBACK-1 §6.1**).
+
+These carry poll traffic for components holding the corresponding
+registrations. Relaying them exposes internal handler enumeration and
+invites the participant to answer polls it does not own. The one
+exception is the addressed form a satellite is entitled to: a
+`<skill_id>.*` topic whose `<skill_id>` the satellite itself
+registered in this session (§4.4).
+
 **Group signal: `site_id`.** If the bridge groups participants into
 logical or physical clusters (a household, an office, a tenant), it
 **MUST** use `context.session.site_id` (§3.3) to identify the group.
@@ -176,9 +202,9 @@ In all routing modes:
   multi-deployment topology (§4.2) is the utterance lifecycle
   defined in **OVOS-PIPELINE-1 §9** plus
   `ovos.session.sync` (**OVOS-SESSION-2 §2.7**), and any additional
-  topics the participant's pipeline plugins depend on. The same matching
-  signals (`destination`, `session_id`, `site_id`) apply within
-  this restricted set.
+  topics the participant's pipeline plugins depend on. The same
+  matching signals (`destination`, `session_id`, `site_id`) apply
+  within this restricted set.
 
 ### 3.3 `site_id` assignment
 
@@ -582,6 +608,9 @@ buffer them indefinitely.
 
 - stamp a unique identifier in `context.source` for every inbound
   message (§3.1);
+- not relay internal-coordination poll topics to an external
+  participant, except the addressed form a satellite registered
+  itself (§3.2);
 - preserve the `session` object's content and structure during relay
   (§3.4);
 - relay every matched message to the corresponding external
@@ -630,5 +659,6 @@ buffer them indefinitely.
   intent gating.
 - **OVOS-AUDIO-1** — `ovos.utterance.speak.b64` and `ovos.audio.speech`
   for TTS-as-a-service (§4.2.5).
-- **OVOS-INTENT-4** — session-keyed registration and
-  `ovos.skill.deregister` (§4.4).
+- **OVOS-CONVERSE-1**, **OVOS-COMMON-QUERY-1**, **OVOS-FALLBACK-1** —
+  the internal-coordination poll families excluded from `session_id`
+  routing (§3.2).
