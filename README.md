@@ -97,14 +97,14 @@ pre-spec status quo, `2` for one that is not backwards compatible.
 | OVOS-INTENT-1 | [Sentence Template Grammar](intent-1.md) | 2 | Draft |
 | OVOS-INTENT-2 | [Locale Resource Formats](intent-2.md) | 2 | Draft |
 | OVOS-INTENT-3 | [Intent Definition](intent-3.md) | 1 | Draft |
-| OVOS-INTENT-4 | [Intent and Entity Registration](intent-4.md) | 2 | Draft |
+| OVOS-INTENT-4 | [Intent and Entity Registration Bus Contract](intent-4.md) | 2 | Draft |
 
 ### Bus stack — how components talk
 
 | ID | Document | Version | Status |
 |----|----------|---------|--------|
 | OVOS-MSG-1 | [Bus Message](msg-1.md) | 1 | Draft |
-| OVOS-SESSION-1 | [Session Carrier Wire Shape](session-1.md) | 1 | Draft |
+| OVOS-SESSION-1 | [Session](session-1.md) | 1 | Draft |
 | OVOS-SESSION-2 | [Session Lifecycle and State Ownership](session-2.md) | 1 | Draft |
 | OVOS-BRIDGE-1 | [Bus Bridge and Opaque Relay](bridge-1.md) | 2 | Draft |
 
