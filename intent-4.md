@@ -365,9 +365,11 @@ The intent-suppression `.blacklist` (INTENT-2 §4.3, INTENT-3 §5.5) is
 travels on the §6 payload's `blacklist` field. The `excluded` role
 (§5.2) is the keyword-intent suppression mechanism (INTENT-3 §4.2).
 
-The slot-value-exclusion role of a `.blacklist` paired with an
-`.entity` (INTENT-2 §4.3) is a different role again, and this
-specification defines no wire carrier for it.
+This says nothing about the entity payload's `blacklist` field (§7.1).
+That field is a different carrier for a different `.blacklist` role —
+slot-value exclusion rather than intent suppression (INTENT-2 §4.3) —
+and it rides on `ovos.entity.register`, not on either intent
+registration topic.
 
 ---
 
@@ -458,7 +460,8 @@ with no entity still fills normally.
   "skill_id": "music.skill",
   "entity_name": "engine",
   "lang": "en-US",
-  "samples": ["spotify", "youtube music", "the radio"]
+  "samples": ["spotify", "youtube music", "the radio"],
+  "blacklist": ["trailer", "music video"]
 }
 ```
 
@@ -468,6 +471,20 @@ Field reference:
 |-------|------|----------|---------|
 | `entity_name` | string | yes | Unique within the skill. By convention matches the slot name a template intent references. |
 | `samples` | array of strings | yes | Slot-free value-set entries (INTENT-1 §5.4). |
+| `blacklist` | array of strings | no | Slot-free phrases that **MUST NOT** be bound as values of this entity's slot (INTENT-2 §4.3, slot-value exclusion). |
+
+The `blacklist` field is the wire carrier for the slot-value-exclusion
+role of a `.blacklist` paired with an `.entity` (INTENT-2 §4.3) — the
+role that has no other path onto the bus. A consuming plugin **MUST
+NOT** bind any phrase listed there as the value of the slot this
+entity supplies, whether the phrase came from `samples`, from another
+entity, or from free text the template captured. An absent or empty
+`blacklist` means no exclusion; as in §5.2 an absent list-valued key
+equals an empty list.
+
+This field is distinct from the template payload's `blacklist` (§6.1),
+which suppresses a whole intent (INTENT-3 §5.5). Same file extension
+in the locale folder, two different roles, two different messages.
 
 ### 7.2 Malformed payloads
 
@@ -483,6 +500,12 @@ registration by itself. A consuming plugin **MUST NOT** reject the
 registration on its account: it **MUST** skip the offending entry,
 **MUST** log each skipped entry at WARN with the §5.3 fields plus the
 entry itself, and **MUST** index the remaining valid entries.
+
+The same tolerance applies identically to `blacklist` entries: an
+unparsable or zero-yield entry is skipped and logged, the remaining
+exclusions still apply, and a `blacklist` in which no entry yields a
+non-empty value is read as no exclusion rather than as a malformed
+registration.
 
 ---
 

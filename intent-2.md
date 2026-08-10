@@ -272,7 +272,11 @@ anaphoric pronouns from filling a referential slot: a `person.blacklist` of
 later stage — OVOS-CONTEXT-1 §7 context fill, or a re-prompt — supplies the
 value. Pronoun sets are language-specific, so this keeps them in per-language
 `locale/<lang>/` resources rather than engine code; a `.blacklist` MAY reference
-a shared `.voc` inline via the `<name>` token (§4.3).
+a shared `.voc` inline via the `<name>` token (§4.3). On the wire, an
+entity's exclusion set is carried in the `blacklist` field of its
+OVOS-INTENT-4 §7.1 entity registration payload — the expanded phrase set of
+the paired `.blacklist` file, delivered alongside the `.entity` value set it
+excludes from.
 
 ```
 # weekday.entity        — values for the {weekday} slot
