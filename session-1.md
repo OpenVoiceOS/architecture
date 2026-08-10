@@ -43,9 +43,8 @@ It does **not** define:
 
 - the **semantics** of any field owned by another specification —
   those are owned by the citing specification. The exception is the
-  fields this specification owns itself: `session_id` (§3.1), the six
-  language signals (§3.2), and the user-preference fields (§3.5),
-  whose semantics are defined here;
+  fields this specification owns itself: `session_id` (§3.1) and the
+  six language signals (§3.2), whose semantics are defined here;
 - session **lifecycle** — when a session begins or ends, how it
   expires, how it is created, how it is resumed (owned by
   OVOS-SESSION-2);
@@ -125,7 +124,7 @@ fixes the class when it claims the field (§2.2 item 3):
   a deployment-configured behaviour: `pipeline`, the six
   `*_transformers` chains, the `blacklisted_*` denylists, `lang` and
   the other language signals, `fallback_handlers`
-  (OVOS-FALLBACK-1 §4), the §3.5 user preferences. An omitted
+  (OVOS-FALLBACK-1 §4). An omitted
   override field resolves to the value the consumer would apply when
   no override is set: the deployment-configured `pipeline` ordering,
   the deployment language, the deployment-configured transformer
@@ -253,7 +252,7 @@ semantic meaning and permitted values. For a field owned by another
 specification this specification fixes only the field name and the
 wire type; everything else is owned by the cited specification. For
 the fields whose owner column names a section of *this* document
-(§3.1, §3.2, §3.5) the semantics below are normative here.
+(§3.1, §3.2) the semantics below are normative here.
 
 All fields propagate unchanged on derivation (§4, over the
 OVOS-MSG-1 §5.1–§5.3 derivations); all fields are session-scoped —
@@ -299,10 +298,6 @@ value as a description of an older utterance.
 | `blacklisted_dialog_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `blacklisted_tts_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `site_id` | string | OVOS-BRIDGE-1 §3.3 |
-| `location` | object | §3.5 (this spec) |
-| `system_unit` | string | §3.5 (this spec) |
-| `time_format` | string | §3.5 (this spec) |
-| `date_format` | string | §3.5 (this spec) |
 
 Every field above is OPTIONAL on the wire. A producer that sets a
 field **MUST** use the wire type listed and the value space defined
@@ -334,17 +329,6 @@ media injection from a layer-2 framework). Using `"default"` from a
 remote client is deliberate impersonation of the device-local
 session; whether that is authorized is a **layer-2 concern** outside
 this specification.
-
-A remote participant that **carries a session identity of its own**
-(a chat thread, a satellite's own conversation, a per-peer session
-minted by a layer-2 framework) **SHOULD** send that identifier rather
-than `"default"` for its own conversational traffic: the default
-session is the device's persistent local state, and writing another
-participant's conversation into it collides with the device owner's
-interactions. This does not restrict the case above: a participant
-with no session identity of its own, and a participant deliberately
-acting **on** the device-local session, use `"default"` and are fully
-conformant.
 
 A layer-2 authentication system **MAY** gate access to the default
 session behind an elevated-privilege flag (an "admin" grant or
@@ -620,7 +604,7 @@ rule** consumed by every other field-claiming specification in the
 registry.
 
 **Omit-when-wire-equivalent-to-omission.** A producer **SHOULD**
-omit any field whose value is wire-equivalent to omission. Four
+omit any field whose value is wire-equivalent to omission. Three
 canonical cases:
 
 1. **`session_id == "default"`.** Per §3.1, an omitted `session_id`,
@@ -643,14 +627,6 @@ canonical cases:
    **SHOULD** omit the field rather than emit `[]`. This includes
    the three denylists (`blacklisted_*`), the six
    `*_transformers` chains, and the `pipeline` ordering.
-4. **An empty object on an object-valued override field.** For every
-   object-valued override field claimed by §3 (and by other specs via
-   the §2.2 registry), an empty object (`{}`) is wire-equivalent to
-   omission on the same grounds: both resolve to the deployment
-   default at consumption (§2.1). A producer **SHOULD** omit the field
-   rather than emit `{}`. This covers `location` (§3.5). It does not
-   cover the state-record fields of §2.1, for which the empty value is
-   the owner-specified resolution rather than a deferral.
 
 The rule is **SHOULD**, not **MUST**: a producer that emits a
 redundant default-valued field is non-optimal but conformant. A
@@ -659,55 +635,6 @@ specification places no maximum on session size.
 
 Other specifications claiming session fields via §2.2 inherit
 this rule for the fields they claim — they need not restate it.
-
-### 3.5 User-preference fields
-
-Four fields carry the session origin's **presentation preferences**,
-so that a component answering a remote participant renders times,
-dates, units, and place-relative answers for the *user's* locale
-rather than the device's:
-
-- `system_unit` — string; measurement-system preference. The value
-  space is exactly `"metric"` or `"imperial"`; no other value is
-  defined by this specification.
-- `time_format` — string; time-rendering preference. The value space
-  is exactly `"full"` (24-hour clock) or `"half"` (12-hour clock).
-- `date_format` — string; date-ordering preference. The value space
-  is exactly `"DMY"` or `"MDY"`.
-- `location` — object; the session origin's location preferences.
-  Every key is OPTIONAL and every key this specification defines is
-  listed here; unlisted keys are tolerated but carry no normative
-  meaning (§2.3, §2.4):
-
-  | Key | Type | Meaning |
-  |-----|------|---------|
-  | `city` | object | `{"name": string, "state": {"name": string, "country": {"name": string, "code": string}}}` — the place name and its administrative parents. `code` is the ISO 3166-1 alpha-2 country code. |
-  | `coordinate` | object | `{"latitude": number, "longitude": number}` — decimal degrees, WGS 84. |
-  | `timezone` | object | `{"code": string}` — an IANA time-zone name, e.g. `"America/Los_Angeles"`. |
-
-A value outside the value space fixed above is malformed and is
-treated as omitted (§2).
-
-All four follow §2.1 as **override fields**: absence means the
-consumer falls back to its deployment default (the deployment's
-configured units, clock, date order, and location). The §3.4
-wire-weight rule applies: a producer **SHOULD** omit a preference
-whose value matches the deployment default, and **SHOULD** omit
-`location` rather than emit `{}` (§3.4 case 4).
-
-**Deliberately unregistered: transient audio state.** This
-specification does not register per-device transient audio-state
-fields such as `is_speaking` / `is_recording` booleans. They describe
-the device at an instant, not the session, and a value snapshotted
-into a propagating session object is stale by the time any consumer
-reads it. Such a field is therefore not a field of `session`
-(§2.3): a consumer that encounters one tolerates it under §2.4 and
-**SHOULD NOT** act on its value. The authoritative surface for
-speaking status is OVOS-AUDIO-1: the output-lifecycle signals of
-OVOS-AUDIO-1 §5.1–§5.2, and the `ovos.audio.is_speaking` query of
-OVOS-AUDIO-1 §5.3 for a component that needs the status on demand.
-
----
 
 ## 4. Propagation
 
