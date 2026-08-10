@@ -817,25 +817,11 @@ rewrite which later chains run for the same utterance, making the
 lifecycle's transformer surface depend on mutation timing rather
 than on the state the utterance arrived with.
 
-**Nested lifecycles.** "Once per utterance lifecycle" is scoped to
-a single lifecycle, including a nested one. When a handler triggers
-a further utterance lifecycle while the outer one is still running
-(OVOS-PIPELINE-1 §6.5), the nested lifecycle composes **its own**
-six effective chains from the session as committed at *its* start,
-and every transformer in them runs again. Nothing is deduplicated
-against the outer lifecycle: a transformer that already ran for the
-outer utterance runs again for the nested one, because it is a
-different artifact at a different injection point.
-
-The §1.3 stamp lists follow the same scoping. Each lifecycle's
-Messages carry their own `<type>_transformer_ids` lists, built from
-that lifecycle's chains. A nested lifecycle's entry Message starts
-its lists **fresh** — it **MUST NOT** inherit the outer lifecycle's
-stamps, which describe a different artifact. A transformer's
-"execution window" in the §1.3 append rule is one `transform` call
-in one chain in one lifecycle; the once-per-window append is what
-keeps a list free of duplicates, and the §1.1 no-repeat rule
-guarantees the chain cannot invoke the same transformer twice.
+**Nested lifecycles.** A nested lifecycle (OVOS-PIPELINE-1 §6.5)
+composes its own six chains from the session as committed at its
+start, and every transformer in them runs again. Nothing is
+deduplicated against the outer lifecycle — it is a different
+artifact.
 
 If every requested `transformer_id` is dropped by availability or
 policy, the effective chain is empty for that injection point and
@@ -896,22 +882,10 @@ reply convention) carries one orchestrator process's own slice:
 |-------|------|----------|---------|
 | `loaded` | array of strings | yes | The `transformer_id`s this responding process has loaded for this type. |
 | `priorities` | object (string→integer) | yes | The declared priority of every `transformer_id` in `loaded`. Priorities are intrinsic to the plugin and always returned. |
-| `order` | array of strings | no | The **explicit deployer order** (§4) configured for this chain in this process, when one is configured. |
-
-`order` is present only when the deployer configured an explicit
-order for this chain (§4). Its presence tells a consumer two
-things that `priorities` alone cannot express: that declared
-priorities are **not** what orders this chain, and which
-transformers are eligible to run at this hook at all — a loaded
-`transformer_id` absent from `order` is excluded by the deployer
-and no session preference can resurrect it (§5.3 step 2). When
-`order` is absent, the chain is priority-ordered and every entry
-in `loaded` is eligible. Every `transformer_id` in `order` MUST
-also appear in `loaded`.
 
 A `.response` carries **only the responder's local view**. It
 does **not** report a global chain order — chain composition is
-the §4 ordering (priority, or `order` when present) plus the §5
+the §4 ordering plus the §5
 per-session override applied across the union of responses, and
 any aggregating consumer (a developer tool, a monitoring service)
 is responsible for combining the slices.
@@ -970,25 +944,13 @@ returned its input unchanged. An empty utterance list is **not** a
 shape violation; §3.2 defines its two meanings, and OVOS-PIPELINE-1
 §6.2 depends on the non-cancellation one reaching the lifecycle.
 
-**What "returned its input unchanged" means.** Every artifact type
-of §3 permits in-place mutation, so a transformer that raises
-part-way through, or returns a malformed value after mutating,
-has already changed the object the orchestrator holds. The rule is
-therefore about **control flow, not state**: the orchestrator
-**MUST** discard the failing call's return value and continue the
-chain with the artifact and `Message.context` **as they stand** —
-including whatever partial in-place mutation the failed call
-performed. Partial mutation survives a raise. The orchestrator
-**MUST NOT** be required to unwind it; this matches the
+**What "returned its input unchanged" means.** §3 permits in-place
+mutation everywhere, so a call that raises part-way through has
+already changed the object the orchestrator holds. The rule is about
+**control flow, not state**: discard the failing call's return value
+and continue with the artifact and `Message.context` as they stand,
+partial mutation included. Nothing is unwound — this is the
 no-rollback rule below.
-
-An orchestrator **MAY** offer stronger isolation by snapshotting
-the artifact and `Message.context` before each call and restoring
-the snapshot when the call raises or returns a malformed value.
-That is a conformant implementation strategy, not an obligation.
-Transformers **MUST NOT** depend on either behaviour: a transformer
-that needs all-or-nothing semantics stages its mutations and
-applies them at the end of its own call.
 
 Timeouts and per-transformer execution limits are
 **implementation-defined**. Deployers concerned about a slow
@@ -1346,9 +1308,8 @@ covers.
   topics — one per chain it implements — and respond on the
   corresponding `.response` topic (§6) with **its own local
   slice** of loaded `transformer_id`s and their declared
-  priorities, plus the `order` array when an explicit deployer
-  order is configured for that chain (§6) — never invent entries
-  for transformers it has not loaded.
+  priorities — never invent entries for transformers it has not
+  loaded.
 
 **Each orchestrator process** **MAY**:
 
