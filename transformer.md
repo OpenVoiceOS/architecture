@@ -896,10 +896,22 @@ reply convention) carries one orchestrator process's own slice:
 |-------|------|----------|---------|
 | `loaded` | array of strings | yes | The `transformer_id`s this responding process has loaded for this type. |
 | `priorities` | object (string→integer) | yes | The declared priority of every `transformer_id` in `loaded`. Priorities are intrinsic to the plugin and always returned. |
+| `order` | array of strings | no | The **explicit deployer order** (§4) configured for this chain in this process, when one is configured. |
+
+`order` is present only when the deployer configured an explicit
+order for this chain (§4). Its presence tells a consumer two
+things that `priorities` alone cannot express: that declared
+priorities are **not** what orders this chain, and which
+transformers are eligible to run at this hook at all — a loaded
+`transformer_id` absent from `order` is excluded by the deployer
+and no session preference can resurrect it (§5.3 step 2). When
+`order` is absent, the chain is priority-ordered and every entry
+in `loaded` is eligible. Every `transformer_id` in `order` MUST
+also appear in `loaded`.
 
 A `.response` carries **only the responder's local view**. It
 does **not** report a global chain order — chain composition is
-the §4 ordering plus the §5
+the §4 ordering (priority, or `order` when present) plus the §5
 per-session override applied across the union of responses, and
 any aggregating consumer (a developer tool, a monitoring service)
 is responsible for combining the slices.
@@ -1334,8 +1346,9 @@ covers.
   topics — one per chain it implements — and respond on the
   corresponding `.response` topic (§6) with **its own local
   slice** of loaded `transformer_id`s and their declared
-  priorities — never invent entries for transformers it has not
-  loaded.
+  priorities, plus the `order` array when an explicit deployer
+  order is configured for that chain (§6) — never invent entries
+  for transformers it has not loaded.
 
 **Each orchestrator process** **MAY**:
 
