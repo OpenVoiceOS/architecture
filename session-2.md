@@ -65,9 +65,8 @@ This specification defines:
   what is permitted to mutate it, when components SHOULD
   project their cross-utterance state into session-resident
   fields vs hold it internally, the session mutation discipline
-  (§2.6), the explicit out-of-utterance sync mechanism
-  `ovos.session.sync` (§2.7), and the write-ordering and
-  conflict rules that apply across all of them (§2.8);
+  (§2.6), and the explicit out-of-utterance sync mechanism
+  `ovos.session.sync` (§2.7);
 - the **client-side merge rules** (§3) — how a client tracks
   session updates from assistant-emitted Messages, keyed on
   `session_id` alone;
@@ -448,69 +447,6 @@ lifecycle picks the update up only where it reads the session
 again after the inner lifecycle returns; a snapshot the outer
 handler already holds is not revised, per §2.6.
 
-### 2.8 Write ordering and conflicting writes
-
-§2.6 and §2.7 name four ways a session field gets written during
-a round. This section fixes the order they apply in and what
-happens when two of them write the same field.
-
-**The timeline.** For one utterance on one `session_id`, the
-orchestrator **MUST** apply writes in this order:
-
-1. **Inbound merge.** The session arriving on the entry Message
-   is merged. For `session_id == "default"` this is the
-   default-session store merge of §5.1; for a named session the
-   inbound session simply *is* the working snapshot (§2.2).
-2. **Transformer hooks**, in the order the chain runs
-   (OVOS-TRANSFORM-1). Each hook writes in place and the next
-   hook sees the result.
-3. **Match-phase writes.** Each pipeline plugin's
-   `Match.updated_session` is committed as PIPELINE-1 §4.2
-   defines, at the point that plugin's match is accepted.
-4. **Dispatch-time orchestrator writes.** Writes the
-   orchestrator makes while building the dispatch — notably the
-   `session.active_handlers` push of PIPELINE-1 §7.1, which
-   that section already fixes as applying *after*
-   `Match.updated_session` is committed.
-5. **Handler writes**, in-place per §2.6, and any
-   `ovos.session.sync` merges (§2.7), in the order the
-   orchestrator receives them.
-
-Steps 2 through 5 are the §2.6 boundaries; step 1 is the only
-one that is not. Writes from a *different* utterance are not on
-this timeline at all — they reach this session only through the
-client, on a later inbound Message (§2.6).
-
-**Last writer wins, per field.** When two writes on this
-timeline touch the same field, the later one in timeline order
-is the value that survives. Resolution is **per field**, never
-per snapshot: a write that sets field `A` leaves field `B`
-holding whatever the previous writer left there. Two components
-writing disjoint fields therefore never conflict, whatever order
-they run in.
-
-Two exceptions bound the rule:
-
-- a field whose claiming specification defines a finer
-  intra-field merge resolves by that rule instead — at this
-  version, `session.intent_context` per OVOS-CONTEXT-1 §5.3
-  (§2.7);
-- a wholesale-replace pathway replaces the snapshot rather than
-  a field, so the per-field statement does not apply to it. The
-  only such pathway is `Match.updated_session`; §5.1 defines
-  its effect and its carve-outs.
-
-**Ties are not resolvable.** Two writes the orchestrator cannot
-order — most realistically two `ovos.session.sync` Messages from
-different components arriving concurrently on the same field —
-have no defined winner. The bus is asynchronous and carries no
-ordering guarantee (§2.1), so this specification defines none
-either. Components that write a shared field concurrently
-**SHOULD** coordinate among themselves; CONTEXT-1 §5.3 gives the
-worked example of that advice for shared-scope context keys.
-
----
-
 ## 3. Client-side merge rules
 
 These rules are intentionally minimal and permissive. The spec
@@ -678,28 +614,6 @@ specification defines a finer intra-field merge resolves by that
 rule instead. At this version that is `session.intent_context`,
 merged entry-by-entry per OVOS-CONTEXT-1 §5.3 (§2.7).
 
-**Which writes the store accepts.** The store holds the local
-device's session, so the orchestrator **MUST** accept a
-default-session write only where the writer plausibly *is* the
-local device. Concretely, the orchestrator **MUST** merge a
-session-less or explicitly-default inbound Message into the
-store only when the Message originates locally — from the
-device's own components, or from the orchestrator's own process
-tree. A Message that reached the bus across a deployment
-boundary **MUST NOT** be merged into the default-session store
-on the strength of carrying no `session_id`.
-
-The enforcement point for the remote side of this requirement is
-the bridge: a boundary component relaying inbound traffic from
-an external participant is required to stamp a non-default
-`session_id` on it, so that a remote participant cannot capture
-the local device's session simply by omitting `session`.
-OVOS-BRIDGE-1 §3.4 is where that obligation lives. An
-orchestrator that cannot distinguish local from relayed origin
-**SHOULD** treat every inbound Message it cannot attribute to a
-local source as a named session with an orchestrator-assigned
-`session_id`, rather than merging it into the store.
-
 **Field tolerance applies at store-write.** A session written
 into the store may carry keys the orchestrator does not
 recognise. SESSION-1 §2.4's unknown-field tolerance applies:
@@ -785,11 +699,10 @@ An orchestrator that claims conformance to this specification
   stateless per §2.2 — no cross-utterance state held outside
   what the inbound Message brings;
 - hold the default session as persistent in-process state per
-  §5, with the merge, write-acceptance, derive and restart
-  semantics of §5.1 and §5.2;
+  §5, with the merge, derive and restart semantics of §5.1 and
+  §5.2;
 - apply in-place session mutations only at the boundaries of
-  §2.6 (transformer, pipeline-match, handler), in the order
-  §2.8 fixes;
+  §2.6 (transformer, pipeline-match, handler);
 - propagate session forward unchanged on every Message
   derivation per OVOS-MSG-1 §5 and SESSION-1 §4, except where
   the §2.6 boundaries dictate mutation;
