@@ -406,9 +406,42 @@ standard dispatch payload (PIPELINE-1 §7.1): `lang`, `utterance`,
 `slots`. The handler generates a natural-language response and emits
 it via `ovos.utterance.speak` (PIPELINE-1 §9.6).
 
-A handler **MAY** emit zero, one, or multiple `ovos.utterance.speak`
-Messages. Multiple emissions are conveyed in order and the output stage
-**SHOULD** preserve that order.
+A claimed utterance **MUST** produce speech. A persona claim is
+exclusive — the stage consumes the utterance, and no later stage,
+including fallback, ever sees it — so a dispatch that emits nothing
+leaves the user with silence and no error. For every dispatch
+resulting from a claiming match (§7.1 routes 1–3), the handler
+**MUST** emit at least one `ovos.utterance.speak`. A handler **MAY**
+emit more than one; multiple emissions are conveyed in order and the
+output stage **SHOULD** preserve that order.
+
+The obligation holds on failure paths as well. When generation cannot
+produce an ordinary answer — a backend error, an exhausted retry, a
+refused request, or a generation timeout — the handler **MUST** emit
+a degraded or error utterance that tells the user the request could
+not be answered.
+
+The handler-lifecycle trio stays with the orchestrator: the handler
+emits none of it (PIPELINE-1 §8), and the terminal event is
+`ovos.intent.handler.error` only when the handler raises
+(PIPELINE-1 §8.1). A persona handler that catches a generation
+failure, speaks a degraded utterance, and returns normally therefore
+produces `ovos.intent.handler.complete`, which records a successful
+dispatch. So that a failed generation is observable on the bus and
+not merely audible, a handler that could not produce the answer it
+was asked for **SHOULD** speak the degraded utterance and then
+propagate the failure, letting the orchestrator emit
+`ovos.intent.handler.error` with the exception. Speaking a degraded
+answer never substitutes for that signal, and the signal never
+substitutes for speaking.
+
+The generation timeout itself is deployment-defined; this
+specification fixes only what the handler owes the user when the
+timeout expires.
+
+Stop is not a failure. A generation that ceases because a stop signal
+arrived for its session (§8.6) is exempt from the speech obligation —
+the user asked for silence.
 
 ### 8.2 Handler-side session mutation
 
@@ -857,6 +890,9 @@ listing the intent names it dispatches on.
 - set `Match.lang` to the resolved language of the match;
 - subscribe to `<own_pipeline_id>:<intent_name>` to receive its own
   dispatch;
+- emit at least one `ovos.utterance.speak` for every dispatch
+  resulting from a claiming match, including a degraded or error
+  utterance when generation fails or times out (§8.1);
 - derive each `ovos.utterance.speak` emission from the dispatch
   Message per OVOS-MSG-1 §5 derivation semantics (PIPELINE-1 §9.6);
 - cease generation and return promptly on stop signals for its session
@@ -882,6 +918,9 @@ listing the intent names it dispatches on.
 - include `tags` per persona in its `ovos.persona.list` response so
   that routing skills and UIs can make informed summon decisions (§8.7,
   §9);
+- speak the degraded utterance and then propagate a generation
+  failure, so the orchestrator emits `ovos.intent.handler.error`
+  (§8.1);
 - document whether an out-of-band query enters the session's
   conversation history (§8.5).
 
