@@ -353,25 +353,6 @@ systems. A typical layer-2 pattern populates `source` /
 remote client is addressable on the same bus as a local handler,
 without the assistant core itself learning about peers.
 
-**Identifiers are not credentials.** `source` and `destination` are
-routing keys, not authentication: a Message asserts its `source`, and
-nothing in this envelope proves the assertion. Accordingly:
-
-- a producer **MUST NOT** set `source` to an identifier that was not
-  assigned to it, and **MUST** omit `source` when it has no assigned
-  identifier;
-- a component that admits Messages into the bus from outside its
-  trust domain — a bridge, a gateway, any transport terminator —
-  **MUST** overwrite `source` on every inbound Message with the
-  identifier it has assigned to that peer, discarding whatever the
-  peer supplied. It **MUST NOT** trust a peer-supplied `source`, on
-  the first Message or on any later one;
-- a consumer **MUST NOT** treat a matching `source` as proof of
-  identity, and **MUST NOT** derive an authorization decision from
-  `source` or `destination` alone. Authorization, where a deployment
-  needs it, is a layer-2 concern built on evidence this envelope does
-  not carry.
-
 ---
 
 ## 4. The session carrier
@@ -545,20 +526,9 @@ to do its own correlation, if it wants to:
   topic states (§5.3);
 - `session` (§4), which is propagated across `reply` / `response` /
   `forward` (§5.1–§5.2), so an asker can narrow an incoming answer
-  to the conversation it belongs to;
-- `data` itself: an answering component **SHOULD** echo back a
-  discriminating field from the request it answers, so the asker can
-  pair answer to request without any host bookkeeping. The
-  common-query contest does exactly this — a skill's answer echoes
-  the opaque `query_id` it was asked about (OVOS-COMMON-QUERY-1
-  §6.4) — and it is the pattern to follow for any topic where
-  several requests may be outstanding at once.
+  to the conversation it belongs to.
 
-Topic and session alone do **not** discriminate parallel requests:
-two requests on one topic in one session produce two indistinguishable
-answers. An echoed field is what separates them, and a specification
-that expects parallel requests **SHOULD** name the field to echo.
-Whether to correlate at all, and how, is otherwise entirely the
+Whether to correlate at all, and how, is entirely the
 asker's responsibility. Each component (skills, pipeline plugins, external
 clients) tracks its own state as needed, keyed on the session
 identifier (per OVOS-SESSION-1) when it cares about per-channel
@@ -640,11 +610,6 @@ without a second Message that other consumers must now interpret.
 - propagate `session` from a source Message onto every Message
   derived from it (§4.1, §5.1–§5.2), mutating only session fields it
   owns and only at the boundaries of OVOS-SESSION-2 §2.6;
-- omit `source` when it has no assigned identifier, and never claim
-  an identifier assigned to another component (§3.4);
-- overwrite `source` on every Message it admits from outside its
-  trust domain, when it is a bridge, gateway, or other transport
-  terminator (§3.4);
 - emit serialization conformant to §6.
 
 A producer **SHOULD**:
@@ -654,9 +619,7 @@ A producer **SHOULD**:
   (§3.3);
 - when deriving a Message that answers another, use the `.response`
   suffix convention of §5.3 where it applies, so observers can
-  recognize the answer;
-- echo a discriminating field from the request in any answer it
-  produces on a topic that may carry parallel requests (§5.4).
+  recognize the answer.
 
 ### A **consumer** of Messages **MUST**:
 
@@ -675,8 +638,6 @@ A producer **SHOULD**:
   array (§3.4); the contents of `session` are opaque to this
   specification — consumers consult OVOS-SESSION-1 for the field set
   and consumption semantics;
-- not treat `source` as proof of identity, and not derive an
-  authorization decision from the routing keys alone (§3.4);
 - not require any of `source`, `destination`, or `session` to be
   present — they are all optional, and a Message without them is
   well-formed.
