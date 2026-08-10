@@ -127,16 +127,10 @@ re-activation of an already-listed owner removes the prior entry
 and re-inserts at the head (§3.1).
 
 Deployments **SHOULD** bound the list length. The
-**RECOMMENDED default maximum is 10 entries**, which a deployer
-**MAY** raise, lower, or set to "unbounded". The cap is a tuning
-value, not an interoperability invariant — any bound (or none)
-is conformant. The default is deliberately small: every
-listed owner is a candidate for the per-utterance poll (§4.2), and
-the poll sits on the serial critical path of every utterance — a
-large eligibility list converts directly into user-perceived
-latency, while genuine multi-turn engagement rarely involves more
-than a handful of recently active owners. When the cap would be
-exceeded by an
+**default maximum is 64 entries**, which a deployer **MAY** raise,
+lower, or set to "unbounded". The cap is a tuning value, not an
+interoperability invariant — any bound (or none) is conformant.
+When the cap would be exceeded by an
 insertion, the orchestrator **MUST** drop the tail entry (the
 least-recent surviving owner) before inserting the new head, and
 **SHOULD** log the eviction.
@@ -255,33 +249,13 @@ exceeds `T` at two boundaries:
 
 The orchestrator MAY run the prune at additional boundaries; doing
 so MUST NOT produce observably different behaviour from running it
-only at the two boundaries above. The **RECOMMENDED default TTL is
-600 seconds**; an implementation SHOULD apply it when the deployer
-has not configured a value. Absent a TTL the list ages only by the
-§2.1 size cap — which never triggers while the owner count stays
-below the cap, so a stale owner would be polled on every utterance
-forever. A deployer MAY explicitly configure "no TTL", accepting
-that behaviour.
+only at the two boundaries above. When no TTL is configured, no
+time-based pruning occurs and the list ages only by the §2.1 size
+cap — which never triggers while the owner count stays below the
+cap, so a stale owner would be polled on every utterance forever.
 
 The prune **MUST NOT** remove the owner named by a present,
 non-expired `session.response_mode` (the §2.1 exemption).
-
-**Additional decay triggers.** Two optional triggers shorten the
-dead-skill poll tax:
-
-- An orchestrator or converse plugin **MAY** prune an entry whose
-  owner has failed to answer `N` consecutive polls with
-  `error_code: "timeout"` (§4.4). `N` is deployer-configured; the
-  RECOMMENDED value is 3. The prune is applied through the same
-  session-mutation channels as any other list change — the
-  orchestrator at a §3.2 boundary, the plugin via
-  `Match.updated_session`.
-- The orchestrator **SHOULD** remove an owner's entry from
-  `session.converse_handlers` on `ovos.skill.deregister`
-  (OVOS-INTENT-4 §8.4) for that `skill_id`, scoped to the
-  `session_id` the deregistration carries. An unloaded skill
-  cannot answer a poll, and INTENT-4 §8.4 makes the removal a
-  no-op when no entry exists.
 
 Because `activated_at` is session-resident, TTL pruning is
 **resumption-safe**: a session re-sent after an orchestrator restart
@@ -423,14 +397,9 @@ When invoked, a converse plugin MUST proceed in this order:
    sequential per-owner waits multiply the per-owner timeout by
    the list length.
 
-   **Sequential and parallel forms are equivalent.** Polling the
-   list head-first and stopping at the first `result: true`
-   yields the same claimer as polling every owner concurrently
-   and then selecting the first `true` in list order, because
-   selection is keyed on list position and silence or a
-   malformed pong counts as `result: false` (§4.2) in both
-   forms. A deployment MAY choose either; the parallel form only
-   overlaps the waits instead of accumulating them.
+   Sequential and parallel polling select the same claimer, because
+   selection is keyed on list position and silence counts as
+   `result: false` either way.
 
    The plugin SHOULD skip any owner whose `skill_id` appears in
    `session.blacklisted_skills` — doing so avoids an
@@ -514,43 +483,21 @@ deployer MAY raise or lower. An owner
 that does not respond within the timeout is treated as
 `result: false`.
 
-**Aggregate poll ceiling.** The per-owner timeout alone does not
-bound the stage: a sequential cycle over `n` owners costs up to
-`n ×` the per-owner timeout. A converse plugin **MUST** therefore
-also bound the **whole poll iteration** by an aggregate ceiling.
-The ceiling is **deployment-configured** — it depends on the
-§2.1 list cap and on whether the plugin polls sequentially or in
-parallel — and when it elapses every owner that has not yet
-answered is treated as `result: false`, selection proceeding over
-the pongs already in hand per §4.1 step 3. Because the converse
-plugin sits at the **front** of `session.pipeline` (§4), a
-deployment **MUST** set any OVOS-PIPELINE-1 §4.4 match-phase
-bound for this stage at or above its aggregate ceiling; a
-match-phase bound shorter than the ceiling kills the poll
-mid-collection on every utterance the stage handles.
+**Aggregate poll ceiling.** A sequential cycle over `n` owners
+costs up to `n ×` the per-owner timeout, so a converse plugin
+**MUST** also bound the whole poll iteration by a
+deployment-configured aggregate ceiling. When it elapses, owners
+that have not answered are `result: false` and selection proceeds
+over the pongs in hand. A deployment **MUST** set any
+OVOS-PIPELINE-1 §4.4 match bound for this stage at or above that
+ceiling, or the poll is killed mid-collection on every utterance.
 
-**Malformed and foreign pongs.** A pong is valid only when its
-`skill_id` equals the polled owner and the topic prefix, and it
-arrives within the timeout for the current `(owner, utterance)`
-round-trip. A converse plugin **MUST** ignore a pong whose
-`skill_id` is mismatched, that names an owner not in the current
-eligible set, or that arrives after the timeout for its round-trip
-has elapsed. A pong with a missing or non-boolean `result` **MUST**
-be treated as `result: false`. Where an owner answers more than
-once, the **first valid pong per owner** wins and later ones are
-ignored. A converse plugin MUST NOT use the reply from owner *i*
-for utterance *u* to satisfy a different utterance *u′* or a
-different owner *j*; the round-trip is per-`(owner, utterance)`.
-
-**Bus-exchange exception.** The poll round-trip is a documented
-exception to OVOS-PIPELINE-1 §4.4's low-latency guidance. It is
-justified because the poll **is** the handler's decision point:
-the claim cannot be resolved without asking the owners, and no
-cheaper signal stands in for the answer. The exchange is bounded
-twice over — per-owner timeout and aggregate ceiling — and
-terminates as soon as the eligible set is exhausted. OVOS-FALLBACK-1
-§6.1 documents the same exception for its own per-skill query.
-
+**Malformed, foreign and late pongs.** The round-trip is
+per-`(owner, utterance)`. A converse plugin **MUST** ignore a pong
+whose `skill_id` does not match the polled owner, that names an
+owner outside the eligible set, or that arrives after its timeout,
+and **MUST** treat a missing or non-boolean `result` as
+`result: false`. The first valid pong per owner wins.
 
 ### 4.3 The match for a converse claim
 
