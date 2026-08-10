@@ -35,8 +35,7 @@ This specification defines:
 - **the fallback plugin role** (§2) — a pipeline plugin that
   delegates to registered fallback skills;
 - **skill registration** (§3) — how a skill declares itself as a
-  fallback handler with a default ordering priority, and how the
-  registry stays live (§3.5);
+  fallback handler with a default ordering priority;
 - **session fields** (§4) — the one session-resident field that
   controls pool ordering, and the reuse of the OVOS-PIPELINE-1
   denylists for access control;
@@ -191,31 +190,6 @@ available to all sessions, because every session inherits the
 under a specific `session_id` extend the pool for that session
 only.
 
-### 3.5 Registry liveness
-
-A registry entry outlives the process that created it. A skill that
-has stopped, crashed, or disconnected still occupies a pool slot and
-still consumes a per-poll ceiling (§6.1) on every utterance that
-reaches the stage.
-
-- A fallback skill **SHOULD** emit `ovos.fallback.deregister`
-  during orderly shutdown.
-- The plugin **SHOULD** honour `ovos.skill.deregister`
-  (**OVOS-INTENT-4 §8.4**) by removing that skill's fallback
-  registration for the session read from
-  `context.session.session_id`. This is what lets a bridge clean up
-  a satellite's registrations when the satellite disconnects.
-- The plugin **MAY** evict a skill that failed to pong within the
-  ceiling on N consecutive polls, where N is deployment-configured.
-  An evicted skill **MUST** be re-admitted on its next
-  `ovos.fallback.register`.
-
-Eviction is an availability optimisation, not access control. It
-**MUST NOT** be the mechanism by which a deployment keeps a skill
-out of the pool; `session.blacklisted_skills` is (§4).
-
----
-
 ## 4. Session fields
 
 This specification claims one optional session field per
@@ -265,19 +239,13 @@ pool**:
    priority falls within that range. Both bounds are **inclusive**:
    a range `[50, 74]` retains priority 50 and priority 74.
 
-   Ranges configured across the loaded stages **SHOULD** partition
-   the priority space — no gaps, no overlaps. A skill whose
-   priority falls in no configured range is never queried by any
-   stage; the deployment is misconfigured, and a plugin that can
-   observe the gap **SHOULD** log it at WARN with the `skill_id`
-   and the priority.
+   Ranges across the loaded stages **SHOULD** partition the priority
+   space: a skill in no range is never queried by any stage.
 
-   The range filter applies after the preference order of step 1.
-   A skill named in `session.fallback_handlers` is therefore still
-   dropped by the stage whose range excludes it — the preference
-   list orders the pool, it does not admit a skill into a stage.
-   A skill preferred by the session but out of every stage's range
-   is never queried at all.
+   The range filter runs after step 1's preference order. A skill
+   named in `session.fallback_handlers` is still dropped by a stage
+   whose range excludes it — the preference list orders the pool, it
+   does not admit a skill into a stage.
 3. **Availability.** Retain only skills present in the registry for
    the current `session_id` (including `"default"` registrations
    per §3.4).
@@ -300,13 +268,10 @@ at a time in pool order. For each skill it sends:
 `<skill_id>.fallback.ping`
 
 using the **dotted addressed** form (**OVOS-MSG-1 §2.1.1**),
-derived from the inbound utterance Message through the reply
-derivation (**OVOS-MSG-1 §5.2**). The derivation is the reply one
-because the queried skill always answers: a ping that arrives
-response-ready lets the skill produce its pong by the same
-derivation, and the pong then reaches the plugin wherever either
-side runs. Carrying `context.session` forward is a property every
-derivation has; it is not what selects `reply` here.
+derived from the inbound utterance Message via `reply`
+(**OVOS-MSG-1 §5.2**). The skill answers with `reply` of the ping.
+Both Messages are delivered by topic subscription; the routing pair
+just rides along.
 
 Payload:
 
@@ -335,16 +300,15 @@ runs.
 | `can_handle` | bool | yes | Whether this skill is willing to handle the current utterance. |
 | `utterance` | string | yes | Echo of the utterance evaluated — the first element of the ping's `utterances`. |
 
-**Round correlation.** The plugin keys poll state by
-`session_id`, read from `context.session`. A pong whose `utterance`
-or whose session does not match the poll in flight **MUST** be
-discarded: a stale or replayed pong otherwise decides a round it
-never evaluated. The round-trip is one exchange per
-`(skill_id, utterance)` pair. Because at most one fallback poll is
-in flight per session (the session lock and round model of this
-section), the utterance itself uniquely identifies the round — no
-opaque poll id is needed, unlike OVOS-COMMON-QUERY-1 §6.4's
-`query_id`, which serves overlapping contests.
+**Round correlation.** The plugin keys poll state by `session_id`
+from `context.session`, which separates peers and conversations for
+free. What session scoping does **not** separate is two consecutive
+rounds in the same session, so one field is added and no more: a
+pong whose `utterance` does not match the poll in flight **MUST** be
+discarded. At most one fallback poll is in flight per session, so
+the utterance identifies the round — no opaque poll id is needed,
+unlike OVOS-COMMON-QUERY-1 §6.4's `query_id`, which serves
+overlapping contests.
 
 The `utterance` field is REQUIRED going forward. A pong that omits
 it is a legacy producer; the plugin **SHOULD** accept such a pong,
@@ -377,46 +341,19 @@ delayed, it is skipped. This follows OVOS-CONVERSE-1 §4.2, where
 the poll is likewise the decision point.
 
 **Ceiling calibration.** The **RECOMMENDED default ceiling is
-0.5 s**, matching the analogous polls of OVOS-CONVERSE-1 §4.2 and
-OVOS-STOP-1 §4.1 — with the caveat that OVOS-STOP-1 §4.1 also caps
-its ceiling at 1 s, which this specification does not. That default
-is calibrated for skills whose evaluation is local: a database
-lookup, a classifier, a vocabulary test. It is not a budget for a
-model-backed skill. A deployment that runs a model-backed fallback
-stage — an LLM chatbot, a remote question-answering service —
-**MUST** configure that stage's ceiling above the stage's actual
-evaluation latency. Leaving the default in place silently converts
-every such skill into a non-responder, and the utterance falls
-through to a lower-confidence handler that answered faster.
+0.5 s**, matching OVOS-CONVERSE-1 §4.2 and OVOS-STOP-1 §4.1. That
+default suits a local evaluation — a lookup, a classifier, a
+vocabulary test. It is not a budget for a model-backed skill, and a
+deployment running one **MUST** raise that stage's ceiling above the
+stage's real evaluation latency. Left at the default, such a skill
+is silently a non-responder.
 
-**Evaluation caching.** Because a willing skill is asked the same
-question twice — once at the ping, once at the `<skill_id>:fallback`
-dispatch (§7) — a fallback skill **SHOULD** cache the result of its
-ping-time evaluation, keyed by the pair `(session_id, utterance)`
-with `session_id` read from `context.session`, and reuse it when
-the dispatch for that pair arrives. The entry **MUST** be discarded
-when a new utterance arrives in the same session, and **MUST NOT**
-be returned for any utterance other than the exact string it was
-computed for. This mirrors OVOS-COMMON-QUERY-1 §5.2. Caching is a
-skill-side optimisation: the protocol is correct without it, and a
-skill that re-evaluates at dispatch is conformant.
-
-**Stage collection ceiling.** The worst-case time a fallback stage
-spends inside `match` is bounded by:
-
-- **sequential form** — `pool_size × per-poll ceiling`, since each
-  wait runs to the ceiling before the next begins;
-- **broadcast form** — one poll window, independent of pool size.
-
-Both are the stage's *collection ceiling*. OVOS-PIPELINE-1 §4.4
-lets the orchestrator bound each `match` by a timeout and skip a
-plugin that exceeds it, so a deployment **MUST** set the fallback
-stage's match-timeout bound at or above that stage's collection
-ceiling, exactly as OVOS-COMMON-QUERY-1 §2.1 requires for the
-common-query collection window. A shorter bound kills the stage
-mid-poll on every utterance it handles, and the failure is silent:
-the stage simply never claims. The broadcast form is the
-straightforward way to keep the ceiling constant as the pool grows.
+**Stage collection ceiling.** A sequential poll costs up to
+`pool_size × ceiling`; the broadcast form costs one window whatever
+the pool size. Either way that total is the stage's *collection
+ceiling*, and a deployment **MUST** set the OVOS-PIPELINE-1 §4.4
+match bound for this stage at or above it. A shorter bound kills the
+stage mid-poll on every utterance, silently.
 
 **Broadcast-poll optimisation.** As an observably equivalent
 alternative to the sequential per-skill query, the plugin MAY emit
@@ -517,9 +454,12 @@ that no skill can handle produces `ovos.intent.unmatched`
 
 ### 8.2 Multiple stages and priority interleaving
 
-A deployment MAY load multiple fallback plugin instances at
-different positions in `session.pipeline`. Each instance is
-configured with a **priority range** — a `[min, max]` integer
+A deployment MAY reach the fallback role from several
+`session.pipeline` entries — separate plugin instances, each with
+its own single `pipeline_id`, or several entries referencing one
+instance's range configurations. Either way an entry is a matcher
+reference and the actor identity is the plugin's one `pipeline_id`
+(OVOS-PIPELINE-1 §3). Each is configured with a **priority range** — a `[min, max]` integer
 interval — that restricts which registered skills it considers
 (§5 step 2). This allows fallback skills to be interleaved with
 other pipeline stages.
@@ -611,14 +551,10 @@ identically regardless of how many stages are present.
   log at WARN a registered skill that falls in no range (§5);
 - tolerate a pong that omits `utterance` as a legacy producer
   (§6.1);
-- honour `ovos.skill.deregister` for the session read from
-  `context.session.session_id` (§3.5).
 
 ### A fallback pipeline plugin **MAY**:
 
-- mutate session state via `Match.updated_session` (§6.3);
-- evict a skill after N consecutive poll timeouts, re-admitting it
-  on its next registration (§3.5).
+- mutate session state via `Match.updated_session` (§6.3).
 
 ### A skill registered as a fallback handler **MUST**:
 
@@ -628,12 +564,6 @@ identically regardless of how many stages are present.
   `<own_skill_id>.fallback.pong`, derived through the reply
   derivation and echoing the evaluated `utterance` (§6.1);
 - subscribe to `<own_skill_id>:fallback` to receive dispatches (§7).
-
-### A skill registered as a fallback handler **SHOULD**:
-
-- emit `ovos.fallback.deregister` during orderly shutdown (§3.5);
-- cache its ping-time evaluation keyed `(session_id, utterance)`
-  and reuse it at dispatch (§6.1).
 
 ### A deployment **SHOULD**:
 
