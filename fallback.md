@@ -35,8 +35,7 @@ This specification defines:
 - **the fallback plugin role** (§2) — a pipeline plugin that
   delegates to registered fallback skills;
 - **skill registration** (§3) — how a skill declares itself as a
-  fallback handler with a default ordering priority, and how the
-  registry stays live (§3.5);
+  fallback handler with a default ordering priority;
 - **session fields** (§4) — the one session-resident field that
   controls pool ordering, and the reuse of the OVOS-PIPELINE-1
   denylists for access control;
@@ -190,31 +189,6 @@ available to all sessions, because every session inherits the
 `"default"` scope (**OVOS-INTENT-4 §11.2**). Skills registered
 under a specific `session_id` extend the pool for that session
 only.
-
-### 3.5 Registry liveness
-
-A registry entry outlives the process that created it. A skill that
-has stopped, crashed, or disconnected still occupies a pool slot and
-still consumes a per-poll ceiling (§6.1) on every utterance that
-reaches the stage.
-
-- A fallback skill **SHOULD** emit `ovos.fallback.deregister`
-  during orderly shutdown.
-- The plugin **SHOULD** honour `ovos.skill.deregister`
-  (**OVOS-INTENT-4 §8.4**) by removing that skill's fallback
-  registration for the session read from
-  `context.session.session_id`. This is what lets a bridge clean up
-  a satellite's registrations when the satellite disconnects.
-- The plugin **MAY** evict a skill that failed to pong within the
-  ceiling on N consecutive polls, where N is deployment-configured.
-  An evicted skill **MUST** be re-admitted on its next
-  `ovos.fallback.register`.
-
-Eviction is an availability optimisation, not access control. It
-**MUST NOT** be the mechanism by which a deployment keeps a skill
-out of the pool; `session.blacklisted_skills` is (§4).
-
----
 
 ## 4. Session fields
 
@@ -388,18 +362,6 @@ stage — an LLM chatbot, a remote question-answering service —
 evaluation latency. Leaving the default in place silently converts
 every such skill into a non-responder, and the utterance falls
 through to a lower-confidence handler that answered faster.
-
-**Evaluation caching.** Because a willing skill is asked the same
-question twice — once at the ping, once at the `<skill_id>:fallback`
-dispatch (§7) — a fallback skill **SHOULD** cache the result of its
-ping-time evaluation, keyed by the pair `(session_id, utterance)`
-with `session_id` read from `context.session`, and reuse it when
-the dispatch for that pair arrives. The entry **MUST** be discarded
-when a new utterance arrives in the same session, and **MUST NOT**
-be returned for any utterance other than the exact string it was
-computed for. This mirrors OVOS-COMMON-QUERY-1 §5.2. Caching is a
-skill-side optimisation: the protocol is correct without it, and a
-skill that re-evaluates at dispatch is conformant.
 
 **Stage collection ceiling.** The worst-case time a fallback stage
 spends inside `match` is bounded by:
@@ -611,14 +573,10 @@ identically regardless of how many stages are present.
   log at WARN a registered skill that falls in no range (§5);
 - tolerate a pong that omits `utterance` as a legacy producer
   (§6.1);
-- honour `ovos.skill.deregister` for the session read from
-  `context.session.session_id` (§3.5).
 
 ### A fallback pipeline plugin **MAY**:
 
-- mutate session state via `Match.updated_session` (§6.3);
-- evict a skill after N consecutive poll timeouts, re-admitting it
-  on its next registration (§3.5).
+- mutate session state via `Match.updated_session` (§6.3).
 
 ### A skill registered as a fallback handler **MUST**:
 
@@ -628,12 +586,6 @@ identically regardless of how many stages are present.
   `<own_skill_id>.fallback.pong`, derived through the reply
   derivation and echoing the evaluated `utterance` (§6.1);
 - subscribe to `<own_skill_id>:fallback` to receive dispatches (§7).
-
-### A skill registered as a fallback handler **SHOULD**:
-
-- emit `ovos.fallback.deregister` during orderly shutdown (§3.5);
-- cache its ping-time evaluation keyed `(session_id, utterance)`
-  and reuse it at dispatch (§6.1).
 
 ### A deployment **SHOULD**:
 
