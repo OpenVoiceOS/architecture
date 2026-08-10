@@ -285,37 +285,12 @@ safe under §6.2 first-match-wins iteration — a declined
 plugin's exploratory mutations never reach later plugins or
 downstream stages.
 
-For that discard to be real rather than aspirational, the
-orchestrator **SHOULD** hand each plugin an **independent copy** of
-the session snapshot for the duration of its `match` call. A plugin
-handed the orchestrator's own object can mutate it in place and have
-the mutation survive its own declination, which is exactly what this
-section forbids. The copy makes the boundary enforceable instead of
-merely stated.
-
-**Policy fields are re-imposed, not inherited.** The session fields
-this specification claims as **policy** — `blacklisted_pipelines`,
-`blacklisted_skills`, `blacklisted_intents` (§5.2–§5.4) — are
-authorization state, not plugin working state. After committing an
-`updated_session`, the orchestrator **MUST** re-impose the inbound
-session's values for those three fields onto the committed snapshot,
-overwriting whatever the plugin returned. A plugin that widens or
-clears a denylist through `updated_session` therefore changes
-nothing: the denylists that governed this utterance keep governing
-every downstream stage of it. Without this rule any loaded plugin
-could grant itself and its successors the permissions the session's
-policy layer (§5.6) denied, and the authorization model of §5.6
-would rest on plugin good behaviour.
-
 The orchestrator-side pattern is uniform:
 
 ```
-match = plugin.match(utterances, lang, session.copy())
+match = plugin.match(utterances, lang, session)
 if match is not None:
     session = match.updated_session or session
-    session.blacklisted_pipelines = inbound.blacklisted_pipelines
-    session.blacklisted_skills    = inbound.blacklisted_skills
-    session.blacklisted_intents   = inbound.blacklisted_intents
     # dispatch and downstream stages use this session
 ```
 
@@ -720,7 +695,6 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     if filtered:  continue
    │
    │     session = match.updated_session or session   # §4.1, §4.2
-   │     re-impose inbound §5 policy fields on session  # §4.2
    │
    │     ── match round closes here ──
    │     post-match decrement turns_remaining--   ← CONTEXT-1 §4
@@ -1543,9 +1517,6 @@ from the hosting process.
   plugin filters (§5.3, §5.4);
 - verify every slot listed in the matched intent's `required_slots`
   is present, and treat a shortfall as a declination (§6.2);
-- re-impose the inbound session's `blacklisted_pipelines`,
-  `blacklisted_skills` and `blacklisted_intents` onto any committed
-  `updated_session` (§4.2);
 - ignore any `Match` returned by a `match` call that already timed
   out, and never dispatch it (§4.4);
 - skip unknown `pipeline_id`s without failing the utterance (§5);
