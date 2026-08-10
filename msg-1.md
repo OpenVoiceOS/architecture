@@ -107,11 +107,10 @@ carries a value of the wrong type — a non-string or empty `type`, a
 `data` or `context` that is not a JSON object. Malformed Messages
 are handled per §6.1.
 
-*Informative.* The asymmetry is deliberate: strictness belongs on
-the producer side, where the defect originates; a consumer-side
-reject on an unknown key would let a single non-conformant emitter
-sever otherwise-valid traffic for every consumer on the bus, and
-would make every additive envelope extension a breaking change.
+*Informative.* Strictness belongs on the producer side. A
+consumer-side reject on an unknown key would let one bad emitter
+sever valid traffic for every consumer, and would make every
+additive envelope extension a breaking change.
 
 ### 2.1 `type`
 
@@ -262,48 +261,55 @@ Message crosses the boundary:
    core is the consumer.
 2. The assistant core classifies the utterance and matches an intent.
    It dispatches the handler on the per-intent topic
-   `<skill_id>:<intent_name>` using the `reply` derivation (§5.2):
-   `destination` becomes the emitter, and `source` becomes the
-   orchestrator's own identifier. The Message is now going
-   *assistant → user*.
+   `<skill_id>:<intent_name>` using the `reply` derivation (§5.2),
+   which swaps the pair. The Message is now going *assistant → user*
+   and is addressed to the emitter.
 3. The handler runs and announces its outcome using the `forward`
-   derivation (§5.1), preserving the dispatch's `context`. Observers
-   still see the emitter as `destination` and the orchestrator as
-   `source`.
+   derivation (§5.1), preserving the dispatch's `context`.
 
-At each step the pair `(source, destination)` answers one question
-unambiguously: *which side of the boundary is talking, and to
-whom?*
+The pair alternates rather than being rewritten, so the emitter's
+identifier stays in it for the whole exchange.
 
-**A worked round-trip.** The rule of §5.2 — a reply names its own
-producer as `source` — is what keeps an addressed poll from bouncing
-back at the asker. Take a converse poll (OVOS-CONVERSE-1 §4.2) for a
-remote skill reached through a bridge, with the utterance emitted by
-a satellite the bridge has stamped `sat-7`:
+**A worked round-trip.** The swap of §5.2 keeps the **peer**
+named in the routing pair for the whole chain. Take a converse poll
+(OVOS-CONVERSE-1 §4.2) where the utterance came from a satellite the
+bridge stamped `sat-7`:
 
-| Step | Producer | Derivation | `source` | `destination` |
-|------|----------|------------|----------|---------------|
-| utterance | satellite, via bridge | origination | `sat-7` | absent (broadcast) |
-| `<skill_id>.converse.ping` | converse plugin | `reply` of the utterance | `converse-plugin` | `sat-7` |
-| `<skill_id>.converse.pong` | polled skill | `reply` of the ping | `<skill_id>` | `converse-plugin` |
+| Step | Derivation | `source` | `destination` |
+|------|------------|----------|---------------|
+| utterance | origination | `sat-7` | absent |
+| `<skill_id>.converse.ping` | `reply` of the utterance | `sat-7` (unchanged — no destination to swap in) | `sat-7` |
+| `<skill_id>.converse.pong` | `reply` of the ping | `sat-7` | `sat-7` |
+| `ovos.utterance.speak` | `reply` of the dispatch | `sat-7` | `sat-7` |
 
-The pong is addressed to the converse plugin, which asked, and not
-to `sat-7`, which did not — because the ping's producer wrote its
-own identifier into `source`, and the pong reverses that pair. Had
-the ping instead copied the emitter's identifier forward, the pong
-would have come back addressed to `sat-7`, and the bridge would have
-relayed an internal poll response out to the satellite while the
-converse plugin waited for an answer that never arrived.
+`sat-7` rides the whole chain, which is the point: the final
+user-facing Message is addressed to the satellite, and the bridge
+routes it home on that value alone. A derivation that replaced
+`source` with each producer's own identifier would drop `sat-7`
+after one hop and the reply would never reach the user.
+
+The pong is addressed to `sat-7` rather than to the converse plugin,
+and the plugin still receives it — delivery is by **topic
+subscription**, and `destination` is informational (§3.4). Stopping
+an internal poll from being relayed out to the satellite is a bridge
+concern — the bridge does not relay internal-coordination topics —
+not something the routing keys arbitrate.
 
 ### 3.2 `source`
 
-`source` — string — opaque identifier of the **producer** of the
-Message. The emitter sets it on origination; the `reply` derivation
-(§5.2) rewrites it to the identifier of the component producing the
-reply, so a replied Message always names its own producer.
-`forward` (§5.1) preserves it, deliberately: a forwarded Message is
-a relay of someone else's Message and keeps naming the original
-producer.
+`source` — string — an opaque identifier set by the emitter on
+origination. `forward` (§5.1) preserves it. `reply` (§5.2) swaps it
+with `destination`, so on a replied Message `source` names the
+**previous hop's addressee**, not the component that produced the
+Message.
+
+A consumer therefore **MUST NOT** read `source` as the identity of
+the producer. Producer identity is not carried by this envelope. What
+the pair does carry, hop after hop, is the **peer** on the external
+side of the boundary (§3.1): the swap keeps that identifier alive
+along the whole chain, which is what lets a layer-2 system route a
+terminal Message back to the participant that started the
+exchange.
 
 ### 3.3 `destination`
 
@@ -352,25 +358,6 @@ systems. A typical layer-2 pattern populates `source` /
 `destination` with peer identifiers so a satellite device or a
 remote client is addressable on the same bus as a local handler,
 without the assistant core itself learning about peers.
-
-**Identifiers are not credentials.** `source` and `destination` are
-routing keys, not authentication: a Message asserts its `source`, and
-nothing in this envelope proves the assertion. Accordingly:
-
-- a producer **MUST NOT** set `source` to an identifier that was not
-  assigned to it, and **MUST** omit `source` when it has no assigned
-  identifier;
-- a component that admits Messages into the bus from outside its
-  trust domain — a bridge, a gateway, any transport terminator —
-  **MUST** overwrite `source` on every inbound Message with the
-  identifier it has assigned to that peer, discarding whatever the
-  peer supplied. It **MUST NOT** trust a peer-supplied `source`, on
-  the first Message or on any later one;
-- a consumer **MUST NOT** treat a matching `source` as proof of
-  identity, and **MUST NOT** derive an authorization decision from
-  `source` or `destination` alone. Authorization, where a deployment
-  needs it, is a layer-2 concern built on evidence this envelope does
-  not carry.
 
 ---
 
@@ -470,44 +457,31 @@ Produces a new Message:
 
 - `type` = `T'`,
 - `data` = `D'`,
-- `context` = a copy of `C` with the routing keys of §3 rewritten so
-  the new Message names its own producer and is addressed back to
-  `M`'s producer:
+- `context` = a copy of `C` with `source` and `destination`
+  **swapped**:
 
-  1. **`destination`.** If `C.source` is set, the new context's
-     `destination` is set to `C.source`. If `C.source` is absent,
-     the new context's `destination` is omitted — the reply is a
-     broadcast, which is the only well-defined behaviour when there
-     is no asker to name.
-  2. **`source`.** The new context's `source` is set to the
-     identifier of the **component producing the reply** — its own
-     assigned identifier, not any value read out of `C`. This holds
-     whatever shape `C.destination` had: a string, an array, or
-     absent. A producer with no assigned identifier **MUST** omit
-     `source`, and **MUST NOT** copy `C.destination` or `C.source`
-     into it.
-  3. All other `context` keys, including `session` (§4), are
+  1. If `C.destination` is set, the new `source` is `C.destination`
+     — its **first element** when `C.destination` is an array.
+  2. If `C.source` is set, the new `destination` is `C.source`.
+  3. A key absent from `C` stays absent. On a broadcast (no
+     `destination`) `source` is therefore carried through unchanged
+     and only `destination` is written.
+  4. All other `context` keys, including `session` (§4), are
      preserved unchanged. As with `forward`, if the source Message
      has no `session`, the derivation **MAY** populate a default
      session on the result (§4.1).
 
-`reply` is the basis of any "send back to the asker" Message. Its
-`source` rule is what makes an addressed round-trip terminate at the
-component that opened it: because each hop names itself, the answer
-to a reply is addressed to the component that asked, not to whoever
-asked *that* component (§3.1). Every request/response round-trip in
-the specifications built on this one — the converse and fallback
-polls, the common-query contest, the handler dispatch — relies on
-that property. A producer that maintains no identifier at all still
-conforms: its replies carry no `source`, and the component it
-answered addresses its own next Message by broadcast.
+`reply` is the basis of any "send back to the asker" Message, and it
+is a **transform on the Message alone** — it reads nothing but `C`.
+That is why the new `source` comes from `C.destination` and not from
+the replying component: the derivation has no access to the
+component's identity.
 
-*Informative.* A single rule replaces the older reversal: `source`
-comes from the producer, never from `C.destination`. Copying
-`C.destination` gave the same answer only in the case where the
-replying component was the sole addressee, and gave a wrong or
-undefined answer everywhere else — on a broadcast the producer had
-no value to copy, and on a multi-addressee Message it had several.
+The swap is what makes the routing pair survive a chain. Each hop
+alternates the two values rather than replacing them, so the peer
+identifier the exchange started with is still in the pair at the
+last hop (§3.1). A component that maintains no addressing at all
+still conforms: with neither key set, `reply` changes nothing.
 
 ### 5.3 `response(D')`
 
@@ -545,20 +519,9 @@ to do its own correlation, if it wants to:
   topic states (§5.3);
 - `session` (§4), which is propagated across `reply` / `response` /
   `forward` (§5.1–§5.2), so an asker can narrow an incoming answer
-  to the conversation it belongs to;
-- `data` itself: an answering component **SHOULD** echo back a
-  discriminating field from the request it answers, so the asker can
-  pair answer to request without any host bookkeeping. The
-  common-query contest does exactly this — a skill's answer echoes
-  the opaque `query_id` it was asked about (OVOS-COMMON-QUERY-1
-  §6.4) — and it is the pattern to follow for any topic where
-  several requests may be outstanding at once.
+  to the conversation it belongs to.
 
-Topic and session alone do **not** discriminate parallel requests:
-two requests on one topic in one session produce two indistinguishable
-answers. An echoed field is what separates them, and a specification
-that expects parallel requests **SHOULD** name the field to echo.
-Whether to correlate at all, and how, is otherwise entirely the
+Whether to correlate at all, and how, is entirely the
 asker's responsibility. Each component (skills, pipeline plugins, external
 clients) tracks its own state as needed, keyed on the session
 identifier (per OVOS-SESSION-1) when it cares about per-channel
@@ -599,29 +562,20 @@ silently coerce it.
 
 ### 6.1 Handling a malformed Message
 
-"Treat as malformed" has one meaning throughout this specification
-and every specification that cites it. A consumer that treats a
+"Treat as malformed" means the same thing everywhere this
+specification and its companions use it. A consumer that treats a
 Message as malformed:
 
-- **MUST NOT** act on it — no handler runs, no state changes, no
-  derived Message is emitted from it;
-- **MUST** drop it, and **MUST NOT** repair or coerce it into a
-  conformant shape by guessing at the producer's intent;
-- **MUST NOT** crash, and **MUST NOT** let the fault tear down its
-  transport or its subscriptions. A malformed Message is a
-  **per-message producer fault**, never a transport fault; a consumer
-  that drops its bus connection over one bad Message can be held
-  offline indefinitely by a single misbehaving producer;
-- **SHOULD** log the violation, with enough detail to identify the
-  producer, so that the defect is fixable;
-- **MUST NOT** emit an error Message in reply, unless the
-  specification defining the topic prescribes one. A malformed
-  Message often carries no usable routing keys, and an unprompted
-  error reply to a broadcast is itself a source of bus noise.
+- **MUST** drop it — no handler runs, no state changes, nothing is
+  derived from it, and it is not repaired by guessing;
+- **MUST NOT** let the fault tear down its transport or its
+  subscriptions. One bad Message is a producer fault, not a
+  transport fault;
+- **SHOULD** log it with enough detail to identify the producer.
 
-Dropping is silent to the bus and loud to the operator. That is the
-intended asymmetry: the defect is reported where it can be fixed,
-without a second Message that other consumers must now interpret.
+A consumer emits no error Message in reply unless the specification
+defining the topic prescribes one; a malformed Message often carries
+no usable routing keys to answer on.
 
 ---
 
@@ -634,29 +588,23 @@ without a second Message that other consumers must now interpret.
 - when present, give `data` and `context` JSON-object values
   (possibly empty); they **MAY** be omitted when empty (§2);
 - when deriving a Message from another (`forward` / `reply` /
-  `response`), follow §5 — in particular, set the `source` of a
-  `reply` to its own identifier, never to a value read out of the
-  source Message's `context` (§5.2);
+  `response`), follow §5 — in particular, swap `source` and
+  `destination` on a `reply`, taking the first element when
+  `destination` is an array (§5.2);
 - propagate `session` from a source Message onto every Message
   derived from it (§4.1, §5.1–§5.2), mutating only session fields it
   owns and only at the boundaries of OVOS-SESSION-2 §2.6;
-- omit `source` when it has no assigned identifier, and never claim
-  an identifier assigned to another component (§3.4);
-- overwrite `source` on every Message it admits from outside its
-  trust domain, when it is a bridge, gateway, or other transport
-  terminator (§3.4);
 - emit serialization conformant to §6.
 
 A producer **SHOULD**:
 
-- set `source` to its own identifier when one is assigned (§3.2);
+- set `source` to its own identifier **on origination**, when one is
+  assigned (§3.2);
 - set `destination` when the Message is targeted at a known consumer
   (§3.3);
 - when deriving a Message that answers another, use the `.response`
   suffix convention of §5.3 where it applies, so observers can
-  recognize the answer;
-- echo a discriminating field from the request in any answer it
-  produces on a topic that may carry parallel requests (§5.4).
+  recognize the answer.
 
 ### A **consumer** of Messages **MUST**:
 
@@ -675,8 +623,6 @@ A producer **SHOULD**:
   array (§3.4); the contents of `session` are opaque to this
   specification — consumers consult OVOS-SESSION-1 for the field set
   and consumption semantics;
-- not treat `source` as proof of identity, and not derive an
-  authorization decision from the routing keys alone (§3.4);
 - not require any of `source`, `destination`, or `session` to be
   present — they are all optional, and a Message without them is
   well-formed.
