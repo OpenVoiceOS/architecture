@@ -40,7 +40,7 @@ It builds on six companion specifications:
   `Message.context`, the `session` carrier, and the
   `forward` / `reply` / `response` derivations every Message
   defined here travels in;
-- the *Session Carrier Wire Shape Specification* (OVOS-SESSION-1) —
+- the *Session Specification* (OVOS-SESSION-1) —
   the field-registry mechanism under which this spec claims its
   session fields (§2), and the omission-not-`null` rule;
 - the *Session Lifecycle and State Ownership Specification*
@@ -48,7 +48,7 @@ It builds on six companion specifications:
   that this spec's converse plugin role embraces fully for its
   response-mode wait state, plus the in-utterance mutation
   boundaries (§2.6 there) and the default-session ownership rule
-  (§6 there);
+  (§5 there);
 - the *Utterance Lifecycle and Pipeline Specification*
   (OVOS-PIPELINE-1) — the pipeline-plugin contract the converse
   plugin role conforms to (§4), `Match.updated_session` (§4.2),
@@ -74,9 +74,9 @@ This specification defines the converse-handler list
 (`session.response_mode`, §2.2), the activation lifecycle (§3),
 the converse plugin role (§4), the interactive response
 mechanism (§5), the two reserved intent_names `converse` and
-`response`, the evaluation order relative to CONTEXT-1 (§7),
-termination (§8), and conformance (§9). Non-goals are listed
-in §10.
+`response`, the bus surface (§6), the evaluation order relative
+to CONTEXT-1 (§7), termination (§8), and conformance (§9).
+Non-goals are listed in §10.
 
 ---
 
@@ -96,8 +96,8 @@ the stop cascade. The two lists are written and drained independently:
 PIPELINE-1 stamps `active_handlers` at dispatch time and the stop
 plugin drains it on stop; this spec stamps `converse_handlers` at
 dispatch time and the TTL prune (§3.2) decays it. A skill removed from
-`active_handlers` by a stop operation remains in `converse_handlers`
-and may still be offered converse turns.
+`active_handlers` by a **targeted stop** (STOP-1 §4) remains in
+`converse_handlers` and may still be offered converse turns.
 
 `session.converse_handlers` is a JSON array of `{skill_id,
 activated_at}` objects. `skill_id` is a plain skill's id or a
@@ -106,6 +106,15 @@ pipeline plugin's `pipeline_id` (per PIPELINE-1 §7.0).
 precision). Because `skill_id` appears in colon-separated topic
 shapes it **MUST NOT** contain `:` (MSG-1 §2.1.1); the recommended
 form is ASCII letters / digits / `_` / `-` only.
+
+**Identifier charset (stated once, for the whole spec).** A `.` in
+`skill_id` is permitted. Every dotted topic this spec defines
+(`<skill_id>.converse.ping` / `.pong`, §4.2) is built from a known
+`skill_id` and delivered by **exact subscription** — never parsed
+back into components — so it stays unambiguous even when `skill_id`
+itself contains `.` (MSG-1 §2.1.1). Only the `:` prohibition is
+normative. §2.2 and §4.2 rely on this paragraph and do not restate
+it.
 
 The list is ordered **head-first by recency**: index `0` is the
 most recently activated owner; index `n-1` is the least recently
@@ -119,10 +128,23 @@ and re-inserts at the head (§3.1).
 
 Deployments **SHOULD** bound the list length. The
 **default maximum is 64 entries**, which a deployer **MAY** raise,
-lower, or set to "unbounded". When the cap would be exceeded by an
+lower, or set to "unbounded". The cap is a tuning value, not an
+interoperability invariant — any bound (or none) is conformant.
+When the cap would be exceeded by an
 insertion, the orchestrator **MUST** drop the tail entry (the
 least-recent surviving owner) before inserting the new head, and
 **SHOULD** log the eviction.
+
+**Response-mode holder exemption.** The owner named by a present,
+non-expired `session.response_mode` (§2.2) **MUST NOT** be evicted
+by the cap, nor pruned by the §3.2 TTL. Evicting it would strand
+the pending response window: the §2.2 identity invariant would then
+reject the holder's own answer and the utterance the holder
+solicited would be matched by some other stage. When the cap would
+be exceeded and the tail entry is the exempt holder, the
+orchestrator **MUST** drop the next-least-recent non-exempt entry
+instead. The exemption ends the moment `response_mode` is absent or
+its `expires_at` has passed.
 
 ### 2.2 `session.response_mode`
 
@@ -132,8 +154,8 @@ holder is awaiting a direct response:
 
 | Key | Type | Required | Meaning |
 |-----|------|----------|---------|
-| `skill_id` | string | yes | The handler that holds response mode for this session. MUST NOT contain `:` (MSG-1 §2.1.1 — colon-separated topic shapes use this identifier as a component). |
-| `expires_at` | number | yes | Unix-seconds wall-clock time after which the wait window is stale. MAY be a float; consumers MUST accept integer and float forms. The plugin MUST discard a stale entry on the next match (§5.2) — the holder's framework-side timer drives the user-facing reaction. |
+| `skill_id` | string | yes | The handler that holds response mode for this session. Charset per §2.1. |
+| `expires_at` | number | yes | Unix-seconds wall-clock time after which the wait window is stale. MAY be a float; consumers MUST accept integer and float forms. Once passed, the entry is **inert** — no delivery ever happens from it (§5.2) — and it is discarded opportunistically per §5.2. The holder's framework-side timer drives the user-facing reaction. |
 
 Absent or omitted `session.response_mode` means no holder; the
 next utterance is matched normally. JSON `null` is **not** a valid
@@ -229,8 +251,11 @@ The orchestrator MAY run the prune at additional boundaries; doing
 so MUST NOT produce observably different behaviour from running it
 only at the two boundaries above. When no TTL is configured, no
 time-based pruning occurs and the list ages only by the §2.1 size
-cap. A deployment with no TTL is conformant but not recommended —
-it is effectively hardcoding TTL to "forever".
+cap — which never triggers while the owner count stays below the
+cap, so a stale owner would be polled on every utterance forever.
+
+The prune **MUST NOT** remove the owner named by a present,
+non-expired `session.response_mode` (the §2.1 exemption).
 
 Because `activated_at` is session-resident, TTL pruning is
 **resumption-safe**: a session re-sent after an orchestrator restart
@@ -299,10 +324,12 @@ PIPELINE-1 §4.2 mechanism), and its returned `Match` dispatches
 per PIPELINE-1 §7 normally. There is no dispatch suppression and
 no out-of-band signalling between the plugin and the orchestrator.
 
-The plugin is a **pure matcher** in OVOS-PIPELINE-1 §7.0 terms —
-its `match` produces a `Match` whose `skill_id` is some *other*
-component's identity (the claiming handler, or the
-response-mode holder), never its own `pipeline_id`. The reserved
+The plugin is a **pure matcher** — a matcher whose only output is
+its return value: its `match` produces a `Match` whose `skill_id`
+is some *other* component's identity (the claiming handler, or the
+response-mode holder), never its own `pipeline_id`
+(OVOS-PIPELINE-1 §7.0), and the plugin bundles no handler of its
+own. The reserved
 intent_names are dispatched to those handler-owners, which
 subscribe to `<own_skill_id>:converse` / `<own_skill_id>:response`.
 The plugin **SHOULD** publish the intent_names it produces matches
@@ -311,11 +338,15 @@ passive index `ovos.pipeline.<pipeline_id>.intents.list` per
 PIPELINE-1 §10, so observers can enumerate the reserved-name
 surfaces this plugin handles.
 
-A deployment MAY load zero, one, or more than one converse
-plugins. When no converse plugin is loaded,
-`session.converse_handlers` is still maintained per §3 but no owner
-is offered the chance to claim utterances; that is a deployment
-choice.
+A deployment **SHOULD** load **at most one** converse plugin.
+Loading zero is a valid choice: `session.converse_handlers` is
+still maintained per §3, but no owner is offered the chance to
+claim utterances. The behaviour of a deployment that loads
+**several** converse plugins is **unspecified by this
+specification** — each would poll the same eligible set on the
+same utterance, duplicating the round-trip and racing for the
+claim, and the resulting ordering is a property of
+`session.pipeline` rather than of this contract.
 
 A deployment that wants response-mode delivery (§5) **SHOULD**
 configure a converse plugin at the **front** of `session.pipeline`
@@ -330,28 +361,47 @@ When invoked, a converse plugin MUST proceed in this order:
 
 1. **Response-mode pre-emption.** If `session.response_mode` is
    present and its `expires_at` is in the future, the plugin
-   MUST return a `Match` per §5.2 for the holder, on
+   MUST first verify the §2.2 identity invariant: after the §3.2
+   TTL prune (when configured), the holder's `skill_id` MUST
+   appear in `session.converse_handlers` — a pruned or
+   unrecognised holder MUST NOT receive delivery; the plugin
+   logs it, discards it opportunistically per §5.2, and
+   proceeds to step 2. For a valid holder, the
+   plugin MUST return a `Match` per §5.2 for the holder, on
    `intent_name == "response"`, and SKIP the converse-handler poll.
    The orchestrator dispatches per PIPELINE-1 §7; the holder's
    response handler runs.
 
    If `session.response_mode` is present but `expires_at` has
-   passed, the plugin MUST treat it as stale: discard it via
-   `Match.updated_session` (removing the field from the
-   downstream session) and proceed to step 2 — no
-   response-mode delivery happens for this utterance.
+   passed, the plugin MUST treat it as stale and proceed to
+   step 2 — no response-mode delivery happens, for this
+   utterance or any later one. Discarding the field is
+   opportunistic, per §5.2.
 
 2. **Converse-handler iteration.** The plugin reads
    `session.converse_handlers` (after the §3.2 TTL prune, when
    configured) as its eligible set. Blacklist policy is applied
    by the PIPELINE-1 §5.3–§5.4 backstop, not by this plugin.
 
-3. **Poll iteration.** The plugin polls the eligible set via
-   §4.2. The plugin MAY issue poll requests in parallel; when
-   it does, it MUST select the claimer with the **highest
-   `activated_at`** among those that returned `result: true`,
-   not by response arrival order. The plugin SHOULD skip any
-   owner whose `skill_id` appears in
+3. **Poll iteration and selection.** The plugin polls the
+   eligible set via §4.2 and selects the **first claimer in
+   recency order** — the earliest entry in
+   `session.converse_handlers`, which is ordered head-first by
+   recency (§2.1). Where two entries carry an equal
+   `activated_at`, the entry **nearest the head** is the more
+   recent (OVOS-PIPELINE-1 §7.1). Selection is **never** by
+   response-arrival order.
+
+   The plugin SHOULD issue poll requests in parallel — the poll
+   runs on the serial critical path of every utterance, and
+   sequential per-owner waits multiply the per-owner timeout by
+   the list length.
+
+   Sequential and parallel polling select the same claimer, because
+   selection is keyed on list position and silence counts as
+   `result: false` either way.
+
+   The plugin SHOULD skip any owner whose `skill_id` appears in
    `session.blacklisted_skills` — doing so avoids an
    unnecessary round-trip before the PIPELINE-1 §5.3
    backstop would reject the resulting Match anyway.
@@ -373,7 +423,11 @@ not activate the polled owner.
 
 The plugin MUST emit a **poll request** on the topic
 `<skill_id>.converse.ping`, where the leading component is
-the owner being asked. The Message:
+the owner being asked. The plugin **MUST** derive the ping via
+`reply` (OVOS-MSG-1 §5.2) from the **inbound utterance Message**,
+so that `context.session` and the routing keys propagate
+automatically and the ping reaches the owner whether it runs
+locally or behind a satellite transport. The Message:
 
 - carries the full inbound session snapshot;
 - carries `data.skill_id` equal to the topic prefix (the owner
@@ -382,7 +436,7 @@ the owner being asked. The Message:
   §4.1) and `data.lang` (the active language).
 
 The owner MUST emit a Message of type `<skill_id>.converse.pong`
-derived via `reply` (OVOS-MSG-1 §5), so that routing metadata is
+derived via `reply` (OVOS-MSG-1 §5.2), so that routing metadata is
 preserved and the response reaches the converse plugin regardless
 of whether the skill runs locally or remotely (e.g. via a satellite
 transport). `source` and `destination` are layer-2 metadata and do
@@ -394,15 +448,19 @@ not affect the topic name. The response carries `data`:
 | `result` | boolean | yes | `true` ⇒ the owner claims the utterance; `false` ⇒ the owner declines. |
 | `error_code` | string | no | Optional structured reason (see §4.4) when `result` is `false`. |
 
+The boolean's field name is protocol-specific: this spec's poll
+uses `result`, while the analogous polls of OVOS-FALLBACK-1 /
+OVOS-STOP-1 use `can_handle` and OVOS-COMMON-QUERY-1 uses
+`can_answer`. Each name is normative only within its own protocol.
+
 Both topics use the **dotted addressed** form (`<skill_id>.<verb>`).
 The poll is **not** a PIPELINE-1 §7 dispatch, so it avoids the `:`
 separator that OVOS-MSG-1 §2.1.1 reserves for the dispatch shape
 `<skill_id>:<intent_name>` and uses `.` instead. The owner subscribes
 to its own `<own_skill_id>.converse.ping` and replies on
 `<own_skill_id>.converse.pong`; the plugin emits the identical strings.
-Because each topic is built from a known `skill_id` and delivered by
-**exact subscription** — never parsed back into components — it stays
-unambiguous even when `skill_id` itself contains `.` (OVOS-MSG-1 §2.1.1).
+Exact-subscription delivery keeps these topics unambiguous for any
+conformant `skill_id`; see §2.1.
 
 The poll is the **handler's decision point**. The owner MUST
 inspect `data.utterances` and `data.lang` — including any NLU
@@ -418,14 +476,28 @@ SHOULD include `error_code: "done"` in a declining response
 self-deactivation requests.
 
 A converse plugin MUST wait for the poll reply with a
-**deployer-configured per-owner timeout**. The default timeout
-is `0.5` seconds, which a deployer MAY raise or lower. An owner
+**deployer-configured per-owner timeout** — an unbounded wait
+would stall the utterance's serial critical path indefinitely.
+The **RECOMMENDED default timeout is `0.5` seconds**, which a
+deployer MAY raise or lower. An owner
 that does not respond within the timeout is treated as
-`result: false`. A converse plugin MUST NOT use the reply from
-owner *i* for utterance *u* to satisfy a different utterance
-*u′* or a different owner *j*; the round-trip is
-per-`(owner, utterance)`.
+`result: false`.
 
+**Aggregate poll ceiling.** A sequential cycle over `n` owners
+costs up to `n ×` the per-owner timeout, so a converse plugin
+**MUST** also bound the whole poll iteration by a
+deployment-configured aggregate ceiling. When it elapses, owners
+that have not answered are `result: false` and selection proceeds
+over the pongs in hand. A deployment **MUST** set any
+OVOS-PIPELINE-1 §4.4 match bound for this stage at or above that
+ceiling, or the poll is killed mid-collection on every utterance.
+
+**Malformed, foreign and late pongs.** The round-trip is
+per-`(owner, utterance)`. A converse plugin **MUST** ignore a pong
+whose `skill_id` does not match the polled owner, that names an
+owner outside the eligible set, or that arrives after its timeout,
+and **MUST** treat a missing or non-boolean `result` as
+`result: false`. The first valid pong per owner wins.
 
 ### 4.3 The match for a converse claim
 
@@ -436,7 +508,7 @@ returns a `Match` (PIPELINE-1 §4.1) shaped as follows:
 - `intent_name` = the reserved value `converse`;
 - `lang` = the active language;
 - `utterance` = the chosen candidate;
-- `captures` = `{}` (a converse claim is not a slot-bearing
+- `slots` = `{}` (a converse claim is not a slot-bearing
   match);
 - `updated_session` = OPTIONAL. The converse plugin MAY use
   this PIPELINE-1 §4.2 channel to pre-promote the claimer to
@@ -464,26 +536,32 @@ the value SHOULD be drawn from:
 
 | Code | Meaning |
 |------|---------|
-| `timeout` | The owner did not respond within the per-owner timeout (synthesised by the plugin when no response arrives). |
+| `timeout` | **Plugin-synthesised only.** The owner did not respond within the per-owner timeout or the aggregate ceiling (§4.2). It never appears on the wire — by definition no pong arrived — and an owner MUST NOT emit it. It exists so plugin logs and metrics can name the silence. |
 | `not_eligible` | The owner is no longer present on the converse-handler list (raced removal). |
-| `response_mode_held` | The owner is currently in response mode and was polled in error. |
 | `handler_error` | The owner attempted to decide but an internal error prevented it. |
 | `killed` | The poll was terminated by an interrupt signal (see §5.4) before the owner could decide. |
 | `done` | The owner explicitly signals it is finished with this conversation thread and requests removal from `session.converse_handlers`. |
 
-When a plugin receives `error_code: "done"` it **MUST** remove
-the declining owner from `session.converse_handlers`:
+When a plugin receives `error_code: "done"` it removes the
+declining owner from `session.converse_handlers`:
 
 - **When returning a `Match`** (another owner claimed on the same
   iteration): remove the `"done"` owner via `Match.updated_session`
   (the PIPELINE-1 §4.2 channel).
 - **When returning `null`** (no owner claimed): there is no Match
-  to carry `updated_session`. The plugin MUST mutate the inbound
-  session object in-place, removing the `"done"` owner from
-  `converse_handlers`. This in-place mutation on a null-return is
-  the sole permitted exception to PIPELINE-1 §4.2's non-mutation
-  rule; it is scoped strictly to `"done"` removal and has no effect
-  on the current utterance's dispatch path.
+  to carry `updated_session`, and in-place mutation of the inbound
+  session object is not visible past the plugin boundary
+  (PIPELINE-1 §4.2). A pipeline plugin does not write session state
+  outside `Match.updated_session` — that channel discipline is what
+  makes declined-plugin mutations safely discardable (PIPELINE-1
+  §4.2). The removal therefore happens on the plugin's **next
+  claiming match** for the session, or the entry ages out via the
+  §3.2 TTL — whichever comes first. No plugin-side bookkeeping is
+  needed for this: the owner is polled again on the next utterance
+  and answers `error_code: "done"` again, so the removal is
+  re-derived from the current poll round rather than remembered
+  across utterances (§9.2 — the plugin holds no cross-utterance
+  state). The redundant polls are cheap.
 
 Removal is the only effect of `"done"` — it does not affect any
 other iteration step.
@@ -547,10 +625,28 @@ converse plugin's `match`, the plugin consults
 
 1. **State check.** If `session.response_mode` is absent, the
    plugin proceeds to converse-handler iteration (§4.1 step 2). If
-   present but `expires_at` has passed, the plugin treats it
-   as stale: discards the field via `Match.updated_session`
-   and proceeds to converse-handler iteration. No response-mode
-   delivery happens.
+   present but `expires_at` has passed, the plugin treats it as
+   stale and proceeds to converse-handler iteration. No
+   response-mode delivery happens.
+
+   **Discarding a stale entry.** An expired entry is **inert**:
+   §4.1 step 1 and this step reject it on every subsequent
+   utterance, so leaving it in the session changes no routing
+   decision. It is cleared opportunistically, by whichever of
+   these happens first, and no mutation exception to
+   PIPELINE-1 §4.2 is created for either:
+
+   - the plugin removes the field via `Match.updated_session` on
+     its next claiming match for the session (a converse claim
+     per §4.3, or a later response-mode delivery);
+   - the orchestrator **MAY** drop an expired `response_mode`
+     entry when it commits **any** `Match.updated_session` for
+     the session — the entry is already unreachable, so dropping
+     it is observably equivalent to keeping it.
+
+   When the plugin's `match` returns `null` there is no
+   `updated_session` channel and the entry simply stays until one
+   of the above occurs, or until the session ends.
 
 2. **Match for delivery.** With a valid response-mode entry,
    the plugin removes `session.response_mode` (single-shot
@@ -560,7 +656,7 @@ converse plugin's `match`, the plugin consults
    - `intent_name` = the reserved value `response`;
    - `lang` = the active language;
    - `utterance` = the first candidate;
-   - `captures` = `{}`;
+   - `slots` = `{}`;
    - `updated_session` = the inbound session with
      `session.response_mode` removed (single-shot delivery).
 
@@ -576,16 +672,17 @@ converse plugin's `match`, the plugin consults
    any other intent dispatch, with the full handler-trio and
    §3.1 activation.
 
-   The dispatch `data`:
+   The dispatch `data` is the standard PIPELINE-1 §7.1 payload:
 
    | Key | Type | Required | Meaning |
    |-----|------|----------|---------|
-   | `skill_id` | string | yes | The holder; equals the topic prefix. |
-   | `intent_name` | string | yes | The reserved value `response`. |
    | `lang` | string | yes | The active language. |
    | `utterance` | string | yes | The first candidate. |
-   | `utterances` | array of strings | yes | The candidate list per PIPELINE-1 §4.1, post utterance-transformer chain. |
-   | `captures` | object | yes | `{}` — response-mode delivery is not slot-bearing. |
+   | `slots` | object | yes | `{}` — response-mode delivery is not slot-bearing. |
+
+   `skill_id` and `intent_name` are not repeated in the payload —
+   they are the topic's `<skill_id>:<intent_name>` prefix and
+   suffix (PIPELINE-1 §7.1).
 
 4. **Handler.** The handler subscribed to `<skill_id>:response`
    runs and processes the awaited utterance. When it returns,
@@ -644,12 +741,19 @@ OVOS-STOP-1 distinguishes two stop paths with different effects on
   in `session.converse_handlers` and may still claim converse turns.
 - A **global stop** (`intent_name: "global_stop"`, STOP-1 §5) empties
   both `session.active_handlers` and `session.converse_handlers` via
-  `Match.updated_session`. The converse plugin will see an empty list on
-  the next utterance and produce no converse Match.
+  `Match.updated_session`. The subsequent `global_stop` dispatch then
+  stamps the stop plugin itself back onto the lists (§3.1 here is
+  uniform, and `global_stop` is not a reserved intent_name), so the
+  converse plugin sees at most the stop plugin on the next
+  utterance's poll.
 
-When a stop signal arrives in a deployment, the converse plugin SHOULD
-remove `session.response_mode` for affected sessions on its next match
-invocation (cancelling any pending response). The polled-owner-side
+Clearing `session.response_mode` on a stop is owned by
+**OVOS-STOP-1 §6.1** — a targeted stop clears the entry whose
+`skill_id` matches the dispatch target, and a global stop removes
+the field entirely, both via the stop plugin's
+`Match.updated_session`. This spec adds no rule of its own there.
+
+The polled-owner-side
 reaction when an in-flight poll is interrupted is to emit
 `<skill_id>.converse.pong` with `result: false` and
 `error_code: "killed"` (§4.4) if still able to do so, or to fall back
@@ -750,8 +854,9 @@ specification MUST:
   apply the converse plugin's `Match.updated_session`
   mutations per PIPELINE-1 §4.2;
 - run the §3.2 TTL prune at both boundaries when a deployer
-  TTL is configured;
-- enforce the §2.1 size cap;
+  TTL is configured, never removing a non-expired
+  `response_mode` holder (§2.1 exemption);
+- enforce the §2.1 size cap, subject to the same exemption;
 - dispatch every successful converse-plugin `Match` per
   OVOS-PIPELINE-1 §7 normally — no dispatch suppression, no
   out-of-band paths, full handler-trio (§8 there);
@@ -782,13 +887,19 @@ A **converse plugin** that claims the role defined in §4 MUST:
   `skill_id` is another component's identity; the plugin bundles
   no handler of its own;
 - follow the §4.1 iteration order in `match`:
-  - check `session.response_mode` first; if present and
-    non-expired, return a `Match` on `intent_name == "response"`
-    clearing the field via `Match.updated_session` (§5.2); if
-    expired, clear via `Match.updated_session` and continue;
-  - conduct the §4.2 poll on the eligible set (MAY run in
-    parallel; MUST select the claimer with the highest
-    `activated_at`; SHOULD skip `blacklisted_skills`); return a
+  - check `session.response_mode` first; verify the §2.2 identity
+    invariant against the post-prune `session.converse_handlers`
+    (a pruned or unrecognised holder MUST NOT receive delivery —
+    discard the entry via `Match.updated_session` and continue);
+    if present, non-expired, and held by a listed owner, return a
+    `Match` on `intent_name == "response"` clearing the field via
+    `Match.updated_session` (§5.2); if expired, clear via
+    `Match.updated_session` and continue;
+  - conduct the §4.2 poll on the eligible set (SHOULD run in
+    parallel; MUST bound it by both the per-owner timeout and the
+    aggregate ceiling; MUST ignore malformed, foreign, and late
+    pongs; MUST select the first claimer in recency order with the
+    §4.1 tie-break; SHOULD skip `blacklisted_skills`); return a
     `Match` on `intent_name == "converse"` for the claimer, or
     `null` if none claim;
 - return a conformant PIPELINE-1 §4.1 `Match`;
@@ -817,7 +928,7 @@ The handler SHOULD subscribe to `<own_skill_id>.converse.ping`
 to participate in polls. On each poll it MUST inspect
 `data.utterances` / `data.lang`, commit to a claim decision, and
 reply on `<own_skill_id>.converse.pong` via `.reply`
-(MSG-1 §5) with `result: true` or `false`. A handler replying
+(MSG-1 §5.2) with `result: true` or `false`. A handler replying
 `result: true` MUST handle the utterance fully when `:converse`
 is dispatched. Silence is treated as `result: false` /
 `error_code: "timeout"` — the handler remains in
@@ -829,8 +940,10 @@ field is the wire surface.
 
 A handler that wants to be removed from
 `session.converse_handlers` SHOULD decline its next converse poll
-with `error_code: "done"` (§4.4) — the plugin will remove it
-immediately via `Match.updated_session`. Without `"done"`, a
+with `error_code: "done"` (§4.4) — the plugin SHOULD remove it via
+`Match.updated_session` (immediately when another owner claims the
+same utterance, otherwise on its next claiming match or via the
+§3.2 TTL). Without `"done"`, a
 declining owner's position decays naturally once newer owners
 are activated or the §3.2 deployer TTL expires.
 
@@ -878,8 +991,8 @@ A **transformer** (OVOS-TRANSFORM-1) that mutates
 This specification deliberately does not:
 
 - prescribe **how** a converse plugin implements its poll
-  round-trips beyond §4.1 (parallelism permitted; selection
-  by highest `activated_at`);
+  round-trips beyond §4.1 (parallelism recommended; selection
+  by first claimer in recency order);
 - prescribe **what** a handler should say or do when it claims,
   leaves response mode, or its response window times out;
 - prescribe converse-plugin **activation policy** (priority
@@ -901,3 +1014,28 @@ This specification deliberately does not:
   §6 or §7 — the two reserved intent_names dispatch through
   the standard §7 path; the reservation is a namespace lease,
   not a dispatch modification.
+
+---
+
+## See also
+
+- **OVOS-PIPELINE-1** — pipeline-plugin contract, `Match` shape and
+  `updated_session` (§4.2), match-phase latency discipline (§4.4),
+  dispatch and `active_handlers` (§7.1), reserved intent-name
+  registry (§7.3).
+- **OVOS-MSG-1** — envelope, the `session` carrier, and the
+  `forward` / `reply` / `response` derivations (§5).
+- **OVOS-SESSION-1** — session field registry and the
+  omission-not-`null` rule.
+- **OVOS-SESSION-2** — in-utterance mutation boundaries (§2.6) and
+  the default-session ownership rule (§5).
+- **OVOS-STOP-1** — interrupt signal, and the owner of
+  `response_mode` clearing on stop (§6.1).
+- **OVOS-FALLBACK-1** — the sibling per-skill poll, whose
+  bus-exchange exception this specification mirrors (§6.1).
+- **OVOS-CONTEXT-1** — the declarative continuous-dialog surface
+  this specification is orthogonal to (§7).
+- **OVOS-TRANSFORM-1** — the six lifecycle hooks at which the
+  session fields claimed here MAY be mutated (§3.3).
+- **OVOS-INTENT-4** — registration model and `ovos.skill.deregister`
+  (§8.4).
