@@ -194,6 +194,16 @@ admin UI, a conflict-resolving skill, or an A/B harness suppresses
 another skill's intent without owning it. A consumer **SHOULD** log
 source and target at DEBUG when they differ.
 
+Cross-skill control is, deployment-wide, an unsolved trust problem;
+which sources may modify which targets is a hardening decision, not
+something this specification can settle. An orchestrator **MAY**
+therefore enforce a deployment policy that blocks cross-skill
+control messages (source ≠ target) — dropping the message and
+logging the refusal at WARN with both identities and the topic.
+The policy's shape (allowlist, config flag, anything else) is
+deployment-defined and out of scope; absent one, cross-skill
+control is honoured as specified above.
+
 The target **session** needs no field of its own: a control message
 affects the scope of the `session_id` its `context` carries, like
 every message of §§5–8 (§11.1). A controller managing another
