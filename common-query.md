@@ -137,8 +137,8 @@ This intent_name is **not** registered via OVOS-INTENT-4. A
 registration naming `common_query` via `ovos.intent.register.*` is
 malformed per PIPELINE-1 §7.3.
 
-Full-answer requests during `match` use the dotted topic
-`<skill_id>.common_query.request` (§7). They are sent by the plugin,
+Full-answer requests during `match` use the static topic
+`ovos.common_query.request`, target named in the payload (§7). They are sent by the plugin,
 not by the orchestrator, and are not dispatches — the colon form is
 reserved for the PIPELINE-1 §7 dispatch shape (OVOS-MSG-1 §2.1.1).
 
@@ -387,18 +387,20 @@ all claiming skills **in parallel**.
 
 ### 7.1 Full-answer request and response
 
-The plugin sends `<skill_id>.common_query.request` (dotted addressed,
-non-dispatch) to each claiming skill:
+The plugin sends `ovos.common_query.request` (broadcast, static
+topic) once per claiming skill, naming the target in the payload:
 
 ```json
 {
-  "utterance": "what is the capital of France"
+  "utterance": "what is the capital of France",
+  "skill_id": "wiki.test"
 }
 ```
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `utterance` | string | yes | The utterance to answer. |
+| `skill_id` | string | yes | The skill being asked. Every common-query skill subscribes to the one topic and answers only when this names it — one payload equality check. Addressing is payload; the routing pair is owned by the `reply` swap (OVOS-MSG-1 §5.2) and never carries it. |
 
 The language is the `lang` argument passed to `match` (§6.1), not a
 value re-derived from the session. These are direct
@@ -406,8 +408,8 @@ plugin-to-skill messages: the orchestrator does not participate, does
 not emit the handler-lifecycle trio for them, and skills **MUST NOT**
 emit lifecycle signals in response.
 
-Each skill emits its result on `<skill_id>.common_query.response`
-(dotted form, derived via `reply` per OVOS-MSG-1 §5):
+Each skill emits its result on `ovos.common_query.response`
+(static topic, derived via `reply` per OVOS-MSG-1 §5):
 
 ```json
 {
@@ -421,7 +423,7 @@ Each skill emits its result on `<skill_id>.common_query.response`
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `utterance` | string | yes | Echo of the request's utterance. |
-| `skill_id` | string | yes | The responding skill's identifier. **MUST** equal the topic's `<skill_id>` prefix (§7.1.1). |
+| `skill_id` | string | yes | The responding skill's identifier. **MUST** equal the request's target (§7.1.1). |
 | `answer` | string | conditional | The natural-language answer. **MUST** be present when the skill has one. |
 | `conf` | number | conditional | Self-reported confidence in `[0, 1]`. **MUST** be present when `answer` is present (Appendix B). |
 
@@ -431,33 +433,18 @@ Responses whose session does not match the active collection, or
 whose `context.utterance_id` does not match it (§6.4), **MUST** be
 discarded.
 
-#### 7.1.1 Topic prefix, payload identity, duplicates, and malformed responses
+#### 7.1.1 Payload identity, duplicates, and malformed responses
 
-The response topic carries the responder's identity structurally, and
-the payload repeats it. The two **MUST** agree:
+Identity is payload, verified against the contest's own state:
 
-- **Prefix extraction.** The `<skill_id>` of a
-  `<skill_id>.common_query.request` / `.response` topic is
-  **everything before the `.common_query.` infix** — not the first
-  dot-separated segment. A dotted `skill_id` such as `wiki.test`
-  therefore yields the topic `wiki.test.common_query.response` and
-  parses back unambiguously, because `.common_query.` occurs exactly
-  once in a well-formed topic of this family. This is the rule any
-  consumer **MUST** use to recover the identity.
-- **Separator hygiene.** OVOS-MSG-1 §2.1.1 constrains an identifier
-  only where the separator is structural. In this family the
-  structural marker is the `.common_query.` infix, not the bare dot,
-  so a `skill_id` containing dots is well-formed here; a `skill_id`
-  containing `.common_query.` is not, and a skill **MUST NOT** use
-  one. The MSG-1 recommendation to prefer ASCII letters, digits, `_`,
-  and `-` still stands for new identifiers.
 - **Binding.** The plugin **MUST** discard a response whose payload
-  `skill_id` does not equal the prefix extracted from the topic it
-  arrived on. Without this check the topic prefix and the payload can
-  name different skills, and every downstream decision that consumes
-  `skill_id` — the denylist (§8 step 2), deduplication, tie-breaking
-  (§8.1), the answering-skill slot (§9) — acts on an identity the
-  responder chose freely.
+  `skill_id` does not name a skill it requested an answer from in
+  this contest (§7.1). Without this check every downstream decision
+  that consumes `skill_id` — the denylist (§8 step 2),
+  deduplication, tie-breaking (§8.1), the answering-skill slot (§9)
+  — acts on an identity the responder chose freely. The topics of
+  this family are static strings; no identity is ever recovered by
+  parsing a topic.
 
 ### 7.2 Collection window
 
@@ -590,12 +577,14 @@ surface):
    its own `skill_id`, and optionally `latency_ms` — deriving the
    pong via `reply` so `context.utterance_id` rides along (§6.4). If no, stay
    silent.
-2. On `<own_skill_id>.common_query.request`, produce the best answer — network
-   calls, DB queries, and full generation are appropriate here — and
-   emit it on `<own_skill_id>.common_query.response` (via `reply`,
+2. On `ovos.common_query.request` naming it in `data.skill_id`,
+   produce the best answer — network calls, DB queries, and full
+   generation are appropriate here — and
+   emit it on `ovos.common_query.response` (via `reply`,
    OVOS-MSG-1 §5) with the echoed `utterance`,
-   its own `skill_id`, `answer`, and `conf`. The payload `skill_id`
-   **MUST** equal the topic prefix the skill emits on (§7.1.1).
+   its own `skill_id`, `answer`, and `conf` (§7.1.1). A request
+   naming a different skill is not addressed to it and **MUST** be
+   ignored.
    If no answer can be produced, emit the response with no `answer`
    field so early termination can fire.
 3. The skill **MUST NOT** call `ovos.utterance.speak` from its
@@ -638,16 +627,16 @@ early start, the stage blocks for the full collection window.
 |-------|-----------|---------|------------|
 | `ovos.common_query.ping` | plugin → all skills | Wants-to-answer poll | §6.1 |
 | `ovos.common_query.pong` | skill → plugin | Claim, via `reply` | §6.2 |
-| `<skill_id>.common_query.request` | plugin → claiming skill | Full-answer request (during match) | §7.1 |
-| `<skill_id>.common_query.response` | claiming skill → plugin | Full answer or decline, via `reply` | §7.1, §11 |
+| `ovos.common_query.request` | plugin → claiming skill (target in `data.skill_id`) | Full-answer request (during match) | §7.1 |
+| `ovos.common_query.response` | claiming skill → plugin | Full answer or decline, via `reply` | §7.1, §11 |
 | `<pipeline_id>:common_query` | orchestrator → plugin | Handler dispatch (reserved intent_name) | §3, §10 |
 
 The one colon-form topic (`<pipeline_id>:common_query`) is the
 orchestrator's dispatch and follows the PIPELINE-1 §7 dispatch shape.
-Dotted-form topics (`<skill_id>.common_query.request`,
-`<skill_id>.common_query.response`) are plugin- and skill-emitted
-non-dispatch messages per MSG-1 §2.1.1; their `<skill_id>` component
-is everything before the `.common_query.` infix (§7.1.1).
+Dotted-form topics (`ovos.common_query.request`,
+`ovos.common_query.response`) are plugin- and skill-emitted
+non-dispatch messages per MSG-1 §2.1.1; the target and responder
+identities travel in `data.skill_id` (§7.1.1) — never in the topic.
 `ovos.common_query.ping` is a broadcast. Pong and
 answer responses are both derived via `reply` (OVOS-MSG-1 §5). Every
 poll/response message is correlated by `context.utterance_id`
@@ -668,12 +657,11 @@ poll/response message is correlated by `context.utterance_id`
   query that arrived without it, and discard pongs and responses
   whose `utterance_id` or session does not match the active contest
   (§6.1, §6.4, §7.1);
-- discard a response whose payload `skill_id` does not equal the
-  `<skill_id>` prefix of the topic it arrived on — everything before
-  the `.common_query.` infix (§7.1.1);
-- request full answers via `<skill_id>.common_query.request` from all
-  claimants in parallel and collect within a bounded window
-  (§7.1, §7.2);
+- discard a response whose payload `skill_id` does not name a skill
+  this contest requested an answer from (§7.1.1);
+- request full answers via `ovos.common_query.request`, one per
+  claimant named in `data.skill_id`, in parallel, and collect within
+  a bounded window (§7.1, §7.2);
 - extend the collection window past the initial value only while a
   claimant is outstanding, never past the ceiling, and never on the
   strength of a reported `latency_ms` (§7.2);
@@ -723,17 +711,17 @@ poll/response message is correlated by `context.utterance_id`
   evaluated candidate, §5.2), and derive both via `reply` so
   `context.utterance_id` propagates for correlation (§6.2, §6.4,
   §7.1);
-- emit answers on `<own_skill_id>.common_query.response` via `reply`
+- emit answers on `ovos.common_query.response` via `reply`
   (§7.1, §11);
-- report its own `skill_id` in the payload, equal to the topic prefix
-  it emits on (§7.1.1);
+- report its own `skill_id` in the payload, and ignore any request
+  whose `data.skill_id` names another skill (§7.1.1);
 - include `conf` whenever `answer` is present (§7.1);
 - respond even when no answer can be produced (no `answer` field), so
   early termination can fire (§7.2);
 - not call `ovos.utterance.speak` from the `common_query` handler
   (§11);
 - not emit handler-lifecycle signals in response to
-  `<own_skill_id>.common_query.request` (§7.1).
+  `ovos.common_query.request` (§7.1).
 
 ### A skill that participates in common query **SHOULD**:
 
