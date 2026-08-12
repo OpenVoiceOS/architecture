@@ -300,21 +300,20 @@ runs.
 | `can_handle` | bool | yes | Whether this skill is willing to handle the current utterance. |
 | `utterance` | string | yes | Echo of the utterance evaluated — the first element of the ping's `utterances`. |
 
-**Round correlation.** The plugin keys poll state by `session_id`
-from `context.session`, which separates peers and conversations for
-free. What session scoping does **not** separate is two consecutive
-rounds in the same session, so one field is added and no more: a
-pong whose `utterance` does not match the poll in flight **MUST** be
-discarded. At most one fallback poll is in flight per session, so
-the utterance identifies the round — no opaque poll id is needed,
-unlike OVOS-COMMON-QUERY-1 §6.4's `query_id`, which serves
-overlapping contests.
+**Round correlation.** The round is the lifecycle: the plugin keys
+poll state by `session_id` from `context.session` and by
+`context.utterance_id` (OVOS-MSG-1 §4.2), which the ping carries by
+`reply` derivation and the pong carries back the same way — no
+skill-side action, no field of this specification's own. A pong
+whose `utterance_id` does not equal the round's **MUST** be
+discarded: an answer that cannot prove which question it answers
+never decides a round. This is the same correlation rule every poll
+protocol uses (OVOS-COMMON-QUERY-1 §6.4).
 
-The `utterance` field is REQUIRED. A pong is correlated to the
-poll by it; a pong that omits it, or whose `utterance` does not
-match the one being polled, is uncorrelatable and **MUST** be
-discarded. An answer that cannot prove which question it answers
-never decides a round.
+The `utterance` field remains REQUIRED as the evaluated candidate —
+it tells the skill *what* it judged (the first element of
+`utterances`, §6.1), while `utterance_id` tells the plugin *which
+round* the judgment belongs to.
 
 The boolean's field name is protocol-specific: this spec and
 OVOS-STOP-1 use `can_handle`, OVOS-CONVERSE-1's poll uses `result`,
