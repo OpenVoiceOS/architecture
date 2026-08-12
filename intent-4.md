@@ -192,9 +192,16 @@ names the **source** requesting it, and the two **MAY** differ.
 Cross-skill control is the point of the bus-level surface (§8.5): an
 admin UI, a conflict-resolving skill, or an A/B harness suppresses
 another skill's intent without owning it. A consumer **SHOULD** log
-source and target at DEBUG when they differ. Session scoping
-(§11.3) bounds the blast radius: a source affects only the session
-its message carries.
+source and target at DEBUG when they differ.
+
+The target **session** needs no field of its own: a control message
+affects the scope of the `session_id` its `context` carries, like
+every message of §§5–8 (§11.1). A controller managing another
+session's registrations declares that session on the message — the
+ordinary per-message session declaration of OVOS-SESSION-2, not a
+mechanism of this specification. What bounds an external
+participant to its own scope is the bridge (OVOS-BRIDGE-1), not
+this message shape.
 
 A single intent **MAY** be registered under both methods — they are
 two training-data representations of the same handler. Different
@@ -592,7 +599,10 @@ without modifying skill code. Both topics share the same payload as
 Here `skill_id` is the **target** of the operation, not the sender:
 unlike registration (§3.2), enable/disable are legitimately
 cross-skill, and `context.skill_id` — the source — **MAY** name a
-different skill.
+different skill. The target session is the `context` session, as
+for every message here (§3.2, §11.3): a controller reaches another
+session's scope by declaring that session on the message, not
+through any payload field.
 
 If `lang` is omitted, every language for that `(skill_id, intent_name)`
 is affected. Like deregistration, enable/disable target the triple and
