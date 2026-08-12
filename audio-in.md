@@ -113,8 +113,18 @@ The service **MUST NOT** emit `ovos.utterance.handle` when STT
 produced no usable transcription — an empty result, a decode
 failure, or a confidence rejection. `utterances` is defined as
 non-empty; a phantom emission with no real content is
-non-conformant. Surfacing the failure for diagnostics is outside
-this specification's scope.
+non-conformant.
+
+Instead the service **MUST** emit `ovos.stt.failed`, carrying the
+session in `context.session` like every emission here (§5.2). The
+payload **MAY** be empty; `lang` **MAY** be included under the §9.1
+condition. The user spoke and nothing will answer — that fact must
+be observable on the bus, or every client is left to guess between
+"still transcribing" and "gave up". What a client does with it —
+an error earcon, a retry prompt, nothing — is client policy, not
+this specification's concern. No handler lifecycle follows: the
+failure event is terminal, and it is the only Message the failed
+capture produces.
 
 ### 5.1 Language resolution
 
@@ -272,6 +282,7 @@ word (push-to-talk, `ovos.mic.listen`) emit no wake-word signal.
 | `ovos.listener.sleep` | controller → audio-input | Enter device-wide sleep mode and suspend capture (§6.3). |
 | `ovos.listener.awoken` | audio-input → broadcast | Left sleep mode (§6.4). |
 | `ovos.mic.listen` | any component → audio-input | Re-open the user input channel; consumed here, defined in OVOS-AUDIO-1 §4.4. |
+| `ovos.stt.failed` | audio-input → broadcast | Capture yielded no usable transcription; terminal, no lifecycle follows (§5). |
 
 ---
 
@@ -284,6 +295,9 @@ word (push-to-talk, `ovos.mic.listen`) emit no wake-word signal.
   STT (§4);
 - assign a session in `context.session` per §5.2;
 - emit `ovos.utterance.handle` with `data.utterances` and `data.lang`
+  (§5);
+- emit `ovos.stt.failed` instead when STT produced no usable
+  transcription, and no `ovos.utterance.handle` for that capture
   (§5);
 - emit `ovos.listener.wakeword` when a wake word triggers capture
   (§6.5);
