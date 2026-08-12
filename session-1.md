@@ -83,7 +83,9 @@ omitted-field rule instead.
 The same rule governs a **wrong-typed** value. A field whose value is
 not of the wire type fixed for it (§3, or the claiming specification
 under §2.2) is malformed: the consumer **MUST** behave as if the field
-were omitted (§2.1), **SHOULD** log the violation, and **MUST NOT**
+were omitted (§2.1), **SHOULD** log the violation at WARN — naming
+the field and the wire type received, so a client bug does not hide
+behind the default the field then resolves to — and **MUST NOT**
 reject the Message because of it. `null` is the special case of this
 rule that a producer is additionally forbidden to emit.
 
