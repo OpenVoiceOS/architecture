@@ -534,10 +534,13 @@ session-scoped intent is matched, the hub dispatches it as a
 to the satellite's `source`; the bridge routes it back per §3.2.
 
 **Disconnect.** When the satellite disconnects, the bridge SHOULD
-emit `ovos.skill.deregister` (**OVOS-INTENT-4 §8.4**) with the
-satellite's `session_id` for each skill the satellite registered.
-When the bridge uses `session_id` NAT (§3.2), it MUST use the
-hub-side `session_id` in the deregister payload.
+emit `ovos.skill.deregister` (**OVOS-INTENT-4 §8.4**) for each skill
+the satellite registered, carrying the satellite's session in the
+Message **context**. The deregistration is scoped to the `session_id`
+the orchestrator reads from `context.session.session_id`, never from
+`Message.data` (**OVOS-INTENT-4 §8.4, §11.1**); the payload carries
+`skill_id` only. When the bridge uses `session_id` NAT (§3.2), the
+`session_id` it places in that context MUST be the hub-side value.
 
 **Reconnect.** When the satellite reconnects, its session-scoped
 registrations are gone. The satellite is responsible for
@@ -627,3 +630,5 @@ buffer them indefinitely.
   intent gating.
 - **OVOS-AUDIO-1** — `ovos.utterance.speak.b64` and `ovos.audio.speech`
   for TTS-as-a-service (§4.2.5).
+- **OVOS-INTENT-4** — session-keyed registration and
+  `ovos.skill.deregister` (§4.4).
