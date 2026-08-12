@@ -249,13 +249,15 @@ session by:
 - the **persona plugin itself** — detecting a release intent during
   `match` (§7.1 route 1) and clearing `persona_id` via
   `Match.updated_session`;
-- the **stop cascade** (OVOS-STOP-1) — a deployment **SHOULD**
-  configure its stop plugin to clear `persona_id` on a global stop,
-  so that "stop" returns the session to deterministic mode. This is
-  deployment guidance, not an obligation this specification places on
-  a stop plugin: OVOS-STOP-1 §6.2 is the normative home for the
-  session fields a stop plugin drains, and it does not currently list
-  `persona_id`;
+- the **stop dispatch** (OVOS-STOP-1) — the persona pipeline
+  **MUST** participate in the ordinary per-skill stop protocol under
+  its own `pipeline_id` (`pipeline_id ≡ skill_id`, PIPELINE-1 §7.0):
+  it answers the stop ping affirmatively when the message's session
+  has an active persona, and on the stop dispatch clears
+  `persona_id` for that session via the standard confirmation path.
+  "Stop" therefore ends a persona conversation everywhere, through
+  machinery OVOS-STOP-1 already defines — no drain-list entry and no
+  stop-plugin configuration is involved;
 - a **pipeline plugin** via handler-side session mutation;
 - a **session sync** (`ovos.session.sync`) from any component.
 
