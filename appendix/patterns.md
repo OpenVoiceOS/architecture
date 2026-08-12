@@ -121,7 +121,7 @@ The specs enforce this consistently:
 Every pong above is a `reply` of the round's ping, which is what
 carries `context.utterance_id` back to the poller unchanged — the
 correlation the poller uses to tell this round's answers from the
-last one's (MSG-1 §4.2).
+last one's (PIPELINE-1 §9.1.1).
 
 #### 3.1.3 No central correlation, no central state
 
@@ -133,7 +133,7 @@ a `.response` back to its request, no shared "current
 conversation" record.
 
 The one identifier that does travel is
-`context.utterance_id` (MSG-1 §4.2), and it does not
+`context.utterance_id` (PIPELINE-1 §9.1.1), and it does not
 contradict any of that. It names an **interaction lifecycle** —
 one utterance, one out-of-band query, one UI command — and it
 is stamped once at lifecycle entry and copied by every

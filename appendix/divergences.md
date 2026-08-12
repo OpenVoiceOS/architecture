@@ -121,7 +121,7 @@ defined by any spec** and should be removed or replaced:
   deployment that relies on the array form loses recipients on
   the first swap already; under v1 the shape is simply not
   available.
-- **Poll correlation is `context.utterance_id`** (MSG-1 §4.2,
+- **Poll correlation is `context.utterance_id`** (PIPELINE-1 §9.1.1,
   COMMON-QUERY-1 §6.4, FALLBACK-1 §6.1, CONVERSE-1 §4.2). No
   poll family mints a correlation key of its own — the earlier
   COMMON-QUERY-1 `query_id` is removed. Nothing in shipped code
@@ -229,7 +229,7 @@ defined by any spec** and should be removed or replaced:
   backwards. The TRANSFORM-1 notes in
   [rationale.md](rationale.md) record why ascending was chosen.
 - **`context.utterance_id` is the universal correlation key**
-  (MSG-1 §4.2). The orchestrator stamps it exactly once at
+  (PIPELINE-1 §9.1.1). The orchestrator stamps it exactly once at
   lifecycle entry — the utterance arrival, the out-of-band
   request, the UI command — and it propagates across `forward` /
   `reply` / `response` under the same MUST that governs

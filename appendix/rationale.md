@@ -86,7 +86,7 @@ the normative sections.
   context, cross-skill state, and similar concerns are
   deferred to other specifications.
 - **One correlation key, in the envelope, for everybody**
-  (MSG-1 §4.2). `utterance_id` is the exception that proves the
+  (PIPELINE-1 §9.1.1). `utterance_id` is the exception that proves the
   bullet above: it is a *value* every derivation copies, not an
   index anybody keeps. It was lifted into MSG-1 rather than left
   to each poll family because the alternative was three

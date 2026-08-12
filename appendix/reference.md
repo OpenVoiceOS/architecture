@@ -163,6 +163,6 @@ layer-2 transports (see appendix/patterns.md §3.1.2).
 | Pipeline introspection response (PIPELINE-1 §10.2) | `reply` | Plugin answers back to the observer that requested |
 
 Deriving a pong with `reply` also carries `context.utterance_id`
-(MSG-1 §4.2) back to the poller untouched, which is what makes the
+(PIPELINE-1 §9.1.1) back to the poller untouched, which is what makes the
 answer correlatable to its round. A pong assembled as a fresh
 Message loses it and is discarded.
