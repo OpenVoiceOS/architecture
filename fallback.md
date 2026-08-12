@@ -260,18 +260,18 @@ earlier stage removed.
 
 ## 6. Match contract
 
-### 6.1 Per-skill query
+### 6.1 The willingness contest
 
-When the effective pool is non-empty the plugin queries skills one
-at a time in pool order. For each skill it sends:
+When the effective pool is non-empty the plugin broadcasts **one**
+ping for the round:
 
-`<skill_id>.fallback.ping`
+`ovos.fallback.ping`
 
-using the **dotted addressed** form (**OVOS-MSG-1 §2.1.1**),
 derived from the inbound utterance Message via `reply`
-(**OVOS-MSG-1 §5.2**). The skill answers with `reply` of the ping.
-Both Messages are delivered by topic subscription; the routing pair
-just rides along.
+(**OVOS-MSG-1 §5.2**). Every registered fallback skill evaluates
+**in parallel** and answers with `reply` of the ping — claim or
+explicit decline. One Message asks the whole pool; the round's
+latency is one collection window, not a sum of per-skill waits.
 
 Payload:
 
@@ -286,17 +286,19 @@ at which the fallback skill parses the utterance — it may query a
 knowledge base, run a classifier, call an LLM, or apply any other
 internal logic. The reply carries only the decision.
 
-The queried skill replies with:
+Each skill replies with:
 
-`<skill_id>.fallback.pong`
+`ovos.fallback.pong`
 
 derived from the ping through the reply derivation (**OVOS-MSG-1
 §5.2**), so that the pong reaches the plugin wherever the skill
-runs.
+runs. A skill **SHOULD** answer even when declining
+(`can_handle: false`): explicit declines are what let the window
+close early instead of waiting out the ceiling.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `skill_id` | string | yes | The responding skill's identity. MUST equal the topic prefix. |
+| `skill_id` | string | yes | The responding skill's identity. |
 | `can_handle` | bool | yes | Whether this skill is willing to handle the current utterance. |
 | `utterance` | string | yes | Echo of the utterance evaluated — the first element of the ping's `utterances`. |
 
@@ -320,15 +322,22 @@ OVOS-STOP-1 use `can_handle`, OVOS-CONVERSE-1's poll uses `result`,
 and OVOS-COMMON-QUERY-1 uses `can_answer`. Each name is normative
 only within its own protocol.
 
-The plugin waits for each skill's reply before advancing to the
-next. The plugin **MUST** bound each poll wait by a ceiling.
-Without a ceiling, one unresponsive skill stalls the entire
-fallback stage — and with it the utterance — forever. An absent or
-malformed pong (missing or non-boolean `can_handle`, mismatched
-`skill_id`, mismatched `utterance`) **MUST** be treated as
-`can_handle: false` and the skill skipped; this is uniform with the
-silence rules of OVOS-CONVERSE-1 (§4.2 there) and OVOS-STOP-1
-(§4.2 there).
+The plugin collects pongs inside **one bounded window** per round.
+Without a bound, one unresponsive skill stalls the entire fallback
+stage — and with it the utterance — forever. A skill silent at
+window close, or whose pong is malformed (missing or non-boolean
+`can_handle`, mismatched `utterance_id`), **MUST** be treated as
+`can_handle: false`; this is uniform with the silence rules of
+OVOS-CONVERSE-1 (§4.2 there) and OVOS-STOP-1 (§4.2 there).
+
+The window **SHOULD** close early when a decision is already
+forced, and selection order makes two early closes safe:
+
+- every skill in the effective pool has answered — nothing more can
+  arrive that the round would wait for;
+- the **highest-priority** skill still unanswered ranks below the
+  best claimant so far — no later pong can outrank the claim
+  already held.
 
 **The poll is the decision.** Unlike OVOS-COMMON-QUERY-1, whose
 ping only filters plausible answerers before a separate answer
@@ -505,8 +514,8 @@ identically regardless of how many stages are present.
 |-------|------|-----------|---------|
 | `ovos.fallback.register` | broadcast | skill → fallback | Register as a fallback handler (§3.1). |
 | `ovos.fallback.deregister` | broadcast | skill → fallback | Deregister (§3.2). |
-| `<skill_id>.fallback.ping` | dotted addressed | fallback → skill | Query: willing to handle this utterance? (§6.1). |
-| `<skill_id>.fallback.pong` | dotted addressed | skill → fallback | Reply: willing or not (§6.1). |
+| `ovos.fallback.ping` | broadcast | fallback → all fallback skills | One willingness query per round (§6.1). |
+| `ovos.fallback.pong` | shared reply topic | skill → fallback | Claim or explicit decline, via `reply` (§6.1). |
 | `<skill_id>:fallback` | dispatch | orchestrator → skill | Dispatch to the selected skill (§7). |
 
 ---
@@ -529,14 +538,13 @@ identically regardless of how many stages are present.
   `Message.data` (§3.2, §3.4);
 - construct the effective handler pool per §5 on each match call,
   ordering equal priorities deterministically (§5 step 1);
-- query skills via `<skill_id>.fallback.ping` / `.pong` — either
-  sequentially in pool order or via the observably equivalent
-  broadcast-poll optimisation (§6.1);
-- bound each poll wait by a ceiling and treat an absent or
-  malformed pong as `can_handle: false` (§6.1);
-- discard a pong whose `utterance` or session does not match the
-  poll in flight (§6.1);
-- select the first willing skill in pool order (§6.2);
+- broadcast one `ovos.fallback.ping` per round and collect
+  `ovos.fallback.pong` within a bounded window (§6.1);
+- treat a skill silent at window close, or a malformed pong, as
+  `can_handle: false` (§6.1);
+- discard a pong whose `context.utterance_id` or session does not
+  match the round (§6.1);
+- select the highest-ranked claimant in pool order (§6.2);
 - return a `Match` with `intent_name: "fallback"` targeting the
   selected skill (§6.3);
 - return `None` when no skill in the pool is willing (§6.2).
@@ -547,8 +555,8 @@ identically regardless of how many stages are present.
   deployer configures otherwise (§6.1);
 - when configured with a priority range, apply it as §5 step 2, and
   log at WARN a registered skill that falls in no range (§5);
-- tolerate a pong that omits `utterance` as a legacy producer
-  (§6.1);
+- close the collection window early on all-answered, or when no
+  unanswered skill can outrank the best claimant (§6.1);
 
 ### A fallback pipeline plugin **MAY**:
 
@@ -558,8 +566,8 @@ identically regardless of how many stages are present.
 
 - emit `ovos.fallback.register` with its `skill_id` and `priority`
   before receiving fallback dispatches (§3.1);
-- subscribe to `<own_skill_id>.fallback.ping` and reply with
-  `<own_skill_id>.fallback.pong`, derived through the reply
+- subscribe to `ovos.fallback.ping` and answer — claim or explicit
+  decline — with `ovos.fallback.pong`, derived through the reply
   derivation and echoing the evaluated `utterance` (§6.1);
 - subscribe to `<own_skill_id>:fallback` to receive dispatches (§7).
 
