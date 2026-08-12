@@ -34,6 +34,27 @@
   cross-pollinate without either format changing. Sits at
   injection point 3 of §3.3 conceptually but is
   build-time rather than runtime tooling.
+- **GUI interactive companions.** GUI-1 §3.4 reserves the
+  names `SYSTEM_confirm` (a yes/no companion to a spoken
+  question) and `SYSTEM_select` (a choice companion to a spoken
+  set of options) without defining them. Both need a return
+  channel from the display back to the assistant, and no such
+  channel is specified — defining the templates without it
+  would leave every backend inventing its own. The names are
+  held so that no application-defined template claims them; a
+  future version defines the pair together with the return
+  path.
+- **An identifier in a dotted topic, at one surface.**
+  MSG-1 §2.1.1 confines identifiers to the
+  `<skill_id>:<intent_name>` dispatch shape and makes every
+  dotted topic a static string. PIPELINE-1 §10's per-plugin
+  introspection surface,
+  `ovos.pipeline.<pipeline_id>.intents.list`, still builds a
+  topic from a runtime identifier, which is the one place the
+  family's topic surface is not enumerable from the specs
+  alone. Whether the surface moves to a static topic with
+  `pipeline_id` in the payload — the shape the poll families
+  took — is unresolved.
 - **i18n corpus.** OVOS-INTENT-2 defines the locale file
   format, and `ovos-localize` (§1.4) provides the
   operations layer; what remains is the *scale* of the

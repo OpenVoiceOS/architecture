@@ -16,8 +16,22 @@ that need no change:
 
 - The Message envelope (`type` / `data` / `context`) — matches
   `ovos-bus-client.Message`.
-- `source`, `destination` semantics including the
-  `Message.reply` swap — matches `ovos-bus-client/message.py`.
+- `source` and `destination` as the routing pair, and the
+  `Message.reply` swap that owns it — matches
+  `ovos-bus-client/message.py`. The one point of departure is the
+  array-valued `destination` the shipped swap still accepts; see
+  §5.3.
+- `ovos.common_query.ping` / `ovos.common_query.pong` — static
+  broadcast poll topics with the responder's identity in
+  `data.skill_id`. Match
+  `ovos-common-query-pipeline-plugin/opm.py` and
+  `ovos-workshop/skills/ovos.py`'s
+  `__handle_common_query_ping` verbatim; the shipped pair is the
+  model the other poll families were reshaped toward (§5.4).
+- Player times counted in **milliseconds** (GUI-1 §3.4
+  `SYSTEM_audio_player` / `SYSTEM_media_player`) — matches
+  `ovos-media/media_backends/base.py`, which already carries
+  `position` and seek targets in ms.
 - `context.session` as a serialized Session object — matches
   `ovos-bus-client/client/client.py`'s
   `message.context["session"] = sess.serialize()`.
@@ -49,7 +63,7 @@ that need no change:
 | PIPELINE-1 | `mycroft.skill.handler.start` / `.complete` / `.error` | `ovos.intent.handler.start` / `.complete` / `.error` | Renamed into the `ovos.intent.*` namespace for uniformity. Breaks every existing handler-lifecycle observer; the migration cost is real. |
 | PIPELINE-1 | `recognizer_loop:utterance` | `ovos.utterance.handle` | See §5.4 entry. Migration touches `ovos-dinkum-listener`, `ovos-simple-listener`, `ovos-audio`, and `ovos-core/intent_services/service.py`. |
 | PIPELINE-1 | `complete_intent_failure` | `ovos.intent.unmatched` | Follows `ovos.intent.*` namespace; pairs with `ovos.intent.matched`. |
-| COMMON-QUERY-1 | `<skill_id>:common_query` | `<skill_id>.common_query.request` | The full-answer request is a plugin-emitted addressed message, not a dispatch; MSG-1 §2.1.1 reserves the colon for dispatch-shaped topics, so it moves to the dotted form and pairs with `<skill_id>.common_query.response`. The one colon topic kept is the dispatch `<pipeline_id>:common_query`. |
+| COMMON-QUERY-1 | `question:query` / `question:query.response` | `ovos.common_query.request` / `ovos.common_query.response` | The shipped plugin broadcasts `question:query` and collects `question:query.response`, correlating answers by the `phrase` string. Both names fail MSG-1 §2.1.1 — `:` outside the dispatch shape, and a root that names neither the ecosystem nor the domain. The v1 pair is two **static** topics; the skill being asked is named in `data.skill_id` (COMMON-QUERY-1 §7.1.1), never in the topic. The one colon topic kept is the dispatch `<pipeline_id>:common_query`. |
 
 ### 5.2.1 Topics to remove from ovos-core
 
@@ -97,6 +111,32 @@ defined by any spec** and should be removed or replaced:
 - **Handler-lifecycle payload updated** (PIPELINE-1 §8.2).
   Today the trio payload is `{name: <handler_func_name>}`.
   Prescribed: `{skill_id, intent_name, optional exception}`.
+- **`destination` is a single string** (MSG-1 §3.3). A Message
+  addresses one consumer or all of them; there is no
+  multi-address form, and a producer wanting several named
+  consumers emits one Message each. Current
+  `ovos-bus-client/message.py` accepts an array: the `reply`
+  swap tests `isinstance(dst, list)` and takes `dst[0]` as the
+  new `source`, silently dropping every other member. Any
+  deployment that relies on the array form loses recipients on
+  the first swap already; under v1 the shape is simply not
+  available.
+- **Poll correlation is `context.utterance_id`** (MSG-1 §4.2,
+  COMMON-QUERY-1 §6.4, FALLBACK-1 §6.1, CONVERSE-1 §4.2). No
+  poll family mints a correlation key of its own — the earlier
+  COMMON-QUERY-1 `query_id` is removed. Nothing in shipped code
+  carries the field: the common-query plugin matches answers by
+  the `phrase` string, and `ovos-bus-client`'s
+  `CollectionMessage` carries a `(handler_id, query_id)` pair
+  that the derivations do not propagate. See §5.4 for the field
+  itself.
+- **A wrong-typed session field is treated as omitted, loudly**
+  (SESSION-1 §2). A field whose value is of the wrong type is
+  filled from the default as if absent, and the violation
+  **SHOULD** be logged at WARN naming both the field and the type
+  received. Current `Session` deserialization accepts whatever it
+  is handed and produces no diagnostic, so a typo'd client field
+  fails silently for the life of the session.
 
 ### 5.4 Architectural divergences
 
@@ -188,6 +228,102 @@ defined by any spec** and should be removed or replaced:
   be renumbered, since run unrenumbered the chain executes
   backwards. The TRANSFORM-1 notes in
   [rationale.md](rationale.md) record why ascending was chosen.
+- **`context.utterance_id` is the universal correlation key**
+  (MSG-1 §4.2). The orchestrator stamps it exactly once at
+  lifecycle entry — the utterance arrival, the out-of-band
+  request, the UI command — and it propagates across `forward` /
+  `reply` / `response` under the same MUST that governs
+  `session`. Everything derived from that lifecycle carries the
+  same value: transformer passes, the pipeline contest, every
+  poll and pong, the dispatch, the terminal events. Two Messages
+  belong to the same lifecycle iff their `utterance_id` matches,
+  and that is the whole correlation rule — the poll specs
+  (FALLBACK-1, COMMON-QUERY-1, CONVERSE-1) define nothing of
+  their own. Nothing in current OVOS has an equivalent: no
+  component stamps a lifecycle identifier, so a plugin holding a
+  poll window today separates this round's answers from the
+  previous round's by the window's own timing alone. A component
+  **MUST NOT** overwrite an `utterance_id` already present, which
+  makes the field the one piece of `context` a bridge or a
+  transformer must carry through untouched.
+- **Identifiers appear in topics only in the dispatch shape**
+  (MSG-1 §2.1.1). `<skill_id>:<intent_name>` is the single
+  identifier-bearing topic shape and the single one a consumer
+  parses; every dotted topic is a **static string** fixed by the
+  specification that defines it. Addressing beyond the topic is
+  payload, and the routing pair belongs to the `reply` swap
+  alone. The consequence is that a monitor, a bridge allowlist,
+  or a conformance harness can enumerate a deployment's complete
+  topic surface from the specifications. Current OVOS mints
+  topics from identifiers freely — `<skill_id>.converse.ping`,
+  `<skill_id>.stop.ping`, `<skill_id>.fallback.ping` (in
+  flight), `question:action.<skill_id>`, `<skill_id>.activate` —
+  so no such enumeration is possible today, and each poll family
+  needed its own reshaping.
+- **The poll families are broadcast contests on static topics**
+  (STOP-1 §4.2, CONVERSE-1 §4.2, FALLBACK-1 §6, COMMON-QUERY-1
+  §6). One ping per round on a static topic, parallel pongs
+  correlated by `utterance_id`, explicit declines, a bounded
+  window that closes early once nothing still unanswered can
+  change the outcome, and selection in pool order rather than
+  arrival order. `ovos.stop.ping` / `.pong` was the model;
+  converse and fallback were reshaped to match it, and common
+  query already had the shape at the ping stage. Current OVOS
+  runs each family differently and none of them this way — §5.7
+  carries the topic mapping. Two consequences carry the weight:
+  - Candidacy stops travelling in the topic. A converse
+    candidate self-checks its own `skill_id` against
+    `context.session.converse_handlers` (CONVERSE-1 §4.2)
+    instead of being addressed by name; a common-query skill
+    checks `data.skill_id`. Shipped `ovos-core`'s
+    `converse_service.py` and `stop_service.py` instead emit one
+    addressed ping **per candidate** in a loop, so a round costs
+    as many Messages as there are candidates and the candidate
+    set is fixed at emit time rather than read from the session
+    the ping carries.
+  - The pong stops being a second, differently-shaped name.
+    Shipped skills answer `<skill_id>.converse.ping` on the
+    shared `skill.converse.pong`, and `<skill_id>.stop.ping` on
+    `skill.stop.pong` — a per-skill request paired with a
+    broadcast reply. Under v1 both halves are static and
+    symmetric.
+- **The in-flight fallback implementation diverges from
+  FALLBACK-1 as well as V0 does.** `ovos-core#808` and
+  `ovos-workshop#465` replace the broadcast
+  `ovos.skills.fallback.ping` with a skill-addressed
+  `<skill_id>.fallback.ping` / `<skill_id>.fallback.pong` pair,
+  keeping the broadcast topic bound alongside it. That is the
+  opposite direction from FALLBACK-1 §6, which prescribes one
+  broadcast `ovos.fallback.ping` per round, answered in parallel
+  on `ovos.fallback.pong`. The divergence is catalogued here
+  because that work is unmerged and reads as conformance work:
+  it is not.
+- **The persona pipeline is stoppable under its own
+  `pipeline_id`** (PERSONA-1 §6, §8.6). The persona pipeline answers
+  the STOP-1 ping affirmatively for a session it holds a
+  conversation on, and is stopped by the ordinary per-skill stop
+  dispatch addressed to its `pipeline_id` — no drain-list entry
+  and no stop-plugin configuration is involved. Current OVOS has
+  no persona pipeline in the stop cascade at all, so there is no
+  shipped behaviour to change; what the ruling forecloses is the
+  alternative shape, in which the stop plugin would have had to
+  know that persona exists.
+- **Enable and disable are cross-skill control messages**
+  (INTENT-4 §3.2, §8.5). The payload-identity check — payload
+  `skill_id` **MUST** equal `context.skill_id`, or the message
+  is rejected — is scoped to registration and deregistration,
+  where a mismatch would be a remote uninstall. `ovos.intent.enable`
+  and `ovos.intent.disable` are exempt: the payload names the
+  **target**, `context.skill_id` names the **source**, and the two
+  legitimately differ, because an admin UI or a conflict-resolving
+  skill suppressing another skill's intent is the point of the
+  surface. An orchestrator **MAY** block cross-skill control as
+  deployment hardening; the policy's shape is deployment-defined.
+  Cross-*session* control needs no field of its own — the message
+  affects the scope of whichever session its `context` declares.
+  Current `mycroft.skill.enable_intent` / `disable_intent` carry no
+  identity check in either direction, and no notion of a target
+  distinct from a source.
 
 ### 5.5 New topics with no direct precedent
 
@@ -214,6 +350,20 @@ defined by any spec** and should be removed or replaced:
   §4.1, §4.2). Sound-effect playback topics. Payloads accept
   either a `uri` or inline base64 `audio` field, enabling
   cross-host audio delivery without shared filesystem access.
+- **`ovos.stt.failed`** (AUDIO-IN-1 §5). Terminal event a MUST
+  when a capture yields no usable transcription: the service
+  emits it *instead of* `ovos.utterance.handle`, never both, and
+  no handler lifecycle follows. `ovos.utterance.handle` with an
+  empty or phantom `utterances` list is non-conformant, which is
+  what makes the failure observable rather than a silence a
+  client has to distinguish from "still transcribing". The
+  payload MAY be empty; `context.session` rides along like every
+  other emission from the service. Current
+  `ovos-dinkum-listener` emits
+  `recognizer_loop:speech.recognition.unknown` — a name that
+  fails MSG-1 §2.1.1 on the `:` separator and the
+  implementation-role root, and one no other listener is
+  obliged to emit. See §5.7 for the mapping.
 - **`ovos.intent.list` / `ovos.intent.describe`** (INTENT-4
   §10). Introspection topics served from the orchestrator's
   passive registration index.
@@ -234,6 +384,12 @@ defined by any spec** and should be removed or replaced:
   predecessor — `ovos.session.update_default` (retired, see
   §5.2.1) served an overlapping purpose for the default session
   only. `ovos.session.sync` is generalised to any session.
+  The omission asymmetry it carries is designed, not an
+  oversight: on a *delta* from a peer with partial knowledge an
+  omitted field means *no opinion* and the receiver's current
+  value stands, while on a *snapshot* an omitted field means the
+  field is absent. Nothing in current OVOS distinguishes the two,
+  because nothing in current OVOS sends either.
 
 ### 5.6 Things the specs do *not* change
 
@@ -248,7 +404,10 @@ defined by any spec** and should be removed or replaced:
   `mycroft.audio.*`) — these are not part of any spec here.
 - The `<skill_id>:<intent_name>` dispatch topic — kept
   verbatim from current OVOS so no skill needs to migrate
-  its handler subscription.
+  its handler subscription. Under MSG-1 §2.1.1 it is now also
+  the *only* topic shape built from identifiers; keeping it
+  unchanged is what let every other identifier-bearing topic go
+  static (§5.4).
 - **Engine-specific introspection topics.** The standard
   plugins expose their own debug / inspection topics — for
   example `intent.service.adapt.reply`,
@@ -290,6 +449,30 @@ a number of predecessor names. The mapping:
 | `mycroft.skill.handler.start` / `.complete` / `.error` | renamed to `ovos.intent.handler.start` / `.complete` / `.error` |
 | `ovos.session.update_default` | **retire** — subscribe to `ovos.utterance.handled` (PIPELINE-1 §9.5) to read updated default-session state; or to any assistant-emitted Message on the default session. See §5.2.1. |
 
+#### Poll-family topics (STOP-1, CONVERSE-1, FALLBACK-1, COMMON-QUERY-1)
+
+Every poll family resolves to a static ping / pong pair, with the
+responder's identity in `data.skill_id` and the round identified by
+`context.utterance_id` (§5.4).
+
+| Predecessor topic | v1 replacement | Notes |
+|--------------|---------------|-------|
+| `<skill_id>.stop.ping` | `ovos.stop.ping` | One broadcast for the round instead of one addressed ping per active handler. Silence is not a decline: with no positive pong the plugin falls back to recency over `session.active_handlers` (STOP-1 §4.1), where shipped `stop_service.py` defaults a non-responder to `False` and can end the round with no target at all. |
+| `skill.stop.pong` | `ovos.stop.pong` | Already a shared reply topic; renamed for symmetry with the ping. |
+| `<skill_id>.converse.ping` | `ovos.converse.ping` | Candidacy moves from the topic to a `session.converse_handlers` membership self-check (CONVERSE-1 §4.2). |
+| `skill.converse.pong` | `ovos.converse.pong` | Shared reply topic renamed; payload gains `skill_id`, `result`, and an optional `error_code`. |
+| `ovos.skills.fallback.ping` | `ovos.fallback.ping` | Already a broadcast; renamed into the `ovos.fallback.*` root. Declines become explicit so the window can close early. |
+| `ovos.skills.fallback.pong` | `ovos.fallback.pong` | As above. Note the in-flight `<skill_id>.fallback.ping` / `.pong` work (§5.4) moves *away* from this shape. |
+| `ovos.common_query.ping` / `.pong` | **unchanged** | Already static broadcast topics with identity in the payload. |
+| `question:query` | `ovos.common_query.request` | Static topic; the skill being asked is named in `data.skill_id`. See §5.2. |
+| `question:query.response` | `ovos.common_query.response` | Answer correlated by `utterance_id`, not by the `phrase` string. |
+
+#### Listening-failure topic (AUDIO-IN-1)
+
+| Predecessor topic | v2 replacement | Notes |
+|--------------|---------------|-------|
+| `recognizer_loop:speech.recognition.unknown` | `ovos.stt.failed` | Terminal event when STT produced no usable transcription; a MUST rather than a listener-specific courtesy. See §5.5. |
+
 #### Out of scope
 
 | Predecessor topic | Status |
@@ -319,6 +502,22 @@ a number of predecessor names. The mapping:
   conformant with either model; deployments that share the
   `"default"` session across multiple peers must migrate to
   destination-based routing for client isolation.
+- **Poll-family broadcasts are filtered by what a participant
+  hosts, not by addressing.** BRIDGE-1 §3.2 enumerates the poll
+  families — `ovos.converse.ping` / `.pong`,
+  `ovos.common_query.ping` / `.pong` / `.request` / `.response`,
+  `ovos.fallback.ping` / `.pong`, `ovos.stop.ping` / `.pong` —
+  and forbids relaying any of them to a participant with **no
+  skill registered in the Message's session**: a pure client has
+  nothing a poll could address, and relaying to it both exposes
+  internal handler enumeration and invites answers to polls it
+  cannot serve. A participant that does host skills in the
+  session receives the broadcasts unfiltered and its skills
+  decide for themselves. The rule exists because the `reply`
+  derivation gives a poll a `destination`, so destination-based
+  routing alone would relay it. Current HiveMind bridges apply
+  no such filter; a satellite that hosts no skills still sees
+  the poll traffic of every session it shares.
 - **No existing implementation fully conforms to OVOS-BRIDGE-1.**
   The bridge spec formalizes a role that exists in deployments
   (the HiveMind gateway, the bus client, any inbound message

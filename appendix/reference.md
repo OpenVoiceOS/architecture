@@ -11,8 +11,13 @@ tables that don't fit cleanly in any single normative spec.
 The naming conventions of OVOS-MSG-1 v2 §2.1.1 — dot-separated
 hierarchy, stable root, verb-tense pattern for the trailing
 segment, request/terminal pairs sharing a root verb,
-`.response` suffix, per-instance
-`<root>.<domain>.<id>.<verb>` form — apply across the family.
+`.response` suffix — apply across the family. One rule sits
+above the rest: identifiers appear in a topic **only** in the
+`<skill_id>:<intent_name>` dispatch shape, and every dotted
+topic is a static string. A consumer classifies any topic by a
+single test — a `:` anywhere means dispatch, no `:` means an
+ordinary dotted topic — and the complete topic surface of a
+deployment is enumerable from the specifications alone.
 The four-way collision of the word "intent" in introspection
 topics deserves an explicit callout:
 
@@ -152,5 +157,12 @@ layer-2 transports (see appendix/patterns.md §3.1.2).
 | Handler-lifecycle trio `.start` / `.complete` / `.error` (PIPELINE-1 §8) | `forward` | Same direction as the inbound dispatch |
 | `ovos.session.sync` emitted inside a handler (SESSION-2 §2.7) | `forward` | Session update travels toward the originating client |
 | `ovos.stop.pong` (STOP-1 §4.2) | `reply` | Skill answers back to the stop plugin that sent the ping |
-| `<skill_id>.converse.pong` (CONVERSE-1 §4.2) | `reply` | Owner answers back to the converse plugin that polled |
+| `ovos.converse.pong` (CONVERSE-1 §4.2) | `reply` | Candidate answers back to the converse plugin that polled |
+| `ovos.fallback.pong` (FALLBACK-1 §6.1) | `reply` | Skill claims or declines back to the fallback plugin |
+| `ovos.common_query.pong` / `ovos.common_query.response` (COMMON-QUERY-1 §6.2, §7.1) | `reply` | Skill answers back to the common-query plugin |
 | Pipeline introspection response (PIPELINE-1 §10.2) | `reply` | Plugin answers back to the observer that requested |
+
+Deriving a pong with `reply` also carries `context.utterance_id`
+(MSG-1 §4.2) back to the poller untouched, which is what makes the
+answer correlatable to its round. A pong assembled as a fresh
+Message loses it and is discarded.
