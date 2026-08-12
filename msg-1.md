@@ -313,15 +313,17 @@ exchange.
 
 ### 3.3 `destination`
 
-`destination` — string OR array of strings — opaque identifier(s) of
-the intended consumer(s). Absence (or an empty array) means
-**broadcast** — every subscriber to the topic is an intended consumer.
+`destination` — string — opaque identifier of the intended
+consumer. Absence means **broadcast** — every subscriber to the
+topic is an intended consumer. A Message addresses **one**
+consumer or all of them; there is no multi-address form. A producer
+that wants several specific consumers emits one Message per
+consumer, or broadcasts.
 
-A producer **MUST NOT** emit an empty string as `destination`, or as
-a member of a `destination` array; no identifier is ever the empty
-string. A consumer that receives one **MUST** treat that value as
-absent — an empty-string `destination` is a broadcast, and an
-empty-string array member is ignored. The same holds for `source`.
+A producer **MUST NOT** emit an empty string as `destination`; no
+identifier is ever the empty string. A consumer that receives one
+**MUST** treat the field as absent — an empty-string `destination`
+is a broadcast. The same holds for `source`.
 
 The bus is not an authorization boundary: a consumer whose identifier
 is not in `destination` may still observe the Message. `source` and
@@ -335,9 +337,8 @@ envelope.
 
 `source` and `destination` are **opaque strings** from the perspective
 of this specification. A consumer **MUST NOT** parse or ascribe
-structure to their values beyond string equality. Where `destination`
-is an array, the test is per-member string equality: a consumer is an
-intended consumer when its own identifier equals any member. How
+structure to their values beyond string equality: a consumer is the
+intended consumer when its own identifier equals `destination`. How
 identifiers are minted (UUID, hostname-derived, etc.) is a deployment
 concern.
 
@@ -414,13 +415,14 @@ the dispatch, the terminal events — carries the same value, because
 propagation across the derivations of §5 is the same **MUST** that
 governs `session` (§4.1).
 
-The component that **originates** a lifecycle stamps `utterance_id`,
-exactly once: the client or listener emitting the utterance-entry
-Message, the requester opening an out-of-band contest, the UI
-emitting a command. The orchestrator **MUST** stamp it at lifecycle
-entry when the source did not. A component **MUST NOT** overwrite a
-`utterance_id` already present — downstream regeneration would
-detach every already-derived Message from its lifecycle.
+The **orchestrator** stamps `utterance_id`, exactly once, at
+lifecycle entry — the point where it first observes the lifecycle's
+entry Message (the utterance arrival, the out-of-band request).
+Clients and skills never mint one; a component that opens a contest
+without passing through the orchestrator sits at lifecycle entry
+itself and stamps under the same rule. A component **MUST NOT**
+overwrite a `utterance_id` already present — regeneration downstream
+would detach every already-derived Message from its lifecycle.
 
 The value is opaque: consumers compare it for equality and do
 nothing else. It **MUST** be unique per lifecycle within the
@@ -489,8 +491,7 @@ Produces a new Message:
 - `context` = a copy of `C` with `source` and `destination`
   **swapped**:
 
-  1. If `C.destination` is set, the new `source` is `C.destination`
-     — its **first element** when `C.destination` is an array.
+  1. If `C.destination` is set, the new `source` is `C.destination`.
   2. If `C.source` is set, the new `destination` is `C.source`.
   3. A key absent from `C` stays absent. On a broadcast (no
      `destination`) `source` is therefore carried through unchanged
@@ -624,8 +625,7 @@ no usable routing keys to answer on.
   (possibly empty); they **MAY** be omitted when empty (§2);
 - when deriving a Message from another (`forward` / `reply` /
   `response`), follow §5 — in particular, swap `source` and
-  `destination` on a `reply`, taking the first element when
-  `destination` is an array (§5.2);
+  `destination` on a `reply` (§5.2);
 - propagate `session` from a source Message onto every Message
   derived from it (§4.1, §5.1–§5.2), mutating only session fields it
   owns and only at the boundaries of OVOS-SESSION-2 §2.6;
