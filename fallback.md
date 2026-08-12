@@ -362,22 +362,18 @@ ceiling*, and a deployment **MUST** set the OVOS-PIPELINE-1 §4.4
 match bound for this stage at or above it. A shorter bound kills the
 stage mid-poll on every utterance, silently.
 
-**Broadcast-poll optimisation.** As an observably equivalent
-alternative to the sequential per-skill query, the plugin MAY emit
-a single broadcast poll to the whole effective pool, collect the
-pongs, and then select the **first willing skill in pool order** —
-not in response-arrival order. Because selection remains keyed on
-pool order and silence/malformed pongs still count as
-`can_handle: false`, the outcome is identical to the sequential
-cycle while the waits overlap instead of accumulating.
+**Selection is pool-ordered, never arrival-ordered.** Pongs arrive
+in whatever order skills answer; the plugin selects the first
+willing skill in **pool order** (§6.2). A fast low-priority claim
+never beats a slow high-priority one inside the window.
 
-**Bus-exchange exception.** The per-skill query cycle is a
-documented exception to PIPELINE-1 §4.4's low-latency guidance,
-justified because fallback stage(s) are positioned after all other
-intent-matching stages (§8). No further stages are blocked during
-the exchange, and the query terminates as soon as a willing skill
-is found. This pattern follows the precedent of OVOS-CONVERSE-1's
-per-skill converse poll.
+**Bus-exchange exception.** The willingness contest is a documented
+exception to PIPELINE-1 §4.4's low-latency guidance, justified
+because fallback stage(s) are positioned after all other
+intent-matching stages (§8): no further stages are blocked during
+the window, and the early-close rules (§6.1) end it as soon as the
+outcome is decided. OVOS-CONVERSE-1 §4.2's contest is the same
+pattern.
 
 ### 6.2 Selection
 
