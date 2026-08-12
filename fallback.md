@@ -304,7 +304,7 @@ close early instead of waiting out the ceiling.
 
 **Round correlation.** The round is the lifecycle: the plugin keys
 poll state by `session_id` from `context.session` and by
-`context.utterance_id` (OVOS-MSG-1 §4.2), which the ping carries by
+`context.utterance_id` (OVOS-PIPELINE-1 §9.1.1), which the ping carries by
 `reply` derivation and the pong carries back the same way — no
 skill-side action, no field of this specification's own. A pong
 whose `utterance_id` does not equal the round's **MUST** be
