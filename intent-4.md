@@ -171,19 +171,30 @@ the other-method registration for the same triple is untouched.
 Replacement is also per-language: other languages of the same
 `(skill_id, intent_name)` are unaffected.
 
-**The payload `skill_id` MUST equal `context.skill_id`.** This holds
-for every message of §§5–8 — `ovos.intent.register.keyword`,
-`ovos.intent.register.template`, `ovos.entity.register`,
-`ovos.intent.deregister`, `ovos.entity.deregister`,
-`ovos.skill.deregister`, `ovos.intent.enable`, and
-`ovos.intent.disable`. A consumer — plugin or orchestrator —
-**MUST NOT** index or act on a message whose payload `skill_id`
-differs from `context.skill_id`, and **MUST** log the mismatch at
-WARN with both values and the rejecting topic. Without this check a
-skill could register, disable, or deregister another skill's intents;
-`ovos.skill.deregister` (§8.4) in particular would be a remote
-uninstall. The same rule governs fallback registration
-(OVOS-FALLBACK-1 §3.1).
+**For registration and deregistration, the payload `skill_id` MUST
+equal `context.skill_id`.** This holds for
+`ovos.intent.register.keyword`, `ovos.intent.register.template`,
+`ovos.entity.register`, `ovos.intent.deregister`,
+`ovos.entity.deregister`, and `ovos.skill.deregister`. A consumer —
+plugin or orchestrator — **MUST NOT** index or act on one of these
+messages whose payload `skill_id` differs from `context.skill_id`,
+and **MUST** log the mismatch at WARN with both values and the
+rejecting topic. Without this check a skill could register or
+deregister another skill's intents; `ovos.skill.deregister` (§8.4)
+in particular would be a remote uninstall. The same rule governs
+fallback registration (OVOS-FALLBACK-1 §3.1).
+
+`ovos.intent.enable` and `ovos.intent.disable` are **control
+messages, not ownership claims**, and are exempt from the identity
+check: the payload `skill_id` names the **target** — the skill whose
+intent is being suppressed or re-armed — while `context.skill_id`
+names the **source** requesting it, and the two **MAY** differ.
+Cross-skill control is the point of the bus-level surface (§8.5): an
+admin UI, a conflict-resolving skill, or an A/B harness suppresses
+another skill's intent without owning it. A consumer **SHOULD** log
+source and target at DEBUG when they differ. Session scoping
+(§11.3) bounds the blast radius: a source affects only the session
+its message carries.
 
 A single intent **MAY** be registered under both methods — they are
 two training-data representations of the same handler. Different
@@ -578,6 +589,11 @@ without modifying skill code. Both topics share the same payload as
 { "skill_id": "music.skill", "intent_name": "play_music", "lang": "en-US" }
 ```
 
+Here `skill_id` is the **target** of the operation, not the sender:
+unlike registration (§3.2), enable/disable are legitimately
+cross-skill, and `context.skill_id` — the source — **MAY** name a
+different skill.
+
 If `lang` is omitted, every language for that `(skill_id, intent_name)`
 is affected. Like deregistration, enable/disable target the triple and
 apply to **all methods** of the intent — there is no per-method
@@ -917,9 +933,12 @@ entity entry within an otherwise valid registration is skipped and
 logged, never grounds for rejecting the registration (§§5.3, 6.3,
 7.2). Matching behaviour beyond that is OVOS-PIPELINE-1's concern.
 
-A plugin **MUST NOT** index or act on any message of §§5–8 whose
-payload `skill_id` differs from `context.skill_id`, and **MUST** log
-the mismatch at WARN (§3.2).
+A plugin **MUST NOT** index or act on any registration or
+deregistration message (§§5–7, §§8.2–8.4) whose payload `skill_id`
+differs from `context.skill_id`, and **MUST** log the mismatch at
+WARN (§3.2). `ovos.intent.enable` / `ovos.intent.disable` are
+exempt: their payload `skill_id` is the target, not the sender
+(§3.2, §8.5).
 
 ### The **orchestrator** **MUST**:
 
