@@ -156,42 +156,21 @@ a `:` anywhere in `type` means a dispatch-shaped topic per the
 specification that defined that shape; no `:` means an ordinary
 dotted topic.
 
-**Decomposed and assembled shapes.** A topic shape built from
-identifiers is either:
+**Identifiers appear in topics only in the dispatch shape.** The
+dispatch topic `<skill_id>:<intent_name>` is the single topic shape
+built from identifiers, and the single one a consumer parses: split
+on the one `:`, `skill_id` left, `intent_name` right. Neither
+identifier contains `:`; the dots a `skill_id` carries are inert,
+because nothing splits a dispatch topic on dots.
 
-- **decomposed** — a consumer is expected to recover the component
-  identifiers by splitting the received topic string. The dispatch
-  shape `<skill_id>:<intent_name>` is decomposed: the handler reads
-  `skill_id` and `intent_name` back out of the topic; or
-- **assembled** — the identifier is used only to *build* a topic
-  string that is then matched by exact subscription. No consumer
-  splits it, because the identifier is already known to every
-  participant, carried in `data`, or both. The addressed poll shape
-  `<skill_id>.converse.ping` (OVOS-CONVERSE-1 §4.2) is assembled:
-  the owner subscribes to the one topic built from its own
-  `skill_id`, and the same value is repeated in `data.skill_id`.
-
-A topic-defining specification **MUST** state which of the two its
-shape is. Absent such a statement the shape is decomposed.
-
-**Separator hygiene.** In a **decomposed** shape, an identifier used
-as a component **MUST NOT** contain the character(s) the shape uses
-structurally:
-
-- in `<A>:<B>`, neither A nor B contains `:`;
-- in `<A>.<B>`, neither A nor B contains `.`;
-- shapes combining both separators impose both constraints on the
-  components they delimit.
-
-An **assembled** shape imposes no such constraint: an identifier
-containing the shape's separator (a `skill_id` such as `wiki.test`
-in `wiki.test.converse.ping`) is conformant, because the resulting
-topic is never split. The identifier must still yield a topic
-matching §2.1.
-
-Each topic-defining specification declares only what its own
-separators require of its own identifiers; a character is
-constrained only where it is structural in a decomposed shape.
+Every dotted topic is a **static string** fixed by the
+specification that defines it. Nothing about a Message's target
+travels in a dotted topic: addressing beyond the topic is
+**payload** (`data`), and the routing pair (§3.2–§3.3) is owned by
+the `reply` swap (§5.2) alone. A monitor, a bridge allowlist, or a
+conformance harness can therefore enumerate the complete topic
+surface of a deployment from the specifications — no runtime
+identifier ever mints a topic outside the dispatch shape.
 
 **Recommended identifier form.** When defining a new identifier
 intended for use as a topic component, prefer values that contain only
@@ -278,8 +257,8 @@ bridge stamped `sat-7`:
 | Step | Derivation | `source` | `destination` |
 |------|------------|----------|---------------|
 | utterance | origination | `sat-7` | absent |
-| `<skill_id>.converse.ping` | `reply` of the utterance | `sat-7` (unchanged — no destination to swap in) | `sat-7` |
-| `<skill_id>.converse.pong` | `reply` of the ping | `sat-7` | `sat-7` |
+| `ovos.converse.ping` | `reply` of the utterance | `sat-7` (unchanged — no destination to swap in) | `sat-7` |
+| `ovos.converse.pong` | `reply` of the ping | `sat-7` | `sat-7` |
 | `ovos.utterance.speak` | `reply` of the dispatch | `sat-7` | `sat-7` |
 
 `sat-7` rides the whole chain, which is the point: the final
@@ -531,8 +510,8 @@ explicitly and derives via `reply` instead.
 An asking component **MUST NOT** assume that the answer to a Message
 on topic `T` arrives on `T + ".response"` unless the specification
 that defines `T` says so. Several specifications name their answering
-topic directly — `<skill_id>.converse.pong` answers
-`<skill_id>.converse.ping` (OVOS-CONVERSE-1 §4.2) — and the answering
+topic directly — `ovos.converse.pong` answers
+`ovos.converse.ping` (OVOS-CONVERSE-1 §4.2) — and the answering
 topic is always whatever the defining specification states.
 
 ### 5.4 No central correlation
@@ -694,6 +673,7 @@ opaque layer-2 substrate of §3.4 / §4.3.
 - **OVOS-SESSION-2** — the session mutation boundaries (§2.6) that
   bound the owned-field exception of §4.1.
 - **OVOS-PIPELINE-1** — the dispatch topic shape
-  `<skill_id>:<intent_name>` (§7.1), the decomposed shape of §2.1.1.
+  `<skill_id>:<intent_name>` (§7.1), the one identifier-bearing
+  shape of §2.1.1.
 - **OVOS-BRIDGE-1** — a layer-2 system built on the routing keys of
   §3 and the session carrier of §4.
