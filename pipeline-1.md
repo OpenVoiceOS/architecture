@@ -1269,6 +1269,36 @@ Payload shape:
 specification recognizes. A conformant orchestrator subscribes to
 this topic; a conformant producer emits to it.
 
+### 9.1.1 The lifecycle identifier — `context.utterance_id`
+
+On receiving the entry Message the orchestrator stamps
+`context.utterance_id` — an opaque string naming this one
+**utterance lifecycle** — exactly once, at entry. Everything
+derived from the lifecycle — the transformer passes, the pipeline
+contest and its polls, the pongs, the dispatch, the terminal events
+of §9.5 — carries the same value, because OVOS-MSG-1 §5's
+derivations preserve `context` keys; no component ever copies it by
+hand. A component **MUST NOT** overwrite a `utterance_id` already
+present: regeneration downstream would detach every
+already-derived Message from its lifecycle.
+
+A component that opens a lifecycle without passing through the
+orchestrator — a plugin serving an out-of-band query — sits at
+lifecycle entry itself and stamps under the same rule.
+
+The value is opaque: consumers compare it for equality and do
+nothing else. It **MUST** be unique per lifecycle within the
+deployment (a UUID is RECOMMENDED; no format is normative). Two
+Messages carry the same `utterance_id` **iff** they belong to the
+same lifecycle — which is the entire correlation rule: a poll
+answer whose `utterance_id` differs from the poll's answers some
+other question. The poll protocols built on this one
+(OVOS-CONVERSE-1, OVOS-FALLBACK-1, OVOS-COMMON-QUERY-1) correlate
+by this field and define nothing of their own. OVOS-MSG-1 §5.4's
+no-central-correlation rule is untouched: no host assigns ids
+centrally, no host tracks them, and equality comparison by whoever
+cares is all there is.
+
 ### 9.2 `ovos.intent.matched`
 
 Emitted by the orchestrator after a plugin's `match` returns
