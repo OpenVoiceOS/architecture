@@ -601,6 +601,19 @@ specification defines a finer intra-field merge resolves by that
 rule instead. At this version that is `session.intent_context`,
 merged entry-by-entry per OVOS-CONTEXT-1 §5.3 (§2.7).
 
+**An omitted field means two different things in this
+specification, by design.** On a *merge* pathway — a sync (§2.7),
+a write into the default-session store (above) — the carrier is a
+delta from a peer with partial knowledge: omission means *no
+opinion*, and the receiver's current value stands. On a *snapshot*
+pathway — a session carried on an utterance Message (SESSION-1
+§2.1), a committed `Match.updated_session` (below) — the carrier
+declares complete state: omission means *not set*, and the field
+resolves to the deployment default at consumption. Which reading
+applies is a property of the pathway, fixed here, never of the
+producer's intent; a producer that wants the other semantics is on
+the wrong pathway.
+
 **Field tolerance applies at store-write.** A session written
 into the store may carry keys the orchestrator does not
 recognise. SESSION-1 §2.4's unknown-field tolerance applies:
