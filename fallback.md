@@ -310,12 +310,11 @@ the utterance identifies the round — no opaque poll id is needed,
 unlike OVOS-COMMON-QUERY-1 §6.4's `query_id`, which serves
 overlapping contests.
 
-The `utterance` field is REQUIRED going forward. A pong that omits
-it is a legacy producer; the plugin **SHOULD** accept such a pong,
-correlating it by session and by the `skill_id` it is still
-waiting on. A pong that carries `utterance` and does not match
-**MUST** be discarded — tolerance covers absence, never
-disagreement.
+The `utterance` field is REQUIRED. A pong is correlated to the
+poll by it; a pong that omits it, or whose `utterance` does not
+match the one being polled, is uncorrelatable and **MUST** be
+discarded. An answer that cannot prove which question it answers
+never decides a round.
 
 The boolean's field name is protocol-specific: this spec and
 OVOS-STOP-1 use `can_handle`, OVOS-CONVERSE-1's poll uses `result`,
