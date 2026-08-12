@@ -383,37 +383,7 @@ unchanged, whether or not the component understands them. Outside
 those boundaries, propagation preserves the existing session
 unchanged (§5.1).
 
-### 4.2 The utterance identifier
-
-`utterance_id` — opaque string — rides inside `Message.context`
-beside `session` and names one **interaction lifecycle**: one
-utterance entering the system, one out-of-band query, one
-UI-originated command. Everything derived from that lifecycle — the
-transformer passes, the pipeline contest and its polls, the pongs,
-the dispatch, the terminal events — carries the same value, because
-propagation across the derivations of §5 is the same **MUST** that
-governs `session` (§4.1).
-
-The **orchestrator** stamps `utterance_id`, exactly once, at
-lifecycle entry — the point where it first observes the lifecycle's
-entry Message (the utterance arrival, the out-of-band request).
-Clients and skills never mint one; a component that opens a contest
-without passing through the orchestrator sits at lifecycle entry
-itself and stamps under the same rule. A component **MUST NOT**
-overwrite a `utterance_id` already present — regeneration downstream
-would detach every already-derived Message from its lifecycle.
-
-The value is opaque: consumers compare it for equality and do
-nothing else. It **MUST** be unique per lifecycle within the
-deployment (a UUID is RECOMMENDED; no format is normative). Two
-Messages carry the same `utterance_id` **iff** they belong to the
-same lifecycle — which is the entire correlation rule: a poll
-answer whose `utterance_id` differs from the poll's answers some
-other question. Specifications built on this one (OVOS-FALLBACK-1,
-OVOS-COMMON-QUERY-1, OVOS-TRANSFORM-1 attribution) correlate by
-this field and define nothing of their own.
-
-### 4.3 The layer-2 picture
+### 4.2 The layer-2 picture
 
 `session` combined with `source`/`destination` (§3) is what makes this
 specification a **substrate for higher-level systems**: `source` and
@@ -529,12 +499,13 @@ to do its own correlation, if it wants to:
 - `session` (§4), which is propagated across `reply` / `response` /
   `forward` (§5.1–§5.2), so an asker can narrow an incoming answer
   to the conversation it belongs to;
-- `utterance_id` (§4.2), stamped once at the lifecycle source and
-  propagated the same way, so an asker can narrow an answer to the
+- any `context` value a claiming specification defines and a
+  producer stamps — OVOS-PIPELINE-1's `utterance_id` (its §9.1.1)
+  is the worked example — carried across every derivation by §5's
+  context preservation, so an asker can narrow an answer to the
   exact interaction that asked. This is still not central
-  correlation: no host assigns it, no host tracks it, and no
-  Message-level in-reply-to chain exists — equality comparison by
-  whoever cares is all there is.
+  correlation: no host assigns anything, no host tracks anything,
+  and no Message-level in-reply-to chain exists.
 
 Whether to correlate at all, and how, is entirely the
 asker's responsibility. Each component (skills, pipeline plugins, external
@@ -661,7 +632,7 @@ guarantees, retry behaviour, session lifecycle (start, end, expiry,
 resumption), the internal shape of `session` (owned by
 OVOS-SESSION-1), identifier assignment policy, and multi-tenant
 routing semantics beyond the
-opaque layer-2 substrate of §3.4 / §4.3.
+opaque layer-2 substrate of §3.4 / §4.2.
 
 ---
 
