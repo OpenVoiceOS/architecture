@@ -354,7 +354,7 @@ as soon as one claims.
 
 ### 6.4 The contest identifier
 
-The contest identifier is `context.utterance_id` (OVOS-MSG-1 §4.2),
+The contest identifier is `context.utterance_id` (OVOS-PIPELINE-1 §9.1.1),
 stamped once at the lifecycle source and carried onto every derived
 Message. `session_id` already separates peers and conversations —
 it does not separate **two contests inside one session**, which is
@@ -365,12 +365,12 @@ field of its own.
 
 - Nothing is echoed and nothing is generated per protocol: the ping,
   the pong, the request and the response are all `reply`-derived
-  (§6.1, §7.1), and MSG-1 §4.1/§4.2 propagation carries
+  (§6.1, §7.1), and PIPELINE-1 §9.1.1 stamping and MSG-1 §5 context preservation carries
   `utterance_id` onto each of them with no skill-side action.
 - For an **out-of-band** query (§12) the requester is the lifecycle
   source and stamps `utterance_id`; a plugin receiving one without it
   sits at lifecycle entry and **MUST** stamp a fresh one
-  (MSG-1 §4.2) before deriving the contest's Messages.
+  (PIPELINE-1 §9.1.1) before deriving the contest's Messages.
 - The plugin **MUST** discard any pong or response whose
   `context.utterance_id` does not equal the active contest's — a
   Message that cannot prove which contest it belongs to never
@@ -652,7 +652,7 @@ poll/response message is correlated by `context.utterance_id`
   per PIPELINE-1 §4 (§2.1);
 - broadcast `ovos.common_query.ping` and collect
   `ovos.common_query.pong` within a bounded poll window (§6.3);
-- correlate every contest by `context.utterance_id` (MSG-1 §4.2),
+- correlate every contest by `context.utterance_id` (PIPELINE-1 §9.1.1),
   stamping a fresh one only at lifecycle entry for an out-of-band
   query that arrived without it, and discard pongs and responses
   whose `utterance_id` or session does not match the active contest
