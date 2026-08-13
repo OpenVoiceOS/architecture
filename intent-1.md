@@ -59,7 +59,7 @@ text-to-speech (TTS).
 `.entity`, `.voc`, and `.blacklist` are grammatically **identical** — expansion
 only, no named slots. They are the same file format and differ only in the role
 OVOS-INTENT-2 assigns each: three ways a developer encodes a set of
-natural-language phrasings for different OVOS components to consume.
+natural-language phrasings for different components to consume.
 
 ---
 

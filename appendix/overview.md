@@ -133,11 +133,14 @@ per-spec versions ("MSG-1 v2, PIPELINE-1 v2").
 ### 1.4 Reference implementations and ecosystem tooling
 
 The **reference implementation for the intent stack** is
-**`ovos-spec-tools`** — expander, resource loader, dialog
-renderer, language matching, locale linter — in one
-dependency-light Python package. New tools that consume locale
-folders or expand templates should depend on it rather than
-reimplementing.
+[**`ovos-spec-tools`**](https://github.com/OpenVoiceOS/ovos-spec-tools)
+— expander, resource loader, dialog renderer, language matching,
+and the `ovos-spec-lint` locale linter — in one dependency-light
+Python package; it is also the intended home of the conformance
+corpus. New tools that consume locale folders or expand templates
+should depend on it rather than reimplementing, and components
+that don't want to reimplement the spec machinery themselves can
+depend on it directly.
 
 The bus and orchestrator stacks have no comparable ground-up
 reference implementation; `ovos-bus-client` is the closest match
@@ -157,3 +160,13 @@ validity, variant counts); and lets translators browse, edit,
 preview, and submit translations as pull requests. It is the
 OVOS counterpart to Home Assistant's managed `intents`
 repository.
+
+### 1.5 Adoption beyond OVOS
+
+The specifications are written implementation-agnostically so other
+voice-assistant projects can adopt the same formats, grammar, and bus
+contracts without buying into the OVOS stack as a whole. Anyone is
+free to adopt them and free to propose changes via pull request;
+adoption is voluntary, but conformance, once adopted, is not.
+
+This corpus is produced for [OpenVoiceOS](https://openvoiceos.org).

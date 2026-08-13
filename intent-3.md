@@ -396,7 +396,7 @@ keyword and template definitions are not interoperable.
 An intent engine **declares which definition method(s) it accepts** — keyword,
 template, or both. The contract is:
 
-- Every conformant OVOS intent engine **MUST** accept **at least one** of the
+- Every conformant intent engine **MUST** accept **at least one** of the
   two methods.
 - An engine **MAY** accept both.
 - An engine **MUST reject** a registration whose method it does not accept,

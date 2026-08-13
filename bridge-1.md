@@ -238,8 +238,8 @@ the current session on every subsequent message.
 
 #### 3.4.2 Managing mode (opaque participants)
 
-When the external participant has no concept of OVOS sessions — as
-in a chat-room gateway, an SMS bridge, or any non-OVOS client — the
+When the external participant has no concept of sessions — as
+in a chat-room gateway, an SMS bridge, or any other opaque client — the
 bridge owns the session lifecycle for each participant. It assigns
 a `session_id` per participant (or per logical channel such as a
 room), synthesizes the session object on inbound messages, and
