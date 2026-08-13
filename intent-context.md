@@ -456,6 +456,33 @@ OVOS-TRANSFORM-1); shared entries use the bare `<key>`. Both segments must not c
 (OVOS-MSG-1 §2.1.1). An entry written on a key that already exists
 replaces it wholesale.
 
+### 5.0 The session is the only context write path
+
+A component writes intent context by mutating the `session` it
+carries or replies with — `session.intent_context`, per §2 — through
+one of the three boundaries above. The write travels with the
+message that carries it, per OVOS-SESSION-1's propagation rule
+(§4). There is **no context-mutation topic**: no participant emits
+a Message whose purpose is to announce a context change to the
+orchestrator or to another component. A component that wants a
+context entry removed writes the removal into its own session copy
+(§5.1–§5.3) exactly as it writes an addition; both travel the same
+way.
+
+*Rationale (non-normative).* A mutation broadcast as a message
+distinct from the session it modifies races the reply whose session
+snapshot it was meant to affect: the reply can be built, forwarded,
+and observed by the client before the separate mutation message is
+applied, so the client's own copy of the session disagrees with the
+orchestrator's for the span of that race. Writing through the
+session removes the race by removing the second object — the
+mutation and its carrier are the same write, so there is nothing
+left to arrive out of order. OVOS-SESSION-2 §2.7 states the general
+form of this constraint: there is no topic on which a session is
+pushed at another participant — a session field has exactly one
+path to the consumer, the session it rides on, never a second push
+channel that can disagree with it.
+
 ### 5.1 Pipeline plugin — `Match.updated_session`
 
 A pipeline plugin that needs to add or remove entries constructs
