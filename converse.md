@@ -616,11 +616,11 @@ consumer must re-open the user input channel once delivery is
 complete. Omitting `listen: true` is non-conformant: the user is
 asked a question but the input channel is never re-opened.
 
-If no `ovos.utterance.speak` is emitted, the handler MUST emit
-`ovos.session.sync` (SESSION-2 §2.7) — the handler-lifecycle
-`.complete` is orchestrator-emitted from stale dispatch context
-and does not reflect handler-side mutations, especially for
-out-of-process handlers.
+A handler that enters response mode therefore MUST emit at least
+one `forward`-derived Message carrying the updated session — the
+handler-lifecycle `.complete` is orchestrator-emitted from stale
+dispatch context and does not reflect handler-side mutations,
+especially for out-of-process handlers (SESSION-2 §2.6).
 
 A handler **leaves** response mode by removing `session.response_mode`
 in its dispatched handler and emitting any Message carrying the

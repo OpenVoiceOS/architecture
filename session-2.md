@@ -65,8 +65,8 @@ This specification defines:
   what is permitted to mutate it, when components SHOULD
   project their cross-utterance state into session-resident
   fields vs hold it internally, the session mutation discipline
-  (§2.6), and the explicit out-of-utterance sync mechanism
-  `ovos.session.sync` (§2.7);
+  (§2.6), and how views converge without any push topic
+  (§2.7);
 - the **client-side merge rules** (§3) — how a client tracks
   session updates from assistant-emitted Messages, keyed on
   `session_id` alone;
@@ -285,8 +285,7 @@ happen only at these boundaries:
   in-place changes, particularly for handlers running
   out-of-process. A handler that mutates session and needs
   that state visible in terminal events MUST emit at least
-  one Message (typically `ovos.utterance.speak` or
-  `ovos.session.sync` per §2.7).
+  one Message (typically `ovos.utterance.speak`).
 
 **Session mutation discipline.** A handler SHOULD NOT mutate
 session fields unless the mutation is necessary for the
@@ -300,7 +299,7 @@ mutation (e.g. a handler removing itself from
 prescription is the authority; this discipline rule does not
 override it.
 
-**Incidental bus events do not mutate the working session.**
+**Incidental bus events never mutate the working session.**
 Bus events emitted *outside* these boundaries — the
 asynchronous, normal-event-handler kind that any component may
 emit at any time — carry a session but do not update anyone's
@@ -316,123 +315,47 @@ merged state arrives on the next inbound Message. A component
 that relies on that effect **MUST** tolerate it landing no
 earlier than the next utterance.
 
-`ovos.session.sync` (§2.7) is the one exception to this
-paragraph, and is the mechanism a component **SHOULD** use when
-it needs to propagate a session update outside the normal
-utterance lifecycle, rather than relying on an unrelated Message
-to carry the update incidentally. A sync **is** merged into the
-working session snapshot on receipt, per the orchestrator
-obligation in §2.7.
+**There is no out-of-band mutation channel.** A component that
+needs a session change to take effect **MUST** effect it at one
+of the boundaries above, in a lifecycle it participates in: a
+transformer hook it implements, a `Match.updated_session` it
+returns, or a handler invocation it is dispatched into. A
+component that participates in no lifecycle at the moment it
+wants the change **MUST** wait until it does. What it emits in
+the meantime is an ordinary bus event under the rule above: the
+client may merge it per §3 and carry it back, and no working
+session is revised by it.
 
-**What a merged sync is visible to.** The merge applies from that
-moment on, and no earlier: it reaches the terminal events the
-orchestrator emits afterwards and any stage that has not yet run. A
-stage that already read the snapshot is not revised. A mid-utterance
-sync buys terminal-event visibility, not re-evaluation.
+### 2.7 Convergence without push
 
-### 2.7 Out-of-utterance session sync — `ovos.session.sync`
+This specification defines **no topic on which any participant
+pushes a session at another**. Session state converges two ways,
+and only these two.
 
-When a component needs to broadcast a session update outside
-the utterance lifecycle it SHOULD use the dedicated topic
-`ovos.session.sync`. The updated session snapshot is the
-**payload** of the Message — carried in `Message.data` as a
-`session` object, not in `Message.context.session`.
-`Message.context.session` remains the ambient carrier (per
-OVOS-MSG-1) and continues to identify the session for routing;
-`Message.data.session` is the explicit sync content.
+**At start-up, by shared derivation.** Processes co-located with
+the orchestrator share one device and therefore one default
+session (§2.3). Each derives its initial view of that session
+from the deployment configuration. The source is the same for
+all of them, so the views agree by construction and no
+handshake, bootstrap request, or announcement is needed to make
+them agree.
 
-`Message.data` shape:
+**At runtime, by adoption.** A consumer **adopts the session of
+any Message it acts on or renders.** This is the rule §3 states
+for clients, and it holds for every consumer: a co-located
+process that renders a `speak`, observes a terminal event, or
+processes any other session-bearing Message takes that session
+as its current view of that `session_id`. The orchestrator's
+default-session store (§5) is authoritative for what rides the
+orchestrator's own emissions, so a process that adopts from
+observed traffic converges on the store by following it.
 
-| Key | Type | Required | Meaning |
-|-----|------|----------|---------|
-| `session` | object | yes | The updated session snapshot. Follows SESSION-1 wire shape. The merge a receiver performs on it is defined per receiver below under *Consumer obligations* — it is not SESSION-1 §2.1 default-filling, and §5.1's rules bind the default-session store only. |
-
-`ovos.session.sync` is a plain broadcast — not a PIPELINE-1
-§7 dispatch, not a round-trip. It does not fire the
-handler-lifecycle trio and does not activate any owner.
-
-A handler emitting `ovos.session.sync` from within a
-dispatched handler invocation MUST derive the Message via
-`forward` (OVOS-MSG-1 §5). `forward` preserves the routing
-metadata of the inbound dispatch, ensuring the sync reaches
-the originating client through any layer-2 transport
-(satellite, gateway, or equivalent) that routes by those
-fields. An `ovos.session.sync` emitted without `forward`
-inside a handler carries no routing metadata and will not
-reach remote clients.
-
-**When to emit.** A component MAY emit `ovos.session.sync`
-at any time for any reason. It SHOULD do so only when:
-
-- the session update cannot ride on a Message already being
-  emitted in the normal flow (i.e. no `speak`, `forward`, or
-  other emission is available to carry it); or
-- another specification explicitly prescribes using it for a
-  specific state change (opportunistic self-removal from
-  `session.active_handlers`, `session.converse_handlers`,
-  or equivalent).
-
-A component SHOULD NOT emit `ovos.session.sync` gratuitously.
-The normal derivation chain (§2.6) is the preferred
-propagation path; `ovos.session.sync` exists for cases where
-no in-utterance emission is available.
-
-**Consumer obligations.**
-
-- The **orchestrator** MUST merge `Message.data.session` from
-  a received `ovos.session.sync` into its working session
-  snapshot for the affected `session_id`, **when it holds
-  one**. The merge is **field-replacement**: a field present in
-  the synced snapshot replaces the current value; a field
-  absent from it leaves the current value unchanged. An absent
-  field is *not* read as a request to restore the deployment
-  default — SESSION-1 §2.1's default-filling governs
-  consumption of a session, not this merge. For
-  `session_id == "default"` the working snapshot is the
-  default-session store (§5), which always exists. For a named
-  session it is the transient per-utterance session in progress
-  (§2.2). The orchestrator MUST reflect the merged state in any
-  terminal events it subsequently emits for the same utterance —
-  specifically the handler-lifecycle `.complete` event
-  (OVOS-PIPELINE-1 §8) and the universal end-marker
-  `ovos.utterance.handled` (PIPELINE-1 §9.5) — so that clients
-  and observers receive a session snapshot that includes the
-  sync update. §2.6 fixes the limits of that visibility.
-- **Clients** SHOULD update their local session store when
-  they observe `ovos.session.sync` whose `Message.context.session`
-  carries a `session_id` matching their own, merging
-  `Message.data.session` using the same field-replacement
-  semantics as §3.
-
-**A finer merge may be prescribed per field.** Field replacement
-is the **default** rule, and it is what applies to any field
-whose claiming specification says nothing further. A claiming
-specification **MAY** define a finer intra-field merge for the
-field it claims, and where it does, that rule governs both this
-sync merge and the §5.1 store merge. One such field exists at
-this version: `session.intent_context`, which OVOS-CONTEXT-1
-§5.3 merges **entry-by-entry** — a key present with an entry
-object sets or replaces that key, a key present with a `null`
-entry removes it, and keys absent from the payload are left
-unchanged. A receiver implementing this specification MUST
-apply CONTEXT-1 §5.3's rule to `intent_context` rather than
-replacing the whole map.
-
-**Named session with no utterance in flight.** Between rounds the
-orchestrator holds no snapshot for a named session (§2.2), so the
-sync is a **no-op**: it **MUST NOT** create a snapshot or any other
-cross-utterance state to hold the update. Nothing is lost — the sync
-is a broadcast, the client that owns the session merges it and
-carries it back on its next inbound Message. That is the intended
-path, not a degraded one.
-
-**Nested lifecycles.** When lifecycles are nested (PIPELINE-1
-§6.5), a sync on the shared `session_id` binds to the
-**innermost lifecycle in flight** — the one whose working
-snapshot is current at the moment of receipt. The outer
-lifecycle picks the update up only where it reads the session
-again after the inner lifecycle returns; a snapshot the outer
-handler already holds is not revised, per §2.6.
+*(Rationale, informative.)* A view that converges by adoption
+has exactly one writer per session — the client for a named
+session (§2.5), the orchestrator for the default session (§5).
+No process ever broadcasts its own view at anyone, so two
+processes cannot clobber each other's default session, and there
+is no ordering question between competing pushes to resolve.
 
 ## 3. Client-side merge rules
 
@@ -467,6 +390,21 @@ It is instead **RECOMMENDED** that a client adopt at the
 universal end-marker `ovos.utterance.handled` (PIPELINE-1 §9.5),
 which is emitted exactly once per utterance (§3.3) and so needs
 no ordering to be unambiguous.
+
+**Adopt from what you render.** Independently of that
+convergence point, a client **adopts the session of any
+user-facing Message it renders** — a `speak` it voices, a page
+it draws, any Message it turns into something the user
+perceives. Rendering is acting on the Message, and the session
+that arrived with it is the assistant's view at the point the
+assistant produced what the user is now receiving.
+
+This is what covers an interaction the assistant starts on its
+own. A proactive `speak` outside any utterance round carries its
+session exactly as a `speak` inside one does; the client that
+renders it adopts that session and carries it back on its next
+inbound Message. No separate push mechanism is needed, and none
+exists (§2.7).
 
 A client **MAY** adopt incrementally from Messages observed
 mid-round, and **MAY** run a more elaborate policy
@@ -599,20 +537,21 @@ sessions.
 Field replacement is the **default**; a field whose claiming
 specification defines a finer intra-field merge resolves by that
 rule instead. At this version that is `session.intent_context`,
-merged entry-by-entry per OVOS-CONTEXT-1 §5.3 (§2.7).
+merged entry-by-entry per OVOS-CONTEXT-1 §5.3.
 
-**An omitted field means two different things in this
-specification, by design.** On a *merge* pathway — a sync (§2.7),
-a write into the default-session store (above) — the carrier is a
-delta from a peer with partial knowledge: omission means *no
-opinion*, and the receiver's current value stands. On a *snapshot*
-pathway — a session carried on an utterance Message (SESSION-1
-§2.1), a committed `Match.updated_session` (below) — the carrier
-declares complete state: omission means *not set*, and the field
-resolves to the deployment default at consumption. Which reading
+**Every wire carrier is a snapshot; merge semantics are
+store-internal.** A session on the wire — carried on an utterance
+Message (SESSION-1 §2.1), committed as a `Match.updated_session`
+(below) — declares complete state: an omitted field means *not
+set*, and it resolves to the deployment default at consumption.
+The delta reading, where an omitted field means *no opinion* and
+the current value stands, applies on exactly one pathway: the
+write into the orchestrator's own default-session store described
+above. That is a rule about how the orchestrator writes its own
+store — server-local, and not a semantics any Message carries on
+the bus. Which reading
 applies is a property of the pathway, fixed here, never of the
-producer's intent; a producer that wants the other semantics is on
-the wrong pathway.
+producer's intent.
 
 **Field tolerance applies at store-write.** A session written
 into the store may carry keys the orchestrator does not
@@ -708,8 +647,7 @@ An orchestrator that claims conformance to this specification
   the §2.6 boundaries dictate mutation;
 - emit the universal end-marker `ovos.utterance.handled`
   carrying the final round session (PIPELINE-1 §9.5), as the
-  client-side convergence point of §3.3;
-- merge `ovos.session.sync` Messages on receipt per §2.7.
+  client-side convergence point of §3.3.
 
 An orchestrator **MUST NOT** require any client to declare
 session-start / session-end / session-id-allocation events
@@ -738,16 +676,15 @@ accept best-effort resumption (§4.3).
 
 A component **MUST NOT** rely on bus events (the asynchronous
 kind that fire outside the utterance lifecycle) to mutate
-session state in the current utterance (§2.6);
-`ovos.session.sync` (§2.7) is the one exception. It MAY emit such
+session state in the current utterance (§2.6). It MAY emit such
 events to communicate with other components; their effect on
 session, if any, lands on subsequent utterances.
 
 A component **SHOULD NOT** mutate session fields in its handler
 unless the mutation is necessary or prescribed by another
-specification (§2.6 discipline rule). When a session update
-must be propagated outside the normal utterance flow, the
-component SHOULD use `ovos.session.sync` (§2.7).
+specification (§2.6 discipline rule). A component that needs a
+session change effects it at a §2.6 boundary of a lifecycle it
+participates in; there is no out-of-band pathway (§2.7).
 
 ### 6.4 Client
 
@@ -783,12 +720,10 @@ default-session store *is* that state for the local device.
 
 ## 7. Bus topics
 
-| Topic | Direction | Purpose |
-|-------|-----------|---------|
-| `ovos.session.sync` | component → all | Broadcast an explicit session update outside the utterance lifecycle (§2.7). Updated snapshot in `Message.data.session`; `session_id` identified via `Message.context.session` per MSG-1. |
-
-No other normative bus topic is defined by this specification.
-The per-utterance session propagation (§2.6) and end-marker
+This specification defines **no bus topic**. Session travels on
+the carrier OVOS-SESSION-1 defines, mutates at the lifecycle
+boundaries of §2.6, and converges by adoption (§2.7, §3). The
+per-utterance session propagation (§2.6) and the end-marker
 (§3.3) travel on topics owned by OVOS-PIPELINE-1.
 
 A deployment **MAY** define a further topic of its own on which

@@ -89,10 +89,9 @@ an entry here.
   retired failure topic on the no-transcription and cancellation
   paths (OVOS-PIPELINE-1 §9.3).
 - OVOS-CONTEXT-1 pathway citations repointed (§5.1 engine-side,
-  §5.2 in-place transformer mutation, §5.3 `ovos.session.sync`);
-  the bus-event mutation topics dropped in favour of the sync
-  pathway; attribution precedence and cancellation-stamp rationale
-  stated locally.
+  §5.2 in-place transformer mutation, §5.3 in-place handler
+  mutation); the bus-event mutation topics dropped; attribution
+  precedence and cancellation-stamp rationale stated locally.
 - SESSION-1 registry claims corrected to §2.2; slot-typing
   deferrals restated as timeless out-of-scope statements.
 
@@ -270,13 +269,13 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 - The state-ownership model (stateless bus, stateless orchestrator for
   named sessions, orchestrator-owned default session), the mutation
-  boundaries, `ovos.session.sync` (§2.7), client-side merge rules,
-  resumption semantics, and conformance.
+  boundaries, convergence without push topics (§2.7), client-side
+  merge rules, resumption semantics, and conformance.
 - §2.4 — a handler that emits no Message cannot propagate in-place
   session mutations: the orchestrator-emitted handler-lifecycle trio
   does not reflect handler-side changes, so a handler whose mutations
   must appear in terminal events emits at least one Message
-  (`ovos.utterance.speak` or `ovos.session.sync`).
+  (typically `ovos.utterance.speak`).
 ## OVOS-SESSION-1 — Session Carrier Wire Shape
 
 ### 1
@@ -615,7 +614,6 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   assignment, and the relaying vs managing session-preservation modes.
   §4 — emergent patterns over MSG-1 + SESSION-1/2 + PIPELINE-1 +
   TRANSFORM-1 + CONTEXT-1 + INTENT-4 at a bus boundary: policy injection,
-  multi-deployment topologies, out-of-utterance `ovos.session.sync`, and
-  satellite skill registration. §5 ordering guidance; §6 conformance.
+  multi-deployment topologies, and satellite skill registration. §5 ordering guidance; §6 conformance.
 - §3.3 — `site_id` assignment is owned here; OVOS-SESSION-1 §3.3 carries
   the registry pointer and the orchestrator-pipeline consumer constraints.

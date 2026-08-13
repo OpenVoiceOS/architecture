@@ -155,7 +155,6 @@ layer-2 transports (see appendix/patterns.md §3.1.2).
 |---|---|---|
 | Handler `speak`, GUI events, session mutations during dispatch (PIPELINE-1 §7) | `forward` | Same direction as the inbound dispatch |
 | Handler-lifecycle trio `.start` / `.complete` / `.error` (PIPELINE-1 §8) | `forward` | Same direction as the inbound dispatch |
-| `ovos.session.sync` emitted inside a handler (SESSION-2 §2.7) | `forward` | Session update travels toward the originating client |
 | `ovos.stop.pong` (STOP-1 §4.2) | `reply` | Skill answers back to the stop plugin that sent the ping |
 | `ovos.converse.pong` (CONVERSE-1 §4.2) | `reply` | Candidate answers back to the converse plugin that polled |
 | `ovos.fallback.pong` (FALLBACK-1 §6.1) | `reply` | Skill claims or declines back to the fallback plugin |

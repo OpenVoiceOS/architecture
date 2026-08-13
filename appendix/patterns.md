@@ -86,8 +86,8 @@ from one it received. The rule is:
 
 - **Use `forward`** when the new Message travels in the **same
   direction** as the source — toward the same destination. A handler
-  emitting `speak`, a session sync, or a lifecycle event during a
-  dispatch uses `forward`; the user-side client receives it because
+  emitting `speak` or a lifecycle event during a dispatch uses
+  `forward`; the user-side client receives it because
   the `destination` was already set by the earlier `reply` flip.
 - **Use `reply`** when the new Message travels **back toward the
   sender** of the source — a responder answering a requester. A
@@ -111,7 +111,6 @@ The specs enforce this consistently:
 | Emission | Derivation | Reason |
 |---|---|---|
 | Handler lifecycle trio (PIPELINE-1 §8) | `forward` | Travels toward the client alongside the dispatch |
-| `ovos.session.sync` from a handler (SESSION-2 §2.7) | `forward` | Session update travels toward the client |
 | `ovos.stop.pong` (STOP-1 §4.2) | `reply` | Response back to the stop plugin that pinged |
 | `ovos.converse.pong` (CONVERSE-1 §4.2) | `reply` | Response back to the converse plugin that polled |
 | `ovos.fallback.pong` (FALLBACK-1 §6.1) | `reply` | Claim or explicit decline, back to the fallback plugin |

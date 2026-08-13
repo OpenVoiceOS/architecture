@@ -36,8 +36,8 @@ This specification defines:
 - **emergent patterns** (§4) — capabilities that arise from
   composing other specifications at the bridge boundary: access
   control, pipeline overrides, context pre-population,
-  multi-deployment topologies, out-of-utterance session sync, and
-  satellite skill registration;
+  multi-deployment topologies, and satellite skill
+  registration;
 - **ordering guidance** (§5) — the expectation of FIFO delivery;
 - **conformance** (§6).
 
@@ -153,7 +153,7 @@ hub. When performing `session_id` mapping, the bridge MUST maintain
 a stable bijection between the participant's value and the hub-side
 value for the lifetime of the participant's connection. When the
 participant disconnects, the bridge SHOULD emit any cleanup events
-(e.g. `ovos.skill.deregister` per §4.4) using the **hub-side**
+(e.g. `ovos.skill.deregister` per §4.3) using the **hub-side**
 `session_id` before dropping the bijection, so that orchestrator
 state keyed on the hub-side value is cleaned up correctly.
 
@@ -174,8 +174,7 @@ In all routing modes:
 - A bridge MAY restrict topic subscription to a hardened minimum
   set for reduced attack surface. The minimum set for a
   multi-deployment topology (§4.2) is the utterance lifecycle
-  defined in **OVOS-PIPELINE-1 §9** plus
-  `ovos.session.sync` (**OVOS-SESSION-2 §2.7**), and any additional
+  defined in **OVOS-PIPELINE-1 §9**, and any additional
   topics the participant's pipeline plugins depend on. The same matching
   signals (`destination`, `session_id`, `site_id`) apply within
   this restricted set.
@@ -504,19 +503,7 @@ In this topology audio crosses the bridge as base64 data rather than
 as a local rendering obligation. The hub renders nothing locally for
 sessions owned by the satellite.
 
-### 4.3 Out-of-utterance session sync
-
-The hub MAY emit `ovos.session.sync` (**OVOS-SESSION-2 §2.7**) to
-push session-state changes to participants between utterance rounds
-— for example, when configuration changes or a background process
-mutates shared state. A bridge in a multi-deployment topology SHOULD
-relay `ovos.session.sync` to the appropriate satellite(s) by
-matching on `context.destination` or `context.session.session_id`,
-using the same routing signals as for any other outbound message
-(§3.2). `ovos.session.sync` is included in the hardened minimum
-topic set (§3.2) for this reason.
-
-### 4.4 Satellite skill registration
+### 4.3 Satellite skill registration
 
 A satellite running its own **intent-based skills** may register
 those skills on the hub's orchestrator by relaying the registration
@@ -606,11 +593,9 @@ buffer them indefinitely.
 - mutate the `session` object to inject layer-2 policy or metadata
   before bus injection (§4.1);
 - connect spec-compliant voice-OS deployments as peers (§4.2);
-- relay `ovos.session.sync` to satellites between utterance rounds
-  (§4.3);
 - relay intent registration messages from satellite-side skills to
   the hub, and emit `ovos.skill.deregister` on satellite disconnect
-  (§4.4);
+  (§4.3);
 - translate `ovos.utterance.speak` to `ovos.utterance.speak.b64`
   for satellites without local TTS, and relay `ovos.audio.speech`
   back to them (§4.2.5).
@@ -631,4 +616,4 @@ buffer them indefinitely.
 - **OVOS-AUDIO-1** — `ovos.utterance.speak.b64` and `ovos.audio.speech`
   for TTS-as-a-service (§4.2.5).
 - **OVOS-INTENT-4** — session-keyed registration and
-  `ovos.skill.deregister` (§4.4).
+  `ovos.skill.deregister` (§4.3).
