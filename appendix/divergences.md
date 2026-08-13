@@ -72,17 +72,15 @@ defined by any spec** and should be removed or replaced:
 
 - **`ovos.session.update_default`** —
   emitted by `SessionManager` to broadcast the default
-  session. SESSION-2 §5.4 acknowledges that an
-  orchestrator MAY emit default-session state on a deployer-defined
-  topic but assigns no normative name. This ad-hoc topic should be
-  retired: any component that needs the default-session state can
-  subscribe to `ovos.utterance.handled` (PIPELINE-1 §9.5) and read
-  the session it carries, or listen to any other assistant-emitted
-  Message on the default session. See §5.7 for the migration mapping.
-  Note: `ovos.session.sync` serves a distinct purpose — explicit
-  out-of-utterance state sync — and is formalized by
-  SESSION-2 §2.7; see §5.5 for its entry as a topic without
-  direct precedent.
+  session. SESSION-2 §7 acknowledges that a deployment MAY publish
+  default-session state on a topic of its own as a diagnostic, but
+  assigns no normative name and no consumer. This ad-hoc topic is
+  retired: a component that needs the default-session state
+  subscribes to `ovos.utterance.handled` (PIPELINE-1 §9.5) and reads
+  the session it carries, or adopts the session of any other
+  assistant-emitted Message on the default session (SESSION-2 §2.7).
+  See §5.7 for the migration mapping and §5.5 for the removed-mechanism
+  record.
 
 ### 5.3 Prescriptive shape changes
 
@@ -377,19 +375,39 @@ defined by any spec** and should be removed or replaced:
   `reply` / `response` (MSG-1 §5). Formalizes a "MAY"
   convenience for in-process subsystems; compatible with
   existing behaviour.
-- **`ovos.session.sync`** (SESSION-2 §2.7). Explicit
-  out-of-utterance session-state sync emitted by a component that
-  has mutated session state outside the normal utterance lifecycle
-  and needs the change propagated. No spec-conformant
-  predecessor — `ovos.session.update_default` (retired, see
-  §5.2.1) served an overlapping purpose for the default session
-  only. `ovos.session.sync` is generalised to any session.
-  The omission asymmetry it carries is designed, not an
-  oversight: on a *delta* from a peer with partial knowledge an
-  omitted field means *no opinion* and the receiver's current
-  value stands, while on a *snapshot* an omitted field means the
-  field is absent. Nothing in current OVOS distinguishes the two,
-  because nothing in current OVOS sends either.
+
+#### Removed mechanisms — session push topics
+
+The specs define **no topic on which any participant pushes a
+session at another**. Two mechanisms in shipped code do exactly
+that, and neither has a home in the spec family. This appendix is
+the one place that record lives; the specs themselves describe only
+what exists.
+
+- **`ovos.session.sync`** — a bare session broadcast. Shipped code
+  implements `handle_session_sync` and a bare-sync bootstrap on bus
+  connect. The spec has no equivalent: a named session is
+  client-authoritative (SESSION-2 §2.5), so a server-side push
+  fights the ownership model and is overwritten by the next inbound
+  client Message. Every legitimate mutation has an in-lifecycle
+  boundary instead (SESSION-2 §2.6), and a proactive interaction
+  propagates by the adoption rule (SESSION-2 §3.2): the client
+  adopts the session of any user-facing Message it renders.
+- **`ovos.session.update_default`** — a default-session broadcast
+  (see §5.2.1), emitted from `connect_to_bus` via
+  `_broadcast_default_session`. The spec converges the default
+  session two other ways (SESSION-2 §2.7): co-located processes
+  derive their initial view from the same deployment configuration,
+  and thereafter adopt the session of the Messages they act on or
+  render. That leaves one writer per session and removes the
+  multi-writer clobber the broadcast makes possible.
+
+**V1 removal scope.** `handle_session_sync` and its subscription;
+the bare-sync bootstrap on connect; `_broadcast_default_session` and
+its `connect_to_bus` call site. The only bridging behaviour code
+keeps during migration is the connect handshake: a bare sync on
+connect maps to `ovos.session.update_default` until both mechanisms
+are gone.
 
 ### 5.6 Things the specs do *not* change
 
@@ -447,7 +465,8 @@ a number of predecessor names. The mapping:
 | `ovos.utterance.handled` | **unchanged** — kept as the universal end-marker. |
 | `<skill_id>:<intent_name>` | **unchanged** — dispatch topic; a plugin-bundled handler has `skill_id == pipeline_id`. |
 | `mycroft.skill.handler.start` / `.complete` / `.error` | renamed to `ovos.intent.handler.start` / `.complete` / `.error` |
-| `ovos.session.update_default` | **retire** — subscribe to `ovos.utterance.handled` (PIPELINE-1 §9.5) to read updated default-session state; or to any assistant-emitted Message on the default session. See §5.2.1. |
+| `ovos.session.update_default` | **retire** — subscribe to `ovos.utterance.handled` (PIPELINE-1 §9.5) to read updated default-session state; or adopt the session of any assistant-emitted Message on the default session (SESSION-2 §2.7). See §5.2.1 and §5.5. |
+| `ovos.session.sync` (incl. the bare-sync connect bootstrap) | **retire** — no spec defines a session push topic; session mutates at the SESSION-2 §2.6 boundaries and converges by adoption (SESSION-2 §2.7, §3.2). See §5.5. |
 
 #### Poll-family topics (STOP-1, CONVERSE-1, FALLBACK-1, COMMON-QUERY-1)
 

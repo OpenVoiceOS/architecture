@@ -15,14 +15,14 @@ It builds on five companion specifications:
 
 - the *Bus Message Specification* (OVOS-MSG-1) — the envelope, the
   `session` carrier in which context lives (§4), and the
-  `forward` derivation used by the `ovos.session.sync` mutation
-  pathway (§5.1);
+  `forward` derivation on which a handler's mutations propagate
+  (§5.3);
 - the *Session Specification* (OVOS-SESSION-1) —
   the field-registry mechanism under which this spec claims
   `session.intent_context` (§2.2);
 - the *Session Lifecycle and State Ownership Specification*
-  (OVOS-SESSION-2) — the
-  `ovos.session.sync` topic and its merge semantics (§5.3);
+  (OVOS-SESSION-2) — the session-mutation boundaries (§2.6) at
+  which the pathways of §5 write;
 - the *Intent Definition Specification* (OVOS-INTENT-3) — the intent
   definition this spec extends with a `requires_context` declaration;
 - the *Utterance Lifecycle and Pipeline Specification* (OVOS-PIPELINE-1)
@@ -299,9 +299,9 @@ A single skill `tea.skill` runs a confirmation branch:
    { "value": null, "turns_remaining": 1 }
    ```
 
-   and emits `ovos.session.sync` (§5.3) with the updated session
-   snapshot. The orchestrator merges the snapshot; the entry is
-   now live at `tea.skill:confirming_milk`.
+   The mutation rides forward on the Messages the skill emits
+   from the handler (§5.3); the entry is now live at
+   `tea.skill:confirming_milk`.
 
 2. The user says **"yes"**. `tea.skill` has two narrow intents,
    `confirm_milk_yes` and `confirm_milk_no`, each declaring
@@ -330,7 +330,8 @@ A multi-skill conversation:
    { "value": "Bob", "turns_remaining": 3 }
    ```
 
-   and emits `ovos.session.sync` (§5.3) with the updated snapshot.
+   The mutation rides forward on the Messages the skill emits
+   from the handler (§5.3).
 
 2. The user says **"how tall is he"**. `bio.skill` has registered a
    template intent `height_query` whose template names a `{person}`
@@ -408,8 +409,8 @@ understood.
 
 ### 4.1 Mid-dispatch mutations
 
-Mutations via `ovos.session.sync` (§5.3) emitted while a dispatch
-is in flight take effect **after** the current dispatch's
+Handler mutations (§5.3) made while a dispatch is in flight take
+effect **after** the current dispatch's
 post-match decrement and **before** the next dispatch's pre-match
 prune. They are visible to the matchers of the *next* utterance,
 never to any matcher in the current one, and they are not
@@ -485,20 +486,26 @@ when a skill is in scope (intent, dialog, or TTS transformer
 stage); use the transformer's own identifier (per OVOS-TRANSFORM-1)
 otherwise.
 
-### 5.3 Skill or handler — `ovos.session.sync`
+### 5.3 Skill or handler — in-place during dispatch
 
 A skill handler that needs to add, update, or remove entries:
 
 1. Takes its local copy of `session` (received on the dispatch
    Message via OVOS-MSG-1 §4).
 2. Writes or deletes entries directly in `session.intent_context`,
-   computing the stored key per §3.
-3. Emits `ovos.session.sync` (OVOS-SESSION-2 §2.7) derived via
-   MSG-1 `forward` from the dispatch Message, with
-   `Message.data.session` carrying the updated snapshot.
+   computing the stored key per §3. This is the handler boundary
+   of OVOS-SESSION-2 §2.6, and `session.intent_context` is a field
+   this specification lets the handler write.
+3. Emits at least one Message derived via MSG-1 `forward` from the
+   dispatch Message. `forward` carries the mutated session to the
+   orchestrator and on to the originating client through any
+   layer-2 transport that routes by those fields. **A handler that
+   emits no Message does not propagate its mutation** (SESSION-2
+   §2.6): the write stays in the handler's local copy.
 
-The orchestrator applies `intent_context` from the sync payload
-**entry-by-entry**, not as a wholesale replacement:
+Where `intent_context` is merged rather than carried whole — the
+orchestrator's default-session store (OVOS-SESSION-2 §5.1) — the
+merge is **entry-by-entry**, not a wholesale replacement:
 
 - A key present in the payload with an entry object **sets or
   replaces** that key in the working map.
@@ -707,17 +714,17 @@ unresolved, and an utterance-produced `person` overrides it.
 - store `session.intent_context` as the entry map of §2 — entries
   carry only `value`, `expires_at`, `turns_remaining`; scope and
   ownership are encoded in the key shape (§3);
-- treat `session.intent_context` in `Message.context.session` on
-  ordinary (non-`ovos.session.sync`) Messages as **read-only** —
-  the session carrier propagates the current snapshot; only the
-  three pathways of §5 write it;
-- on receipt of `ovos.session.sync`, apply the `intent_context`
-  payload entry-by-entry per §5.3: present entry objects set or
-  replace the keyed entry; `null` entries delete the key; absent
-  keys are unchanged;
+- treat `session.intent_context` arriving in
+  `Message.context.session` as **read-only** — the session carrier
+  propagates the current snapshot; only the three pathways of §5
+  write it;
+- merge `intent_context` entry-by-entry per §5.3 wherever it
+  merges the session rather than carrying it whole: present entry
+  objects set or replace the keyed entry; `null` entries delete
+  the key; absent keys are unchanged;
 - prune dead entries before the first matcher runs and decrement
   `turns_remaining` after the match round (§4);
-- apply `ovos.session.sync` mutations received mid-dispatch after the current post-match decrement and before the next pre-match prune (§4.1);
+- apply handler mutations received mid-dispatch after the current post-match decrement and before the next pre-match prune (§4.1);
 - pass the post-decay `session` (with `intent_context` reflecting
   the §4 prune-and-decrement state) to each plugin's
   `match(utterances, lang, session)` call (OVOS-PIPELINE-1 §4);
@@ -754,10 +761,10 @@ unaffected by this specification.
 
 **A skill** that uses intent context **MUST**:
 
-- mutate `session.intent_context` only via `ovos.session.sync`
-  (§5.3) — the only normative mutation pathway available to
-  handlers; direct in-process mutation without syncing has no
-  effect on the orchestrator's working session;
+- mutate `session.intent_context` in place during its dispatch and
+  emit at least one `forward`-derived Message (§5.3) — the only
+  normative mutation pathway available to handlers; a mutation the
+  handler never emits has no effect on anyone else's session;
 - choose the key scope explicitly (§3): `private` prefix for
   skill-internal state, bare key for facts other skills may key
   off;
@@ -777,8 +784,7 @@ is not independently authenticated. Two consequences a deployer
   The prefix on a private key encodes which component wrote the
   entry **in this orchestrator instance, at this moment** — it
   was written by that component when it mutated the session
-  directly (§5.1 / §5.2) or synced via `ovos.session.sync`
-  (§5.3). It does **not** authenticate entries already present
+  directly (§5.1 / §5.2 / §5.3). It does **not** authenticate entries already present
   in a `session` blob that arrives over the bus — those entries
   are trusted to the extent the session itself is.
 

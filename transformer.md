@@ -1351,9 +1351,9 @@ covers.
   entries prefixed `<skill_id>:`, where `<skill_id>` for a
   transformer is its own `transformer_id` or, when the transformer
   is writing on behalf of a specific skill, that skill's
-  `skill_id`). Mutations made via the `ovos.session.sync` pathway
-  (OVOS-CONTEXT-1 §5.3) are also permitted; the choice between
-  the in-place pathway and the sync pathway is the transformer's;
+  `skill_id`). The in-place pathway is the only one open to a
+  transformer: the hook is the mutation boundary, and the write
+  MUST land before `transform` returns;
 - access the bus for side-effects unrelated to the transformer's
   IO (logging, telemetry, cross-session signals) — but **SHOULD
   NOT** make the transformer's output depend on bus responses
@@ -1443,10 +1443,9 @@ true` or `cancel_reason`:
   claims the six per-session transformer-override fields (§5), and
   the deployment-default fallback rule for omitted fields.
 - *Intent Context Specification* (OVOS-CONTEXT-1) — the
-  context-mutation pathways transformers may use. Both the
-  `ovos.session.sync` pathway (§5.3) and the in-place
-  transformer pathway (§5.2) are available; the choice is the
-  transformer's per the conformance rules of §9 of this spec.
+  context-mutation pathway transformers use: the in-place
+  transformer pathway (§5.2), per the conformance rules of §9 of
+  this spec.
 - *Intent Definition Specification* (OVOS-INTENT-3) — the intent
   and `Match` model that §3.4 operates on; §7 slot-map shape.
 - *Sentence Template Grammar Specification* (OVOS-INTENT-1) — §5.3

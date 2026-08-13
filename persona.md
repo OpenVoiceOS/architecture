@@ -220,7 +220,6 @@ effect of summon is to set `persona_id` in the session.
   - the **client** on the initial utterance message;
   - a **pipeline plugin** (e.g., a skill with a registered intent)
     via handler-side session mutation (OVOS-SESSION-2 §2.6);
-  - a **session sync** (`ovos.session.sync`) from any component;
   - the **orchestrator** as a policy decision.
 
 **Unknown identities.** No component validates `persona_id` against a
@@ -258,18 +257,19 @@ session by:
   "Stop" therefore ends a persona conversation everywhere, through
   machinery OVOS-STOP-1 already defines — no drain-list entry and no
   stop-plugin configuration is involved;
-- a **pipeline plugin** via handler-side session mutation;
-- a **session sync** (`ovos.session.sync`) from any component.
+- a **pipeline plugin** via handler-side session mutation
+  (OVOS-SESSION-2 §2.6).
 
 Omission does not dismiss, but the mechanics differ by session
 class. For the **default session**, the orchestrator's merge
 semantics (OVOS-SESSION-2 §5.1) preserve the stored value when an
 inbound Message omits `persona_id`; dismissal therefore requires an
 **explicit clear** — an empty-string `persona_id` (equivalent to
-absent, §3) sent via `ovos.session.sync`, a summoning plugin that
-handles the release intent, or a committed `Match.updated_session`
-snapshot without the field. For a **named session**, the client's
-copy is authoritative (OVOS-SESSION-2 §2.5): the client dismisses
+absent, §3) written at a session-mutation boundary (OVOS-SESSION-2
+§2.6) and carried forward on the emitting component's Messages, a
+summoning plugin that handles the release intent, or a committed
+`Match.updated_session` snapshot without the field. For a **named
+session**, the client's copy is authoritative (OVOS-SESSION-2 §2.5): the client dismisses
 by removing `persona_id` from the session state it carries on
 subsequent Messages.
 
