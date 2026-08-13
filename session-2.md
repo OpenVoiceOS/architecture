@@ -26,7 +26,7 @@ time, lets an orchestrator restart without losing client-side
 continuity, and lets multiple orchestrators in a deployment serve
 the same session without coordination.
 
-It builds on five companion specifications:
+It builds on six companion specifications:
 
 - the *Bus Message Specification* (OVOS-MSG-1) — the envelope,
   routing keys, `forward` / `reply` / `response` derivations,
@@ -48,8 +48,9 @@ It builds on five companion specifications:
   *Active Handlers and Interactive Response Specification*
   (OVOS-CONVERSE-1) — both elect the §2.4 SHOULD-project
   pathway for their cross-utterance state (intent-context
-  entries, active-handler list, response-mode wait window
-  respectively), making it resumption-safe by construction.
+  entries for CONTEXT-1; the converse-handler list and
+  response-mode wait window for CONVERSE-1), making it
+  resumption-safe by construction.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 **MAY**, and **RECOMMENDED** are used as in RFC 2119.
@@ -138,8 +139,9 @@ The orchestrator **MAY** maintain a transient per-utterance
 cache (the inbound session it is currently processing, the
 Match it has produced, etc.); such caches are utterance-scoped
 and discarded at end-of-utterance. They are **not**
-cross-utterance state and **MUST NOT** be relied upon by any
-component as durable.
+cross-utterance state: a component **MUST** continue to function
+when such a cache is absent, and **MUST NOT** read one as
+durable state.
 
 A consequence: any orchestrator in a deployment can serve any
 inbound Message on any named session. No coordination is
@@ -155,8 +157,8 @@ means "interact with the device-local session." The orchestrator
 session, keyed under `"default"` — the authoritative
 default-session store.
 
-This is the one exception to §2.2. The local device is a
-client of the orchestrator that runs in the same process tree
+*(Rationale, informative.)* This is the one exception to §2.2.
+The local device is a client of the orchestrator that runs in the same process tree
 as the orchestrator itself; making the orchestrator hold its
 state is the simplest representation of that physical
 co-location.
@@ -168,17 +170,28 @@ Behaviour rules for the default-session store are in §5.
 A component (a pipeline plugin, a transformer, any other
 participant) that holds `session_id`-keyed state **across**
 utterances **SHOULD** project that state into a session-resident
-field it owns (claimed under SESSION-1 §2.1) when projection is
-practical. Projection flows through the pipeline plugin's
-`Match.updated_session` channel (PIPELINE-1 §4.2) or through
-in-place mutation at transformer / handler boundaries (§2.6).
-Projected state is **resumption-safe by construction** — it
-travels with the session, survives orchestrator restart, and
-moves transparently across multi-orchestrator deployments.
+field it owns when projection is practical. Projection flows
+through the pipeline plugin's `Match.updated_session` channel
+(PIPELINE-1 §4.2) or through in-place mutation at transformer /
+handler boundaries (§2.6). Projected state is **resumption-safe
+by construction** — it travels with the session, survives
+orchestrator restart, and moves transparently across
+multi-orchestrator deployments.
+
+Ownership of a session field is established only by the claiming
+mechanic of SESSION-1 §2.2, which is available to a
+*specification*, not to a component. A component whose projected
+field is claimed by no specification is still conformant: that
+field is non-normative per SESSION-1 §2.3 and rides the
+unknown-field tolerance of SESSION-1 §2.4 — every consumer
+carries it and none is bound to interpret it. What such a
+component does **not** get is a normative reading by anyone
+else. A component that wants its field honoured by other
+participants needs a specification to claim it.
 
 A component **MAY** instead hold authoritative cross-utterance
-state internally when projection is impractical. Realistic
-examples:
+state internally when projection is impractical. *(The following
+examples are informative.)*
 
 - a **language-model plugin** holding a multi-turn conversation
   transcript that is too large to ride on every session-carrying
@@ -207,10 +220,12 @@ A component that takes this path:
   may have persisted the state and handle the resume cleanly.
   The spec does not bind the outcome of any plugin-internal
   resumption attempt;
-- MUST NOT expect other components or clients to know its
-  state exists or to compensate for its absence.
+- **MUST** continue to function correctly when no other
+  component or client knows the state exists or compensates for
+  its absence — it MUST NOT make its own correctness depend on
+  such knowledge or compensation.
 
-The CONVERSE-1 converse plugin (§5 there) is one example of a
+*(Informative.)* The CONVERSE-1 converse plugin (§5 there) is one example of a
 plugin that chooses to project all its cross-utterance state —
 the response-mode wait window is small, simple, and naturally
 session-coupled, so the SHOULD-project path is the obvious fit.
@@ -238,7 +253,10 @@ the user's cloud, anything else.
 
 Trust and authorization are layer-2 concerns (§1); this spec
 places no constraint on what `session_id` or `session` value a
-client sends.
+client sends. *(Informative.)* This rule is what obliges a
+boundary component that governs a client by injecting policy
+fields into its session to keep doing so on every Message;
+OVOS-BRIDGE-1 §4.1 states that obligation as the gate invariant.
 
 ### 2.6 When session mutates in place
 
@@ -248,14 +266,18 @@ happen only at these boundaries:
 - **transformer boundaries** — any of OVOS-TRANSFORM-1's six
   hooks (audio, utterance, metadata, intent, dialog, TTS);
 - **pipeline boundaries** — a pipeline plugin's `match` may
-  return a `Match.updated_session` per PIPELINE-1 §4.2; the
-  orchestrator MUST apply it as `session = match.updated_session
-  or session` immediately on a non-null match;
+  return a `Match.updated_session`. The commit mechanic is
+  PIPELINE-1 §4.2's and is not restated here;
 - **handler boundaries** — a dispatched handler (skill or
   plugin-bundled handler per PIPELINE-1 §7.0) MAY mutate
-  session in-place; its emissions via `forward` / `reply` /
-  `response` (OVOS-MSG-1 §5) carry the mutated session
-  forward. **A handler that emits no Message has no
+  session in-place, within the limit that it writes only fields
+  it owns. OVOS-MSG-1 §4.1 otherwise forbids a producer to
+  modify a session present on the source Message; the
+  owned-field allowance in that section is what makes this
+  boundary conformant, and a handler write to a field it does
+  not own remains forbidden. The handler's emissions via
+  `forward` / `reply` / `response` (OVOS-MSG-1 §5) carry the
+  mutated session forward. **A handler that emits no Message has no
   bus-visible way to propagate its session mutations.** The
   handler-lifecycle trio `.complete` (PIPELINE-1 §8) is
   orchestrator-emitted from the dispatch context the
@@ -278,22 +300,35 @@ mutation (e.g. a handler removing itself from
 prescription is the authority; this discipline rule does not
 override it.
 
+**Incidental bus events do not mutate the working session.**
 Bus events emitted *outside* these boundaries — the
 asynchronous, normal-event-handler kind that any component may
-emit at any time — **MUST NOT** be expected to mutate session
-state in the current utterance. The bus is asynchronous and
-not part of the utterance lifecycle (§2.1).
+emit at any time — carry a session but do not update anyone's
+working state. The orchestrator **MUST NOT** merge the session
+of such a Message into the working session snapshot for the
+utterance in progress, and a component **MUST NOT** make its own
+behaviour depend on such a merge having happened. The bus is
+asynchronous and not part of the utterance lifecycle (§2.1).
 
-A bus-emitted Message that carries a mutated session **MAY**
-affect subsequent utterances on that session (its updated
-session is received by the client and merged per §3), but
-**MUST NOT** be expected to affect the utterance during which
-it was emitted.
+Such a Message **MAY** still affect subsequent utterances on the
+session: the client receives it and merges per §3, and the
+merged state arrives on the next inbound Message. A component
+that relies on that effect **MUST** tolerate it landing no
+earlier than the next utterance.
 
-A component that needs to propagate a session update outside
-the normal utterance lifecycle SHOULD use `ovos.session.sync`
-(§2.7) rather than relying on an unrelated Message to carry
-the update incidentally.
+`ovos.session.sync` (§2.7) is the one exception to this
+paragraph, and is the mechanism a component **SHOULD** use when
+it needs to propagate a session update outside the normal
+utterance lifecycle, rather than relying on an unrelated Message
+to carry the update incidentally. A sync **is** merged into the
+working session snapshot on receipt, per the orchestrator
+obligation in §2.7.
+
+**What a merged sync is visible to.** The merge applies from that
+moment on, and no earlier: it reaches the terminal events the
+orchestrator emits afterwards and any stage that has not yet run. A
+stage that already read the snapshot is not revised. A mid-utterance
+sync buys terminal-event visibility, not re-evaluation.
 
 ### 2.7 Out-of-utterance session sync — `ovos.session.sync`
 
@@ -310,7 +345,7 @@ OVOS-MSG-1) and continues to identify the session for routing;
 
 | Key | Type | Required | Meaning |
 |-----|------|----------|---------|
-| `session` | object | yes | The updated session snapshot. Follows SESSION-1 wire shape; omitted fields leave the receiver's current values unchanged (§5.1 merge rule). |
+| `session` | object | yes | The updated session snapshot. Follows SESSION-1 wire shape. The merge a receiver performs on it is defined per receiver below under *Consumer obligations* — it is not SESSION-1 §2.1 default-filling, and §5.1's rules bind the default-session store only. |
 
 `ovos.session.sync` is a plain broadcast — not a PIPELINE-1
 §7 dispatch, not a round-trip. It does not fire the
@@ -346,26 +381,58 @@ no in-utterance emission is available.
 
 - The **orchestrator** MUST merge `Message.data.session` from
   a received `ovos.session.sync` into its working session
-  snapshot for the affected `session_id`. The merge follows
-  §5.1's field-replacement rule: present fields in the synced
-  snapshot replace current values; absent fields leave current
-  values unchanged. For `session_id == "default"` the working
-  snapshot is the default-session store (§5); for named
-  sessions it is the transient per-utterance session in
-  progress (§2.2). The orchestrator MUST reflect the merged
-  state in any terminal events it subsequently emits for the
-  same utterance — specifically the handler-lifecycle
-  `.complete` event (OVOS-PIPELINE-1 §8) and the universal
-  end-marker `ovos.utterance.handled` (PIPELINE-1 §9.5) —
-  so that clients and observers receive a session snapshot that
-  includes the sync update.
+  snapshot for the affected `session_id`, **when it holds
+  one**. The merge is **field-replacement**: a field present in
+  the synced snapshot replaces the current value; a field
+  absent from it leaves the current value unchanged. An absent
+  field is *not* read as a request to restore the deployment
+  default — SESSION-1 §2.1's default-filling governs
+  consumption of a session, not this merge. For
+  `session_id == "default"` the working snapshot is the
+  default-session store (§5), which always exists. For a named
+  session it is the transient per-utterance session in progress
+  (§2.2). The orchestrator MUST reflect the merged state in any
+  terminal events it subsequently emits for the same utterance —
+  specifically the handler-lifecycle `.complete` event
+  (OVOS-PIPELINE-1 §8) and the universal end-marker
+  `ovos.utterance.handled` (PIPELINE-1 §9.5) — so that clients
+  and observers receive a session snapshot that includes the
+  sync update. §2.6 fixes the limits of that visibility.
 - **Clients** SHOULD update their local session store when
   they observe `ovos.session.sync` whose `Message.context.session`
   carries a `session_id` matching their own, merging
   `Message.data.session` using the same field-replacement
   semantics as §3.
 
----
+**A finer merge may be prescribed per field.** Field replacement
+is the **default** rule, and it is what applies to any field
+whose claiming specification says nothing further. A claiming
+specification **MAY** define a finer intra-field merge for the
+field it claims, and where it does, that rule governs both this
+sync merge and the §5.1 store merge. One such field exists at
+this version: `session.intent_context`, which OVOS-CONTEXT-1
+§5.3 merges **entry-by-entry** — a key present with an entry
+object sets or replaces that key, a key present with a `null`
+entry removes it, and keys absent from the payload are left
+unchanged. A receiver implementing this specification MUST
+apply CONTEXT-1 §5.3's rule to `intent_context` rather than
+replacing the whole map.
+
+**Named session with no utterance in flight.** Between rounds the
+orchestrator holds no snapshot for a named session (§2.2), so the
+sync is a **no-op**: it **MUST NOT** create a snapshot or any other
+cross-utterance state to hold the update. Nothing is lost — the sync
+is a broadcast, the client that owns the session merges it and
+carries it back on its next inbound Message. That is the intended
+path, not a degraded one.
+
+**Nested lifecycles.** When lifecycles are nested (PIPELINE-1
+§6.5), a sync on the shared `session_id` binds to the
+**innermost lifecycle in flight** — the one whose working
+snapshot is current at the moment of receipt. The outer
+lifecycle picks the update up only where it reads the session
+again after the inner lifecycle returns; a snapshot the outer
+handler already holds is not revised, per §2.6.
 
 ## 3. Client-side merge rules
 
@@ -388,16 +455,35 @@ carries a valid session at its emission point. A client that
 adopts any one such Message's session has a snapshot consistent
 with the assistant's view at that point in the round.
 
-Adopting the **latest received** session is the simplest client
-policy. More elaborate policies (field-by-field merge, selecting
-by emitter identity) are also conformant; the spec does not
-prescribe.
+**Where to adopt.** "Latest received" is not a well-defined
+selector on this bus. The bus is asynchronous and guarantees no
+delivery order (§2.1), so two Messages emitted in a known order
+may be observed in the opposite one; a client that adopts
+whichever arrived last can therefore install an *older*
+assistant view over a newer one. This specification consequently
+does not define an ordering, and no client may assume one.
+
+It is instead **RECOMMENDED** that a client adopt at the
+universal end-marker `ovos.utterance.handled` (PIPELINE-1 §9.5),
+which is emitted exactly once per utterance (§3.3) and so needs
+no ordering to be unambiguous.
+
+A client **MAY** adopt incrementally from Messages observed
+mid-round, and **MAY** run a more elaborate policy
+(field-by-field merge, selecting by emitter identity). Both are
+conformant, with one warning that applies to every incremental
+policy: **a session adopted mid-round may be stale by the time
+it is stored**, and the client has no reliable way to detect
+that it is. A client that adopts incrementally **SHOULD**
+therefore also adopt at the §3.3 convergence point, which
+supersedes whatever the incremental policy accumulated during
+the round.
 
 ### 3.3 `ovos.utterance.handled` is the canonical convergence point
 
 When a client wants a single canonical "round is over" snapshot,
-the PIPELINE-1 §9 universal end-marker `ovos.utterance.handled`
-is the recommended adoption point: emitted exactly once per
+the universal end-marker `ovos.utterance.handled` (PIPELINE-1
+§9.5) is the recommended adoption point: emitted exactly once per
 utterance on every terminal path, carrying the assistant's final
 session for the round. A client may also adopt incrementally per
 §3.1, or combine both; all are conformant.
@@ -439,7 +525,8 @@ pathway is governed by the holding component's own design. The
 spec defines no protocol for plugin-internal state; the
 plugin chooses what to persist, what to evict, and what
 "resume" means for its own state. A client cannot expect
-parity across components:
+parity across components. *(The following illustrations are
+informative.)*
 
 - a chat-history-holding LLM plugin may resume a months-old
   conversation seamlessly because it persisted the transcript;
@@ -487,14 +574,80 @@ orchestrator operation:
   §4.2, in-handler mutations) propagate into the store
   through the standard derivation chain.
 
-The merge semantics for inbound default-session Messages follow
-SESSION-1 §2.1's omission rule: **omitted inbound fields leave
-the stored field unchanged** (the stored value is the
-orchestrator's last authoritative value for that field); a
-**present inbound field replaces the stored value** for that
-field. This is the natural complement to the stateless-named-
-session rule: the default-session store fills the role the
-client plays for named sessions.
+**Merge semantics for inbound default-session Messages.** An
+**omitted inbound field leaves the stored field unchanged** —
+the stored value is the orchestrator's last authoritative value
+for that field. A **present inbound field replaces the stored
+value** for that field.
+
+This is a deliberate **deviation** from SESSION-1 §2.1, and this
+specification owns it. SESSION-1 §2.1 says an omitted field is
+filled at consumption with the consumer's deployment default.
+That rule is about *consuming* a session; it presumes the
+consumer has no better answer than its configuration. For the
+default session the orchestrator does have a better answer: it
+is the authoritative holder of the session, so it fills an
+omission from its store instead of from its defaults. The
+deviation is confined to writes into the default-session store.
+SESSION-1 §2.1 continues to govern everywhere else, including
+every named session and including how components downstream
+consume the session the orchestrator then emits. This is the
+natural complement to the stateless-named-session rule: the
+default-session store fills the role the client plays for named
+sessions.
+
+Field replacement is the **default**; a field whose claiming
+specification defines a finer intra-field merge resolves by that
+rule instead. At this version that is `session.intent_context`,
+merged entry-by-entry per OVOS-CONTEXT-1 §5.3 (§2.7).
+
+**An omitted field means two different things in this
+specification, by design.** On a *merge* pathway — a sync (§2.7),
+a write into the default-session store (above) — the carrier is a
+delta from a peer with partial knowledge: omission means *no
+opinion*, and the receiver's current value stands. On a *snapshot*
+pathway — a session carried on an utterance Message (SESSION-1
+§2.1), a committed `Match.updated_session` (below) — the carrier
+declares complete state: omission means *not set*, and the field
+resolves to the deployment default at consumption. Which reading
+applies is a property of the pathway, fixed here, never of the
+producer's intent; a producer that wants the other semantics is on
+the wrong pathway.
+
+**Field tolerance applies at store-write.** A session written
+into the store may carry keys the orchestrator does not
+recognise. SESSION-1 §2.4's unknown-field tolerance applies:
+the orchestrator **MUST NOT** reject the write and **MUST NOT**
+strip the unrecognised keys, and it **MUST** carry them on the
+sessions it subsequently derives from the store. SESSION-1
+§2.5's malformed-carrier rules apply unchanged.
+
+**Wholesale replacement on the match pathway.** The
+field-by-field merge above governs **inbound client Messages**.
+A committed `Match.updated_session` (PIPELINE-1 §4.2) is a
+complete snapshot instead: the orchestrator **MUST** replace the
+working session snapshot with it wholesale. A field absent from
+`Match.updated_session` is therefore not preserved — it **reverts
+to the deployment default at consumption**, exactly as any
+omitted field does under SESSION-1 §2.1. It is not deleted in
+any stronger sense, and the distinction matters: a consumer
+never sees a hole, it sees a field that resolves to the default.
+
+Two writes escape wholesale replacement, because other
+specifications fix them as applying on top of the committed
+snapshot rather than inside it:
+
+- the `session.active_handlers` push of PIPELINE-1 §7.1, which
+  that section defines as applied *after* `Match.updated_session`
+  is committed;
+- the entry-level `intent_context` merge of OVOS-CONTEXT-1 §5.3,
+  which merges entry-by-entry and so is not expressible as a
+  whole-map replacement.
+
+Wholesale replacement exists only on the match pathway. An
+inbound client Message cannot drop a stored default-session
+field by omitting it — it can only overwrite the field by
+sending a new value.
 
 ### 5.2 Restart semantics
 
@@ -504,7 +657,7 @@ defaults (the empty session, with every field falling back per
 SESSION-1 §2.1). Components keyed on the default session lose
 their state.
 
-This is acceptable for the default session by design: the
+*(Rationale, informative.)* This is acceptable for the default session by design: the
 default session represents the local device, which is typically
 co-located with the orchestrator process. A restart of the
 orchestrator is a restart of the device's voice stack;
@@ -526,14 +679,6 @@ holds it. For named sessions the same field is preserved only
 as long as the client holds it locally — best-effort on remote
 peers.
 
-### 5.4 Default-session sync to clients
-
-The orchestrator **MAY** emit the default-session state as a
-diagnostic on a deployer-defined topic, so that interested
-observers can track default-session evolution without processing
-every response Message. No normative topic name or consumer is
-defined here; this is deployment policy.
-
 ---
 
 ## 6. Conformance
@@ -554,7 +699,7 @@ An orchestrator that claims conformance to this specification
   stateless per §2.2 — no cross-utterance state held outside
   what the inbound Message brings;
 - hold the default session as persistent in-process state per
-  §5, with the merge / derive / restart semantics of §5.1 /
+  §5, with the merge, derive and restart semantics of §5.1 and
   §5.2;
 - apply in-place session mutations only at the boundaries of
   §2.6 (transformer, pipeline-match, handler);
@@ -562,13 +707,9 @@ An orchestrator that claims conformance to this specification
   derivation per OVOS-MSG-1 §5 and SESSION-1 §4, except where
   the §2.6 boundaries dictate mutation;
 - emit the universal end-marker `ovos.utterance.handled`
-  carrying the final round session (PIPELINE-1 §9), as the
+  carrying the final round session (PIPELINE-1 §9.5), as the
   client-side convergence point of §3.3;
-- merge `ovos.session.sync` Messages per §2.7 into the
-  working session snapshot for the affected `session_id` on
-  receipt, and reflect the merged state in the subsequent
-  handler-lifecycle `.complete` and `ovos.utterance.handled`
-  terminal events for the same utterance.
+- merge `ovos.session.sync` Messages on receipt per §2.7.
 
 An orchestrator **MUST NOT** require any client to declare
 session-start / session-end / session-id-allocation events
@@ -580,11 +721,13 @@ send; the orchestrator processes what arrives.
 A component that holds `session_id`-keyed state across
 utterances **SHOULD**:
 
-- project that state into a session-resident field it claims
-  under SESSION-1 §2.1 (per §2.4), via the appropriate
-  in-utterance pathway — `Match.updated_session` for pipeline
-  plugins per PIPELINE-1 §4.2, direct mutation for
-  transformers and handlers per §2.6;
+- project that state into a session-resident field per §2.4 —
+  a field claimed by a specification under SESSION-1 §2.2 where
+  one exists, otherwise an unclaimed field carried under
+  SESSION-1 §2.4's tolerance with no normative reading by
+  anyone else — via the appropriate in-utterance pathway:
+  `Match.updated_session` for pipeline plugins per PIPELINE-1
+  §4.2, direct mutation for transformers and handlers per §2.6;
 - on every inbound Message, read its state from `session`
   rather than from a cross-utterance internal store.
 
@@ -595,7 +738,8 @@ accept best-effort resumption (§4.3).
 
 A component **MUST NOT** rely on bus events (the asynchronous
 kind that fire outside the utterance lifecycle) to mutate
-session state in the current utterance (§2.6). It MAY emit such
+session state in the current utterance (§2.6);
+`ovos.session.sync` (§2.7) is the one exception. It MAY emit such
 events to communicate with other components; their effect on
 session, if any, lands on subsequent utterances.
 
@@ -619,11 +763,10 @@ A client **MAY** update its local session per §3, choose any
 persistence format and lifetime, and re-emit a previously-used
 `session_id` at any time (§4).
 
-A client **MUST NOT**:
-
-- expect the orchestrator to remember any session state for it
-  between rounds — every round MUST be self-sufficient via the
-  inbound session.
+A client **MUST** make every round self-sufficient: it **MUST**
+carry on the inbound session all state it needs the assistant to
+act on, and it **MUST NOT** omit state on the assumption that
+the orchestrator retained it from a previous round.
 
 ### 6.5 Default-session client
 
@@ -648,12 +791,20 @@ No other normative bus topic is defined by this specification.
 The per-utterance session propagation (§2.6) and end-marker
 (§3.3) travel on topics owned by OVOS-PIPELINE-1.
 
+A deployment **MAY** define a further topic of its own on which
+the orchestrator publishes the default-session state (§5) as a
+diagnostic, so that interested observers can track
+default-session evolution without processing every response
+Message. This specification defines no name, payload, or
+consumer for such a topic; it is deployment policy and carries
+no conformance weight.
+
 ---
 
 ## 8. Non-goals
 
 See §1 for the full list of non-goals. This section adds one
 clarification: **default-session persistence across orchestrator
-restart** is not defined here. §5.3 makes restart-loss
+restart** is not defined here. §5.2 makes restart-loss
 explicit and intentional; persistence is deployer policy if
 desired.
