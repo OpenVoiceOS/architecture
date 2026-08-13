@@ -96,10 +96,11 @@ malformed.
 
 A resource base name MUST consist only of lowercase ASCII letters, digits, and
 underscores, and MUST NOT contain whitespace; file extensions are likewise
-lowercase. Where a base name names a slot —
-an `.entity` file naming the `{slot}` it supplies — it additionally obeys the
-slot-name rule of OVOS-INTENT-1 §3.4 (lowercase letters, digits, and
-underscores; not beginning with a digit).
+lowercase. Where a base name denotes a slot — an `.entity` file naming the
+`{slot}` it supplies, or a `.blacklist` file paired by base name with such an
+`.entity` (§4.3) — it additionally obeys the slot-name rule of OVOS-INTENT-1
+§3.4 (lowercase letters, digits, and underscores; not beginning with a
+digit).
 
 Language directories are named with **BCP-47** language tags (`en-US`, `pt-BR`,
 `zh-Hans`). Tag comparison is **case-insensitive**: `en-us` and `en-US` denote
@@ -125,8 +126,8 @@ an override file replaces the corresponding lower-precedence file entirely.
 ### 2.2 Language fallback (non-normative)
 
 This specification does not mandate behaviour when the requested language has no
-directory. A loader **SHOULD** prefer an exact match. As a *suggestion*, a
-loader MAY fall back to the nearest available language, as measured by any
+directory. A loader should prefer an exact match. As a *suggestion*, a
+loader may fall back to the nearest available language, as measured by any
 language-tag distance metric that treats close regional variants as usable
 matches. Any such fallback is an **implementation choice**,
 not a requirement of this specification, because cross-region substitution can
@@ -136,7 +137,12 @@ produce wording a user would not expect.
 
 ## 3. Common parsing rules
 
-All resource files are line-oriented and share one reader behaviour:
+This section applies to the five **line-oriented** roles — `.intent`,
+`.dialog`, `.entity`, `.voc`, and `.blacklist`. The `.prompt` role is read
+whole-file verbatim and does not use this reader; its own rule is defined at
+§4.4.
+
+These five roles share one reader behaviour:
 
 - the file is **UTF-8**; it SHOULD NOT begin with a byte-order mark, and a
   reader that encounters one MUST discard it;
@@ -342,6 +348,13 @@ legitimately contain brace sequences the author never intended as slots, so
 substitution is conservative: it touches only the `{{name}}` occurrences whose
 names the caller explicitly provides.
 
+**Malformed file.** A `.prompt` file that is empty, or that contains only
+whitespace, is malformed — a loader MUST treat it the same as any other
+malformed resource (§5 step 5). Every other byte sequence, including a file
+consisting solely of `#` lines, is a valid prompt: `.prompt` has no comment
+handling (above), so such a file is not empty, it is a prompt whose content
+happens to look like comments.
+
 **Loads as.** The single whole-file string, with substitution applied per the
 rules above.
 
@@ -382,17 +395,25 @@ A loader for these resources, in any language, **MUST**:
 2. **Locate a file** — within the resolved language directory, searching its
    subdirectories recursively, find a file by its base name and extension,
    honouring the override precedence of §2.1.
-3. **Apply the common reader** — UTF-8, accept `LF`/`CRLF`, strip lines, skip
-   blanks and `#`-comments (§3).
+3. **Apply the common reader** — for the five line-oriented roles (§3): UTF-8,
+   accept `LF`/`CRLF`, strip lines, skip blanks and `#`-comments. `.prompt` is
+   exempt — it is read whole-file verbatim (§4.4) and does not pass through
+   this reader.
 4. **Apply the per-format rule**:
    - `.intent` and the slot-free roles (`.entity`, `.voc`, `.blacklist`) —
      expand each line to its sample set at load time via an
      OVOS-INTENT-1-conformant expander, leaving any named slots intact;
-   - `.dialog` — retain each line as a phrase string; expand per-render (§4.2).
-5. **Reject an empty file** — a resource file of any role that yields no
-   templates after step 3 MUST be treated as malformed: every file MUST
-   contribute at least one template. (Each template must in turn expand to at
-   least one non-empty sample, or it is itself malformed — OVOS-INTENT-1 §3.6.)
+   - `.dialog` — retain each line as a phrase string; expand per-render (§4.2);
+   - `.prompt` — read the whole file verbatim as a single string, applying
+     only UTF-8 decoding and byte-order-mark discovery (§3); no line
+     splitting, stripping, blank-skipping, or `#`-comment filtering is
+     applied (§4.4).
+5. **Reject an empty file** — a resource file of one of the five
+   line-oriented roles that yields no templates after step 3 MUST be treated
+   as malformed: every such file MUST contribute at least one template.
+   (Each template must in turn expand to at least one non-empty sample, or it
+   is itself malformed — OVOS-INTENT-1 §3.6.) A `.prompt` file is malformed
+   instead under the whitespace-only rule of §4.4.
 
 A loader **MAY** cache parsed results and **MAY** implement a language-fallback
 policy per §2.2, but **MUST NOT** change the meaning of the formats defined
