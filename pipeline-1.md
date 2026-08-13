@@ -1286,6 +1286,16 @@ A component that opens a lifecycle without passing through the
 orchestrator — a plugin serving an out-of-band query — sits at
 lifecycle entry itself and stamps under the same rule.
 
+A `get_response` answer is a **new lifecycle**, not a continuation:
+the answer utterance enters at §9.1 like any other, gets its own
+`utterance_id`, and is claimed early by the session's response-mode
+holder. Continuity between the question's lifecycle and the
+answer's is session state (`response_mode`), never the identifier —
+an identifier shared across turns would let a stale poll answer
+from one turn decide the next, which is the failure this field
+exists to prevent. Tooling that wants to group an exchange groups
+by `session_id`.
+
 The value is opaque: consumers compare it for equality and do
 nothing else. It **MUST** be unique per lifecycle within the
 deployment (a UUID is RECOMMENDED; no format is normative). Two
