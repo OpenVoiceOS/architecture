@@ -58,7 +58,21 @@ deployer-defined.
 
 Before passing audio to STT, the audio input service **MUST** run the
 audio-transformer chain (**OVOS-TRANSFORM-1 §3.1**), configured per
-OVOS-TRANSFORM-1 §4.
+OVOS-TRANSFORM-1 §4. Chain input metadata carries at minimum
+sample rate, sample width, and channel count (OVOS-TRANSFORM-1
+§3.1); this is the pre-STT audio-format vocabulary, and it is the
+input-side counterpart to the `mime` and `sample_rate` fields
+OVOS-AUDIO-1 defines on the output side.
+
+When capture is in-process (audio input service and STT sharing a
+process, no bus hop between them), the chain's `lang` parameter
+machinery (**OVOS-TRANSFORM-1 §3.0**) degrades gracefully: there is
+no Message yet whose `data.lang` could seed it, so `lang` simply
+starts unset for the chain and the §3.0 writeback step is a no-op
+(there is no `Message.data.lang` to reflect a value into). This is
+not a gap — the chain's actual output reaches the pipeline through
+`session.detected_lang` (below), which is the channel §5.1 language
+resolution already reads.
 
 Canonical use cases:
 
@@ -84,7 +98,33 @@ per **OVOS-PIPELINE-1 §9.1**.
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `utterances` | array of string | yes | Transcription candidates; first element is primary. |
-| `lang` | string | yes | BCP-47 output language of the transcription. See §5.1. |
+| `lang` | string | no | BCP-47 output language of the transcription. See §5.1. |
+
+Per **OVOS-PIPELINE-1 §9.1**, `lang` on this topic is present only
+when the producer authoritatively knows the content language. The
+audio input service satisfies that condition by construction: it
+selected the STT decoder (§5.1) and therefore knows, without
+inference, which language the decoder was run in. It **SHOULD**
+always set `lang` for that reason — omission is conformant (the
+field stays optional on the topic per §9.1) but only expected when
+the service could not resolve a decode language at all (§5.1).
+
+The service **MUST NOT** emit `ovos.utterance.handle` when STT
+produced no usable transcription — an empty result, a decode
+failure, or a confidence rejection. `utterances` is defined as
+non-empty; a phantom emission with no real content is
+non-conformant.
+
+Instead the service **MUST** emit `ovos.stt.failed`, carrying the
+session in `context.session` like every emission here (§5.2). The
+payload **MAY** be empty; `lang` **MAY** be included under the §9.1
+condition. The user spoke and nothing will answer — that fact must
+be observable on the bus, or every client is left to guess between
+"still transcribing" and "gave up". What a client does with it —
+an error earcon, a retry prompt, nothing — is client policy, not
+this specification's concern. No handler lifecycle follows: the
+failure event is terminal, and it is the only Message the failed
+capture produces.
 
 ### 5.1 Language resolution
 
@@ -116,8 +156,9 @@ placed in `context.session` (**OVOS-MSG-1 §4**).
 - **Local device** — SHOULD use `session_id: "default"`
   (**OVOS-SESSION-2 §5**).
 - **Satellite** — session is assigned by the bridge at the hub
-  boundary (**OVOS-BRIDGE-1 §4.2.1**); the bridge relays or
-  NAT-translates the `session_id` as needed.
+  boundary (**OVOS-BRIDGE-1 §3.4.2**); the bridge relays or
+  NAT-translates the `session_id` as needed (**OVOS-BRIDGE-1
+  §3.2**).
 
 ---
 
@@ -151,6 +192,10 @@ of this Message.
 
 This signal pairs with `ovos.listener.record.started` (§6.1); a component
 that subscribed to the start signal uses this to restore state.
+`ovos.listener.record.ended` carries no completion guarantee about
+what capture produced — the arrival (or absence) of a subsequent
+`ovos.utterance.handle` (§5) is the only reliable signal of whether
+usable audio resulted.
 
 ### 6.3 Sleep mode
 
@@ -174,6 +219,21 @@ request rides a session like every Message, sleep mode is a
 **physical device state**: a sleeping audio input service captures
 nothing for any session. Entering or leaving sleep affects the whole
 device, not only the session that carried the request.
+
+`context.session.session_id` on `ovos.listener.sleep` and
+`ovos.listener.awoken` (§6.4) is therefore **informational only**:
+it identifies the requester for logging and correlation, but the
+device-scope effect — capture suspended or resumed for every
+session — is identical no matter which session's identifier the
+Message carries.
+
+No topic in this specification lets a component query current
+listener state (awake, asleep, capturing) on demand. This is a
+**deliberate omission**: sleep and record signals (§6.1–§6.4) are
+edge-triggered notifications, not a queryable state store. A
+deployment that needs to synchronize to current state on connect
+(e.g. a bridge attaching mid-session) derives it from the last-seen
+lifecycle signal rather than polling for one.
 
 ### 6.4 Awoken
 
@@ -222,6 +282,7 @@ word (push-to-talk, `ovos.mic.listen`) emit no wake-word signal.
 | `ovos.listener.sleep` | controller → audio-input | Enter device-wide sleep mode and suspend capture (§6.3). |
 | `ovos.listener.awoken` | audio-input → broadcast | Left sleep mode (§6.4). |
 | `ovos.mic.listen` | any component → audio-input | Re-open the user input channel; consumed here, defined in OVOS-AUDIO-1 §4.4. |
+| `ovos.stt.failed` | audio-input → broadcast | Capture yielded no usable transcription; terminal, no lifecycle follows (§5). |
 
 ---
 
@@ -234,6 +295,9 @@ word (push-to-talk, `ovos.mic.listen`) emit no wake-word signal.
   STT (§4);
 - assign a session in `context.session` per §5.2;
 - emit `ovos.utterance.handle` with `data.utterances` and `data.lang`
+  (§5);
+- emit `ovos.stt.failed` instead when STT produced no usable
+  transcription, and no `ovos.utterance.handle` for that capture
   (§5);
 - emit `ovos.listener.wakeword` when a wake word triggers capture
   (§6.5);
@@ -267,4 +331,5 @@ word (push-to-talk, `ovos.mic.listen`) emit no wake-word signal.
   `session.detected_lang`, `session.request_lang`.
 - **OVOS-SESSION-2** — session assignment and default-session rule.
 - **OVOS-MSG-1** — session carrier (§4) and envelope.
-- **OVOS-BRIDGE-1** — satellite session assignment (§4.2.1).
+- **OVOS-BRIDGE-1** — satellite session assignment (§3.4.2) and
+  session `session_id` NAT translation (§3.2).
