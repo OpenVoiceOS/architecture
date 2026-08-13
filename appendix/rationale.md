@@ -85,15 +85,32 @@ the normative sections.
   on `session.session_id`. Multi-turn conversation, intent
   context, cross-skill state, and similar concerns are
   deferred to other specifications.
-- **Topic naming conventions** (MSG-1 v2 §2.1.2). The
+- **One correlation key, in the envelope, for everybody**
+  (PIPELINE-1 §9.1.1). `utterance_id` is the exception that proves the
+  bullet above: it is a *value* every derivation copies, not an
+  index anybody keeps. It was lifted into MSG-1 rather than left
+  to each poll family because the alternative was three
+  incompatible keys — a common-query `query_id`, a fallback
+  round tag, a converse round tag — each correlating the same
+  thing, none of them usable by a bridge or a monitor that sees
+  all three. Putting it beside `session` makes it propagate under
+  a rule the derivations already enforce, and makes "these two
+  Messages belong to the same lifecycle" one string comparison
+  anywhere on the bus.
+- **Topic naming conventions** (MSG-1 v2 §2.1.1). The
   conventions other specs in the family follow are
-  codified as SHOULD-rules: dot-separated hierarchy
-  with `:` reserved for component-pair shapes; stable
-  ecosystem-identifying root; verb-tense pattern for the
-  trailing segment; request/terminal pairs sharing a root
+  codified as SHOULD-rules: dot-separated hierarchy;
+  stable ecosystem-identifying root; verb-tense pattern for
+  the trailing segment; request/terminal pairs sharing a root
   verb (`handle` ↔ `handled`); `.response` suffix for
-  response derivations; per-instance
-  `<root>.<domain>.<id>.<verb>` form.
+  response derivations. Above them sits one MUST: `:` belongs
+  to the `<skill_id>:<intent_name>` dispatch shape and nothing
+  else, so every other topic is a static string and no runtime
+  identifier mints a topic. That is what makes a topic
+  allowlist, a bridge filter, or a conformance harness writable
+  against the specs instead of against a running deployment;
+  the price is paid by the poll families, which moved their
+  addressing into the payload (divergences §5.4).
 
 ### 4.3 Session carrier (SESSION-1)
 
@@ -198,16 +215,18 @@ the normative sections.
   selective plugins are expected to be conservative and trust
   their position.
 - **Tier conventions are out of scope.** The
-  high / medium / low suffix is implementation strategy:
-  from the bus, each tier is a distinct `pipeline_id` in
-  `Session.pipeline`. The convention is compatible with
+  high / medium / low suffix is implementation strategy: each
+  tier is a separate entry in `Session.pipeline`, referencing
+  a match configuration rather than a distinct actor
+  (PIPELINE-1 §3). The convention is compatible with
   PIPELINE-1.
 - **Skills and plugins are equivalent handler owners.**
   The dispatch topic `<skill_id>:<intent_name>` is uniform:
   for a pure-matcher plugin the `skill_id` is the matched
   skill's id; for a plugin that bundles its own handler
   (e.g. a language-model persona) `skill_id == pipeline_id`.
-  Both are addressed the same way.
+  The two identifiers are one namespace, so both are addressed
+  the same way.
 - **Universal `ovos.utterance.handled` end-marker on every
   terminal path.** One reserved invariant lets observers
   count turns, route fallbacks, and know "the assistant

@@ -91,8 +91,8 @@ from one it received. The rule is:
   the `destination` was already set by the earlier `reply` flip.
 - **Use `reply`** when the new Message travels **back toward the
   sender** of the source — a responder answering a requester. A
-  skill responding to `ovos.stop.ping`, a handler answering a
-  `<owner_id>.converse.request` poll, or a plugin answering an
+  skill responding to `ovos.stop.ping`, a candidate answering an
+  `ovos.converse.ping` poll, or a plugin answering an
   introspection request all use `reply`; the flip routes the answer
   back to whoever asked.
 
@@ -113,8 +113,15 @@ The specs enforce this consistently:
 | Handler lifecycle trio (PIPELINE-1 §8) | `forward` | Travels toward the client alongside the dispatch |
 | `ovos.session.sync` from a handler (SESSION-2 §2.7) | `forward` | Session update travels toward the client |
 | `ovos.stop.pong` (STOP-1 §4.2) | `reply` | Response back to the stop plugin that pinged |
-| `<owner_id>.converse.response` (CONVERSE-1 §4.2) | `reply` | Response back to the converse plugin that polled |
+| `ovos.converse.pong` (CONVERSE-1 §4.2) | `reply` | Response back to the converse plugin that polled |
+| `ovos.fallback.pong` (FALLBACK-1 §6.1) | `reply` | Claim or explicit decline, back to the fallback plugin |
+| `ovos.common_query.pong` / `.response` (COMMON-QUERY-1 §6.2, §7.1) | `reply` | Claim and full answer, back to the common-query plugin |
 | Pipeline introspection response (PIPELINE-1 §10.2) | `reply` | Response back to the observer that requested |
+
+Every pong above is a `reply` of the round's ping, which is what
+carries `context.utterance_id` back to the poller unchanged — the
+correlation the poller uses to tell this round's answers from the
+last one's (PIPELINE-1 §9.1.1).
 
 #### 3.1.3 No central correlation, no central state
 
@@ -125,10 +132,25 @@ identifier, no in-reply-to field, no host-side index mapping
 a `.response` back to its request, no shared "current
 conversation" record.
 
+The one identifier that does travel is
+`context.utterance_id` (PIPELINE-1 §9.1.1), and it does not
+contradict any of that. It names an **interaction lifecycle** —
+one utterance, one out-of-band query, one UI command — and it
+is stamped once at lifecycle entry and copied by every
+derivation. It is a value in the envelope, not an index:
+nothing looks it up, nothing stores it, and a component that
+correlates on it still keeps its own outstanding-request
+table. What it removes is the need for each poll family to
+invent a correlation key of its own; what it does *not* add is
+a central registry of who is waiting for what.
+
 `session.session_id` identifies an **interaction channel** —
 nothing more. Two messages sharing a `session_id` are on the
 same channel, but the spec guarantees nothing about ordering,
-state continuity, or pending requests.
+state continuity, or pending requests. Two messages sharing an
+`utterance_id` are in the same lifecycle, which is a narrower
+and stronger statement, and the only one either identifier
+makes.
 
 Every component — skills, pipeline plugins, external clients,
 layer-2 systems — owns whatever state it needs. An asker that
@@ -218,15 +240,15 @@ introducing a new abstraction. It:
 
 The high/medium/low confidence-tier convention is
 **compatible** with PIPELINE-1 and out of scope for the spec.
-From the bus's perspective each tier is a distinct
-`pipeline_id` in the session's pipeline list (e.g.
-`padatious_high`, `padatious_medium`, `padatious_low`), which
-is exactly what the spec prescribes. How a Python plugin
-class internally serves multiple `pipeline_id`s — one class
-with `match_high` / `match_medium` / `match_low` methods,
-three separate plugin instances, an orchestrator-side
-suffix-decoding helper — is implementation choice the spec
-does not constrain.
+Each tier is a separate entry in the session's pipeline list
+(e.g. `padatious_high`, `padatious_medium`,
+`padatious_low`), but an entry is a reference to a match
+configuration, not an actor: a plugin instance has one
+`pipeline_id` whichever entry invoked it (PIPELINE-1 §3).
+Whether a deployment runs one class with
+`match_high` / `match_medium` / `match_low` methods or three
+separate instances each with their own `pipeline_id` is
+implementation choice the spec does not constrain.
 
 Three properties make the resulting model unusually
 expressive:
