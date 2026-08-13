@@ -281,8 +281,10 @@ gives the engine example values a slot is expected to take. Such hints are
 meaning, and improve classification — but an intent is fully defined without
 them, and a slot with no `.entity` file still fills normally. How an engine uses
 a hint is engine-specific: it may augment its training data with the values,
-ignore them, or treat them as a closed set to guarantee matches. A value set is
-always a refinement, never a requirement.
+ignore them, or use them to score a candidate match — but it MUST NOT treat
+them as a closed set: a slot filled with a value outside the set MUST remain
+matchable (OVOS-INTENT-1 §5.4). A value set is always a refinement, never a
+requirement.
 
 ### 5.3 Required slots
 

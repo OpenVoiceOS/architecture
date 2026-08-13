@@ -420,10 +420,13 @@ the normalization they depend on (§2). There is exactly one slot form,
 
 A skill MAY supply a set of example values for a named slot through an `.entity`
 file (OVOS-INTENT-2 §4.3) — a file named after the slot it supplies — whose
-lines are expansion-only templates (§1.1). An engine
-MAY use that set to constrain or score a match-time-filled slot. A value set is
-an **optional refinement**: a slot with no `.entity` file still fills per §5.2,
-and a slot referencing an undefined value set is **not** an error.
+lines are expansion-only templates (§1.1). An engine MAY use that set to
+*score* a match-time-filled slot — for example, penalizing a value outside the
+set or preferring one within it. An engine MUST NOT treat the set as an
+exhaustive allow-list: a candidate whose slot fills with a value outside the
+set MUST remain matchable. A value set is an **optional refinement**: a slot
+with no `.entity` file still fills per §5.2, and a slot referencing an
+undefined value set is **not** an error.
 
 ### 5.5 Slot consistency across a definition
 
