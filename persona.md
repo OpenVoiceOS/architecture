@@ -12,7 +12,7 @@ pipeline-positioning constraints that let the orchestrator enforce
 deterministic skills-first behaviour with personas acting as a
 fallback layer.
 
-It builds on four companion specifications:
+It builds on eight companion specifications:
 
 - the *Utterance Lifecycle and Pipeline Specification*
   (OVOS-PIPELINE-1) — the pipeline-plugin contract, the `Match`
@@ -23,9 +23,20 @@ It builds on four companion specifications:
   defined here travels in;
 - the *Session Carrier Wire Shape Specification* (OVOS-SESSION-1) —
   the session field registry and the omission rule;
+- the *Session Lifecycle and State Ownership Specification*
+  (OVOS-SESSION-2) — the merge semantics, the handler-boundary
+  mutation rules, and the SHOULD-project / MAY-internal state
+  pathways;
 - the *Active Handlers and Interactive Response Specification*
   (OVOS-CONVERSE-1) — the conversation cycle that routes follow-up
-  utterances to the persona plugin during multi-turn interactions.
+  utterances to the persona plugin during multi-turn interactions;
+- the *Stop Pipeline Plugin Specification* (OVOS-STOP-1) — the stop
+  cascade a persona handler must obey during generation;
+- the *Locale Resource Formats Specification* (OVOS-INTENT-2) — the
+  locale resource format the embedded persona commands are expressed
+  in;
+- the *Transformer Plugins Specification* (OVOS-TRANSFORM-1) — the
+  dialog-transformer chain that shapes persona output.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 **MAY**, and **RECOMMENDED** are used as in RFC 2119.
@@ -134,10 +145,11 @@ within a single session is not in scope.
 
 **Semantics:**
 
-- When `persona_id` is **absent** (not set), no persona is active.
-  Persona stages MUST return `None` for all utterances except
-  those matching an embedded persona command (§7.1 route 1) or
-  handled by a persona-fallback stage (§7.1 route 3).
+- When `persona_id` is **absent** (not set), no persona is active. A
+  persona stage invoked under its main `pipeline_id` returns `None`
+  for every utterance that does not match an embedded persona command
+  (§7.1 route 1); a stage invoked under a `fallback_pipeline_id`
+  claims it instead (§7.1 route 3). §7.2 is the normative statement.
 - When `persona_id` is **present and non-empty**, the corresponding
   persona is active. Persona stages whose supported identities
   include this value MUST claim utterances that reach them (§7).
@@ -161,8 +173,11 @@ Per OVOS-SESSION-1 §3.4, a producer that intends no active persona
 **No-persona mode** is the pipeline state in which no persona is
 active (`persona_id` is absent from the session). In this mode:
 
-- persona stages **MUST** decline every utterance that does not
-  match an embedded persona command (§7.1 route 1);
+- a persona stage invoked under its main `pipeline_id` **MUST**
+  decline every utterance that does not match an embedded persona
+  command (§7.1 route 1). A stage invoked under a
+  `fallback_pipeline_id` is exempt: it applies route 3 and claims
+  the utterance (§7.1 route 3, §9);
 - the pipeline operates as a purely deterministic, skill-driven
   system — only intent-matching and fallback stages handle
   utterances.
@@ -208,10 +223,17 @@ effect of summon is to set `persona_id` in the session.
   - a **session sync** (`ovos.session.sync`) from any component;
   - the **orchestrator** as a policy decision.
 
-**Unique identity:** A summon MUST reference an existing
-`persona_id`. A summon that names an unknown persona has no effect:
-the orchestrator or summoning component SHOULD log at WARN and leave
-`persona_id` unchanged.
+**Unknown identities.** No component validates `persona_id` against a
+deployment-wide registry — there is none; identity discovery is
+per-plugin (§8.7). A `persona_id` that no loaded plugin supports is
+therefore not rejected: it is simply set on the session and every
+persona stage declines it under route 2 (§7.1), so the utterance falls
+through to the persona-fallback stage if one is configured, and
+otherwise to the fallback stages. The observable effect of summoning an
+unknown persona is a session that behaves like no-persona mode while
+carrying a `persona_id`. A summoning component that wants stricter
+behaviour SHOULD verify the identity against `ovos.persona.list`
+(§8.7) before setting the field.
 
 ---
 
@@ -227,10 +249,15 @@ session by:
 - the **persona plugin itself** — detecting a release intent during
   `match` (§7.1 route 1) and clearing `persona_id` via
   `Match.updated_session`;
-- the **stop cascade** (OVOS-STOP-1) — clearing `persona_id` as
-  part of the escape-hatch behaviour. The stop plugin SHOULD clear
-  `persona_id` so that "stop" returns the session to
-  deterministic mode;
+- the **stop dispatch** (OVOS-STOP-1) — the persona pipeline
+  **MUST** participate in the ordinary per-skill stop protocol under
+  its own `pipeline_id` (`pipeline_id ≡ skill_id`, PIPELINE-1 §7.0):
+  it answers the stop ping affirmatively when the message's session
+  has an active persona, and on the stop dispatch clears
+  `persona_id` for that session via the standard confirmation path.
+  "Stop" therefore ends a persona conversation everywhere, through
+  machinery OVOS-STOP-1 already defines — no drain-list entry and no
+  stop-plugin configuration is involved;
 - a **pipeline plugin** via handler-side session mutation;
 - a **session sync** (`ovos.session.sync`) from any component.
 
@@ -314,18 +341,24 @@ order:
 
 ### 7.2 Active-persona catch-all
 
-When route 2 above applies (no embedded persona command detected,
-and `persona_id` is present and supported), the plugin **MUST**
-claim every utterance that reaches it, subject only to its
-supported-identity check. This is the defining behavioural
-characteristic of a persona: an active persona consumes everything
-that reaches its pipeline stage.
+This is the normative claim rule for route 2; §4, §7.1 and §12
+restate it by citation and add nothing to it.
+
+When route 2 applies (no embedded persona command was detected, and
+`session.persona_id` is present and supported by this plugin), the
+plugin **MUST** claim every utterance that reaches it. This is the
+defining behavioural characteristic of a persona: an active persona
+consumes everything that reaches its pipeline stage.
 
 The plugin **MAY** apply lightweight gate logic before claiming
-(language detection, minimum utterance length, blacklist), but it
-**MUST NOT** use confidence thresholds or intent-matching to decide
-whether to claim — those belong to the deterministic pipeline, not
-to an active persona.
+(language detection, minimum utterance length, blacklist). While
+deciding a **route 2** claim it **MUST NOT** use confidence
+thresholds or intent-matching — those belong to the deterministic
+pipeline, not to an active persona. The prohibition is scoped to
+route 2 only: route 1 is intent matching by construction (the
+embedded persona commands are ordinary intents, §7.1), and route 3
+claims on the absence of an active persona rather than on any
+score.
 
 ### 7.3 Latency discipline
 
@@ -400,9 +433,19 @@ the audio output service reopens the microphone after speech.
 
 Multi-turn interactions are handled through multiple consecutive
 dispatches: the handler emits its prompt and returns; on the next
-utterance, the converse plugin (OVOS-CONVERSE-1) routes
-`<pipeline_id>:converse` to the persona because
-`skill_id == pipeline_id` in CONVERSE-1's active-handler check.
+utterance the converse plugin (OVOS-CONVERSE-1) polls the persona and,
+if the persona claims the turn, dispatches `<pipeline_id>:converse`
+to it.
+
+Eligibility falls out of the dispatch, with no persona-specific
+rule. The orchestrator stamps every dispatch target onto
+`session.converse_handlers` (CONVERSE-1 §3.1) — a different list
+from `session.active_handlers` (PIPELINE-1 §7.1). A persona plugin
+self-matches, so `Match.skill_id` is its own `pipeline_id`
+(PIPELINE-1 §7.0) and that is what gets stamped, as an ordinary
+eligible owner. Stamping is not suppressed for `converse`, so a
+persona stays eligible for the next poll. Eligibility decays by the
+CONVERSE-1 §3.2 TTL and is cleared by a global stop (STOP-1 §6.2).
 
 A persona plugin that supports multi-turn **SHOULD** subscribe to
 `<own_pipeline_id>:converse` to receive follow-up utterances.
@@ -444,10 +487,28 @@ Session context for history continuity is read from
 
 The plugin generates a response for the specified `persona_id` using
 the `reply()` derivation (OVOS-MSG-1 §5) to route back to the caller.
-If `persona_id` is not supported by this plugin, the plugin **MUST**
-still reply on `ovos.persona.answer` — echoing `persona_id` and
-`utterance`, omitting `response`, and setting the `error` field —
-rather than silently drop the request.
+
+**Every request is answered.** A plugin that subscribes to
+`ovos.persona.query` **MUST** reply on `ovos.persona.answer` for
+every request it receives, on every outcome — a supported
+`persona_id` answered normally, an unsupported `persona_id`, a
+backend or generation failure, a refusal, a malformed payload, or a
+generation that exceeded the plugin's time budget. A failure reply
+echoes `persona_id` and `utterance`, omits `response`, and sets the
+`error` field. Silently dropping a request is never conformant: the
+caller cannot distinguish a dropped request from a slow one.
+
+**Request timeout.** The caller's wait and the plugin's generation
+budget are deployment-defined. A plugin **SHOULD** keep its budget
+below the caller's window so the `error` reply arrives before the
+caller gives up.
+
+**Several replies per query.** `ovos.persona.query` is a broadcast,
+so a caller **MUST** tolerate one reply per loaded persona plugin —
+typically one success and N−1 `error` replies for an identity the
+others do not serve. The caller matches on the echoed `persona_id`
+and `utterance` and takes the reply carrying `response`. Only
+`error` replies means no loaded plugin serves that identity.
 
 The response payload:
 
@@ -469,8 +530,16 @@ state or triggering the full utterance lifecycle. A persona plugin that implemen
 defined in §7–§8.4.
 
 The out-of-band query **MUST NOT** mutate `session.persona_id` or
-change the active persona state. It is a stateless query within
-the context provided.
+change the active persona state.
+
+Whether an out-of-band exchange is appended to the conversation
+history of the session named in `context.session.session_id` (§8.4)
+is **plugin-defined**. Both behaviours are conformant: a plugin that
+appends gives the user continuity between an out-of-band lookup and
+the next spoken turn, and a plugin that does not keeps out-of-band
+lookups from polluting the spoken conversation. A plugin **MUST**
+document which of the two it does, because a caller cannot observe
+the difference from the reply.
 
 ### 8.6 Stop awareness
 
@@ -542,9 +611,14 @@ among them by setting `session.persona_id`.
 **Identity namespace:** `persona_id` values SHOULD be unique within
 a deployment. When two plugins both claim the same `persona_id`, the
 first one in pipeline order claims every utterance for that identity;
-the second never matches. Deployments SHOULD avoid this; if detected
-at runtime (e.g. via `ovos.persona.list` responses), the orchestrator
-SHOULD log at WARN.
+the second never matches. Deployments SHOULD avoid this.
+
+A collision is not detected anywhere at runtime: no component holds a
+deployment-wide view of loaded identities, and the orchestrator does
+not read `ovos.persona.list` responses. A deployment that wants the
+collision surfaced builds it into its own tooling — comparing the
+`ovos.persona.list` responses of all loaded plugins (§8.7) at
+provisioning time is the practical place to do it.
 
 **Capability-based routing.** A skill or UI that wants to select among
 multiple loaded personas SHOULD query `ovos.persona.list`, collect the
@@ -592,10 +666,32 @@ The payload for `ovos.persona.deregister`:
 { "persona_id": "<the persona identity to remove>" }
 ```
 
-These topics are **MAY** — a deployment that does not need runtime
-persona management can omit them. When present, the plugin validates
-the `persona_id` namespace uniqueness rules above and rejects
-duplicate or unknown registrations.
+Both payloads carry exactly one field, `persona_id` (string,
+required); the persona's configuration — system prompt, solver
+wiring, model — is a deployment concern (§1) and reaches the plugin
+by whatever means the deployment already uses, not over these topics.
+
+Semantics when a plugin implements them:
+
+- **Register.** The plugin adds `persona_id` to its supported set.
+  Registering an identity the plugin already supports is a **no-op**,
+  not an error: the request is idempotent.
+- **Deregister of an inactive identity.** The plugin removes
+  `persona_id` from its supported set. Subsequent utterances naming
+  it are declined under route 2 (§7.1).
+- **Deregister of an identity in use.** Sessions whose
+  `session.persona_id` equals the deregistered identity are **not**
+  interrupted. The plugin **MUST** keep serving those sessions until
+  each is dismissed (§6), and **MUST NOT** accept new summons of that
+  identity — it drops out of `ovos.persona.list` (§8.7) immediately,
+  and a session that starts carrying it after deregistration is
+  declined. Deregistration retires an identity; it does not cut off a
+  conversation in progress.
+
+There is no response topic for either request, and this specification
+adds none. A rejected or ignored request is therefore observable only
+indirectly: the caller queries `ovos.persona.list` (§8.7) and
+compares the supported set against what it asked for.
 
 ---
 
@@ -606,13 +702,32 @@ after deterministic intent-matching stages and after the stop stage,
 so that skills handle their intents first and the escape hatch can
 interrupt an active persona.
 
-A persona plugin's main `pipeline_id` (active-persona catch-all,
-§7.1 route 2) SHOULD appear after skill stages. Its optional
-`fallback_pipeline_id` (persona-fallback, §7.1 route 3) SHOULD
-appear after all skill stages and at or near the end of the pipeline,
-before any last-resort fallback.
+Persona stages **SHOULD** also be placed **after** a common query
+stage, if the deployment has one. OVOS-COMMON-QUERY-1 §12 states the
+same ordering from its side: deterministic question-answering by
+skills is preferred over a persona's generated reply, and a persona
+placed before common query would consume every question before the
+contest ran.
 
-A typical ordering with both positions:
+Persona stages are **OPTIONAL**. A deployment with no persona stage
+at all — no `persona`, no `persona_fallback` — is fully conformant;
+the pipeline in that case is purely the deterministic, skill-driven
+system described in §4.
+
+A persona plugin instance has **one** `pipeline_id`
+(OVOS-PIPELINE-1 §3). The catch-all position (§7.1 route 2) and the
+persona-fallback position (§7.1 route 3) are two `session.pipeline`
+entries referencing that one plugin under two match configurations —
+`fallback_pipeline_id` names the second entry, not a second actor,
+and every dispatch, stamp and attribution uses the plugin's single
+`pipeline_id`.
+
+The catch-all entry SHOULD appear after skill stages. The
+persona-fallback entry, when present, SHOULD appear after all skill
+stages and near the end of the pipeline, but MUST NOT be the final
+stage: it sits before `fallback_low`, not in its place.
+
+A typical ordering with both persona positions present:
 
 ```
 session.pipeline: [
@@ -620,21 +735,44 @@ session.pipeline: [
   "converse",           # active-handler poll
   "skill_high",         # deterministic registered intents
   "skill_medium",
+  "common_query",       # deterministic question-answering
   "persona",            # active-persona catch-all (route 2)
   "persona_fallback",   # persona-fallback catch-all (route 3)
-  "fallback_low"        # last-resort fallback
+  "fallback_low"        # last-resort catch-all (OVOS-FALLBACK-1 §8.1)
 ]
 ```
 
 `persona` and `persona_fallback` are different pipeline_id values
 registered by the same plugin. A deployment that does not use the
 persona-fallback feature simply omits `persona_fallback` from the
-pipeline.
+pipeline; a deployment that uses no persona stage at all omits both.
 
-A deployment **MAY** place a persona stage earlier when the persona
-is specialised for a domain that should pre-empt general-purpose
-matchers. Multiple persona stages at different pipeline positions
-are conformant.
+**`fallback_low` remains the final stage.** A persona-fallback stage
+claims every utterance that reaches it when no persona is active
+(§7.1 route 3), so in normal operation — with a persona plugin
+loaded and its fallback stage healthy — `persona_fallback` shadows
+`fallback_low` in practice. That is a runtime consequence of
+ordering, not a change of who is responsible for the guarantee. The
+guarantee that every utterance receives a response is assigned by
+OVOS-FALLBACK-1 §8.1 to a bottom-of-pool catch-all fallback skill in
+`fallback_low`, and route 3 does **not** carry or replace that
+guarantee. `fallback_low` SHOULD remain the final stage in every
+deployment so the always-answer guarantee still holds when: no
+persona stage is loaded, the persona backend or generation fails,
+or a `persona_fallback` stage declines (returns `None`, §7.1 route
+3, e.g. an unsupported `persona_id`). Fallback stages above the
+persona-fallback position (`fallback_high`, `fallback_medium`)
+remain reachable and useful regardless.
+
+A deployment **MAY** place a persona stage earlier than this, but
+only where the persona is specialised for a narrow domain and is
+**not** a general question-answering agent — a persona that
+pre-empts general-purpose matchers must be one that declines
+everything outside its domain in practice. A general-purpose persona
+placed before the skill or common query stages consumes every
+utterance and disables the deterministic pipeline entirely, which is
+what §4 and this section exist to prevent. Multiple persona stages
+at different pipeline positions are conformant.
 
 ---
 
@@ -656,8 +794,23 @@ are conformant.
 
 `ovos.persona.activated` payload: `{ "persona_id": "...", "session_id": "..." }`.
 `ovos.persona.dismissed` payload: `{ "persona_id": "...", "session_id": "..." }`.
-These are advisory signals emitted on a best-effort basis; consumers
-**MUST NOT** rely on them for correctness. Session state is authoritative.
+
+**Emission scope.** A persona plugin **MAY** emit these on the
+transitions it performs itself — a self-summon or self-release
+matched under §7.1 route 1. It has no visibility into the others: an
+external summon or dismiss (§5, §6) changes `persona_id` outside the
+plugin, and the plugin learns of it only when the next utterance
+arrives, if one ever does. Those transitions produce **no** event.
+The signals are therefore partial by construction, advisory, and
+best-effort; consumers **MUST NOT** rely on them for correctness or
+treat their absence as evidence that no transition occurred. Session
+state is authoritative — a consumer that needs every transition reads
+`persona_id` from the session instead.
+
+The reply topics are named `ovos.persona.answer` and
+`ovos.persona.list.response`. The asymmetry is deliberate: `answer` is
+the persona's own vocabulary for what it produces, and renaming either
+one now would break deployed subscribers for no behavioural gain.
 
 All dispatch topics follow the PIPELINE-1 §7 topic shape and fire the
 handler-lifecycle trio (PIPELINE-1 §8). The persona handler emits
@@ -683,8 +836,13 @@ listing the intent names it dispatches on.
   `session.persona_id`, and handle each according to its type —
   set or clear `persona_id` for summon/release, leave it unchanged
   for one-off queries (§7.1 route 1);
-- after the summon/release check, read `session.persona_id` and
-  return `None` when the field is absent or empty (§7.1);
+- when invoked under its **main** `pipeline_id`, after the
+  summon/release check, read `session.persona_id` and return `None`
+  when the field is absent or empty (§7.1 route 2);
+- when invoked under a registered `fallback_pipeline_id`, claim the
+  utterance when `session.persona_id` is absent or empty, and return
+  `None` when it names an identity this plugin does not support
+  (§7.1 route 3);
 - return `None` when `session.persona_id` is set to a value it does
   not support (§7.1);
 - claim every utterance that reaches it when `session.persona_id` is
@@ -696,7 +854,10 @@ listing the intent names it dispatches on.
 - derive each `ovos.utterance.speak` emission from the dispatch
   Message per OVOS-MSG-1 §5 derivation semantics (PIPELINE-1 §9.6);
 - cease generation and return promptly on stop signals for its session
-  (§8.6).
+  (§8.6);
+- reply on `ovos.persona.answer` to every `ovos.persona.query` it
+  receives, on every outcome, if it implements the out-of-band
+  interface (§8.5).
 
 ### A persona pipeline plugin **SHOULD**:
 
@@ -711,13 +872,12 @@ listing the intent names it dispatches on.
 - respond to `ovos.persona.list` with its supported `persona_id`
   values (§8.7);
 - project summary state into a session-resident field registered per
-  OVOS-SESSION-1 §2.2 for resumption safety (§8.4).
-
-### A persona pipeline plugin **SHOULD**:
-
+  OVOS-SESSION-1 §2.2 for resumption safety (§8.4);
 - include `tags` per persona in its `ovos.persona.list` response so
   that routing skills and UIs can make informed summon decisions (§8.7,
-  §9).
+  §9);
+- document whether an out-of-band query enters the session's
+  conversation history (§8.5).
 
 ### A persona pipeline plugin **MAY**:
 
@@ -737,8 +897,15 @@ listing the intent names it dispatches on.
 
 - position persona stages after deterministic skills and after the
   stop stage in `session.pipeline` (§10);
-- position the persona-fallback stage (`fallback_pipeline_id`) after
-  all skill stages and before last-resort fallback (§10);
+- position persona stages after a common query stage, if one is
+  present (§10);
+- position the persona-fallback stage (`fallback_pipeline_id`), when
+  present, after all skill stages and near the end of the pipeline,
+  but before `fallback_low`, which SHOULD remain the final stage so
+  the always-answer guarantee (OVOS-FALLBACK-1 §8.1) holds even when
+  no persona stage is loaded, the persona backend fails, or the
+  persona-fallback stage declines (§10);
+- document the out-of-band query time budget it configures (§8.5);
 - ensure `persona_id` values do not overlap across loaded persona
   plugins (§9);
 - designate at most one persona-fallback stage in the active pipeline
@@ -760,7 +927,9 @@ listing the intent names it dispatches on.
   (OVOS-SESSION-2) — the SHOULD-project / MAY-internal state
   pathways and the mutation boundaries.
 - *Stop Pipeline Plugin Specification* (OVOS-STOP-1) — the stop
-  cascade that clears `persona_id` on dismiss (§6).
+  cascade a persona handler obeys during generation (§8.6), and the
+  §6.2 drain rules a deployment may extend to clear `persona_id`
+  (§6).
 - *Active Handlers and Interactive Response Specification*
   (OVOS-CONVERSE-1) — the conversation cycle that routes follow-up
   utterances to the persona plugin via `<pipeline_id>:converse`
