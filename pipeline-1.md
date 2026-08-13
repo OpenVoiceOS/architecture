@@ -28,8 +28,8 @@ Contract*) — the wire format pipeline plugins MAY consume to learn
 what intents skills have registered. Consumption is plugin-
 discretionary; this specification does not require it.
 
-The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and
-**MAY** are used as in RFC 2119.
+The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
+**RECOMMENDED** and **MAY** are used as in RFC 2119.
 
 ---
 
@@ -133,18 +133,41 @@ not interpret the `pipeline_id` string beyond using it as a key.
 Constraints on `pipeline_id` strings:
 
 - Non-empty.
-- Bound by OVOS-MSG-1 §2.1.1: because `pipeline_id` appears as a
-  component in colon-separated topic shapes (`<skill_id>:<intent_name>`
-  in §7, per-pipeline introspection topics in §10), it **MUST NOT**
-  contain `:`. The recommended form is ASCII letters / digits / `_` /
-  `-` only.
+- Bound by OVOS-MSG-1 §2.1.1: `pipeline_id` appears as a component
+  in colon-separated topic shapes (`<skill_id>:<intent_name>` in §7)
+  and as a component in the dot-separated introspection topics of
+  §10.1 (`ovos.pipeline.<pipeline_id>.intents.list`). A
+  `pipeline_id` **MUST** therefore be composed only of ASCII
+  letters, digits, `_` and `-` — the character set `[A-Za-z0-9_-]`.
+  Neither `:` nor `.` may appear: a `:` breaks the single-colon
+  dispatch split of §7, and a `.` breaks the segment split of the
+  §10.1 topic shape. A `pipeline_id` outside this character set is
+  malformed; the orchestrator **MUST NOT** load a plugin under it
+  and **SHOULD** log the rejection.
 - Unique within a deployment's loaded-plugin set.
 
-A plugin **MAY** appear in a session's pipeline more than once
-under different `pipeline_id`s if the plugin chooses to expose
-multiple matching modes (for example, a strict mode and a
-permissive mode). The orchestrator treats each `pipeline_id` as a
-distinct stage.
+A plugin instance has **exactly one** `pipeline_id`. That
+identifier is the plugin's **actor identity**, and it lives in the
+same namespace as a `skill_id` — the two are indistinguishable by
+construction, which is exactly what makes the uniform dispatch of
+§7.0 work. A plugin never carries a second or alternate identifier.
+
+An entry in `session.pipeline` is a **reference to a matcher**, not
+an actor. A plugin that offers several match configurations — a
+strict mode and a permissive mode, confidence tiers, a
+range-restricted variant — is referenced by several entries, and
+every one of them resolves to the same plugin instance and the same
+`pipeline_id`. Match configurations have no identity of their own:
+they are configuration, not participants on the bus.
+
+How a deployment names a match configuration in `session.pipeline`,
+and how the orchestrator resolves an entry to a
+`(plugin, configuration)` pair, is deployment configuration and is
+not fixed here. What **is** fixed is the attribution: the dispatch
+topic (§7), `Match.skill_id` for a self-matching plugin (§7.0), the
+`session.active_handlers` stamp (§7.1), the introspection topic
+(§10.1) and a `blacklisted_pipelines` entry (§5.2) all name the
+plugin's single `pipeline_id` — never an entry-specific string.
 
 ### 3.1 Pipeline attribution
 
@@ -184,7 +207,13 @@ Inputs:
   per utterance, from the per-utterance evidence fields of
   OVOS-SESSION-1 §3.2 (user preference, lang-detect signals), and
   pass the resolved tag to **every** plugin's `match` call for
-  that utterance. A single resolution point keeps the match round
+  that utterance. When no §3.2 evidence field is present, the
+  orchestrator **MUST** resolve to the **deployment default
+  language** — a single deployment-configured BCP-47 tag every
+  orchestrator has. Resolution therefore always terminates in a
+  tag: the `lang` argument is never absent and never empty, and a
+  plugin **MUST NOT** be called with an unresolved language.
+  A single resolution point keeps the match round
   coherent: if each plugin re-derived language independently, the
   same utterance could be matched in different languages at
   different pipeline stages, and which language "wins" would be an
@@ -210,8 +239,29 @@ fields below.
 | `utterance` | string | yes | The specific candidate string from the input list that won the match. A plugin that does not track which candidate won **MUST** populate this with the first element of the input list as a fallback; the orchestrator forwards this value verbatim as `data.utterance` in the dispatch payload (§7.1) and **MUST NOT** substitute another value. |
 | `updated_session` | object | no | A replacement `session` snapshot the plugin produced during `match` (§4.2). When present, the orchestrator MUST use this snapshot — in place of the inbound utterance's session — for the dispatch and every downstream stage. When absent, the inbound session is carried unchanged. This is the **only** mechanism by which a plugin's match-phase session mutations reach downstream consumers; in-place mutations of the inbound session object are not visible past the plugin boundary. |
 
-The orchestrator interprets a non-`None` return as a definitive
-claim. It does not score, rank, or rerank matches across plugins —
+**Malformed `Match` objects.** A returned `Match` is **malformed**
+when any of the following holds:
+
+- a field marked required in the table above is missing, `null`, or
+  of the wrong type;
+- `skill_id` or `intent_name` is empty, or contains `:` — either
+  breaks the single-colon split of the `<skill_id>:<intent_name>`
+  dispatch topic (§7, OVOS-MSG-1 §2.1.1);
+- `lang` is empty or is not a BCP-47 language tag;
+- `slots` is not a mapping of strings to strings (§4.3);
+- `utterance` is empty.
+
+The orchestrator **MUST** treat a malformed `Match` exactly as if
+the plugin had declined: log the defect, continue iteration to the
+next plugin per §6.2, and carry the inbound session unchanged — a
+malformed `Match` never carries an `updated_session` into the
+lifecycle. No bus event is emitted; the rejection is observable
+only as a non-match. The orchestrator **MUST NOT** repair a
+malformed `Match` by substituting a value of its own, because every
+repair guesses at a routing decision the plugin failed to state.
+
+The orchestrator interprets a well-formed non-`None` return as a
+definitive claim. It does not score, rank, or rerank matches across plugins —
 **first match wins** (§6). A plugin that wants to express
 uncertainty must return `None` and let a later plugin claim.
 
@@ -303,18 +353,39 @@ etc.), the call can block for an unbounded time.
 
 The orchestrator **SHOULD** bound each `match` invocation by a
 deployment-defined time. The **RECOMMENDED** default is **10 s**.
-When a bound is applied, it **MUST** be at least as large as any
-collection ceiling a stage runs internally (e.g. the
-OVOS-COMMON-QUERY-1 §2.1 collection window) — a match-phase timeout
-shorter than a stage's own internal wait guarantees that stage is
-killed mid-collection on every utterance it handles. If a plugin
-has not returned within the bound,
+
+Sizing that bound is a **deployment** obligation, not an
+orchestrator one: only the deployer knows the internal collection
+ceilings of the plugins it loaded, and the orchestrator treats every
+plugin as a black box (§1). A **deployment MUST** set each plugin's
+match-phase bound at or above any collection ceiling that plugin
+runs internally — for common query, at or above the §7.2 collection
+window ceiling of OVOS-COMMON-QUERY-1, as that specification's §2.1
+requires. A bound shorter than a stage's own internal wait
+guarantees the stage is killed mid-collection on every utterance it
+handles.
+
+If a plugin has not returned within the bound,
 the orchestrator **MUST** treat the call as if the plugin had raised an
 exception — log the timeout, skip to the next plugin per §6.2, and
 continue normally. Any partial mutation performed by the plugin during the
 timed-out call is discarded (there is no `Match` to carry an
 `updated_session`; the inbound session is unchanged). No bus event is
 emitted for the timeout at this stage.
+
+**A timed-out call is closed for good.** Once the bound has expired
+and iteration has moved on, the orchestrator **MUST** ignore any
+`Match` the abandoned call later produces: it **MUST NOT** dispatch
+it, **MUST NOT** commit its `updated_session`, and **MUST NOT**
+re-enter the match round. Without this rule a slow plugin that
+returns just after a later plugin claimed would dispatch a second
+handler for one utterance and break the one-`ovos.utterance.handled`
+invariant of §9.5. Whether the orchestrator can actually *cancel*
+the abandoned call is out of scope — the orchestrator is bound to
+ignore the result, not to stop the work. Plugins **SHOULD**
+therefore tolerate having a completed `match` discarded, and
+**SHOULD NOT** treat the return of `match` as a commitment that the
+dispatch will follow.
 
 The timeout bound and whether it counts toward the §6.2 circuit-breaker
 are deployer-configurable.
@@ -348,7 +419,14 @@ This specification claims four session fields per OVOS-SESSION-1
 session-scoped, propagate with the session under OVOS-SESSION-1 §4,
 and follow the deployment-default-fallback absence rule of
 OVOS-SESSION-1 §2.1: an omitted, empty, or absent field resolves at
-consumption to the deployment-configured default.
+consumption to the deployment default for that field.
+
+For `session.pipeline` that deployment default has one name in this
+specification — the **default-session pipeline**, defined once in
+§5.1 as the `pipeline` configured for the reserved
+`session_id == "default"` session (OVOS-SESSION-1 §3.1). Every
+later mention of a default pipeline in this specification means that
+list and no other.
 
 ### 5.1 `session.pipeline`
 
@@ -381,8 +459,9 @@ Example:
 }
 ```
 
-For each utterance, the orchestrator iterates `session.pipeline`
-in order, calling `match` on each corresponding plugin (§6.2).
+For each utterance, the orchestrator narrows this list into the
+effective pipeline (§5.5) and iterates **that** list in order,
+calling `match` on each corresponding plugin (§6.2).
 
 If a `pipeline_id` in `session.pipeline` does not correspond to
 any loaded plugin, the orchestrator **MUST** skip it and **SHOULD**
@@ -424,6 +503,12 @@ its effective pipeline (per §5.5), it **MUST** skip any
 is made; no bus event is emitted for the skip. The filtering is
 observable only as a non-invocation.
 
+Entries here name **plugins**, not `session.pipeline` entries (§3).
+Denying a `pipeline_id` therefore removes every entry that resolves
+to that plugin, whichever match configuration the entry selects: a
+plugin cannot be denied in one tier and invoked in another, because
+there is only one actor to deny.
+
 Unknown `pipeline_id`s in `blacklisted_pipelines` are harmless and
 **MUST NOT** cause the utterance to abort — they simply match
 nothing.
@@ -441,21 +526,29 @@ intents **MUST NOT** be matched for this session.
 
 The contract is **two-tier**:
 
-1. A pipeline plugin **SHOULD NOT** return a `Match` whose
-   `skill_id` (§7.1) is a `skill_id` listed here. A plugin's
-   internal handling of would-match-but-blacklisted candidates is
-   **not specified** — it MAY skip the candidate before scoring,
-   suppress its score below a match threshold, route to a
-   plugin-internal default-handler, or anything else — as long as
-   the returned `Match` does not name a blacklisted skill.
-2. A pipeline plugin that does not implement filtering is **not
-   conformant** with this field. The orchestrator **MUST** therefore
-   act as backstop: after a plugin returns a candidate `Match`, the
-   orchestrator **MUST** check `Match.skill_id` against
-   `blacklisted_skills` and, if listed, **MUST** treat the match as
-   if the plugin had declined — continue iteration to the next
-   plugin per §6.2. No bus event is emitted for backstop filtering;
-   it is observable only as a non-match.
+1. **Plugin-side filtering is an optimisation.** A pipeline plugin
+   **SHOULD NOT** return a `Match` whose `skill_id` (§7.1) is a
+   `skill_id` listed here. A plugin's internal handling of
+   would-match-but-blacklisted candidates is **not specified** — it
+   MAY skip the candidate before scoring, suppress its score below a
+   match threshold, route to a plugin-internal default-handler, or
+   anything else — as long as the returned `Match` does not name a
+   blacklisted skill. Filtering early lets the plugin claim the
+   utterance with its next-best candidate instead of losing the turn
+   to a later stage, which is why the field is worth honouring; a
+   plugin that ignores it is **still conformant** with this
+   specification, because the field's enforcement does not depend on
+   it.
+2. **Orchestrator-side filtering is the enforcement.** After a
+   plugin returns a candidate `Match`, the orchestrator **MUST**
+   check `Match.skill_id` against `blacklisted_skills` and, if
+   listed, **MUST** treat the match as if the plugin had declined —
+   continue iteration to the next plugin per §6.2. No bus event is
+   emitted for backstop filtering; it is observable only as a
+   non-match. This check runs on every candidate `Match` from every
+   plugin, so the denylist holds across the whole loaded-plugin set
+   whatever any individual plugin does. The authorization model of
+   §5.6 rests on this tier alone.
 
 Empty-array semantics match §5.2: `[]` is wire-equivalent to
 omission. A producer with no skills to deny **SHOULD** omit the
@@ -467,9 +560,11 @@ An unordered array of fully-qualified `<skill_id>:<intent_name>`
 strings (the dispatch-topic shape of §7) whose specific intents
 **MUST NOT** be matched for this session.
 
-The contract is identical in shape to §5.3 (two-tier:
-plugin-SHOULD + orchestrator-MUST-backstop), with the comparison
-performed against the candidate `Match`'s dispatch identity
+The contract is identical in shape to §5.3 — plugin-side filtering
+is an optimisation the plugin **SHOULD** perform, and the
+orchestrator's per-candidate check is the enforcement it **MUST**
+perform — with the comparison performed against the candidate
+`Match`'s dispatch identity
 `<Match.skill_id>:<Match.intent_name>`.
 
 The bare `intent_name` form is **not** accepted in this field.
@@ -521,9 +616,12 @@ iterates for this utterance.
 `session.blacklisted_skills` and `session.blacklisted_intents` are
 **not** applied at this stage. They are per-candidate policy filters
 applied during iteration against each `Match` a plugin returns
-(§5.3, §5.4). The two-tier shape (plugin SHOULD, orchestrator MUST
-backstop) ensures policy enforcement regardless of plugin
-conformance.
+(§5.3, §5.4). The two-tier shape — plugin-side filtering as an
+optimisation, orchestrator-side filtering as the enforcement —
+ensures policy holds regardless of what any plugin does. The
+orchestrator also re-imposes all three denylists onto any
+`updated_session` a plugin returns (§4.2), so a claiming plugin
+cannot relax policy for the stages after it.
 
 The intended separation of concerns is sharp:
 
@@ -594,11 +692,20 @@ to terminate** with exactly one `ovos.utterance.handled` event
 ```
 ovos.utterance.handle                    ← entry (§9.1)
    │
-   ├─ session retrieval; effective pipeline composed (§5.5)
-   │  (preference → availability → policy)
+   ├─ session retrieval; language resolved once (§4)
    │
    ├─ utterance-transformer chain runs   ← TRANSFORM-1 §3.2
    ├─ metadata-transformer chain runs    ← TRANSFORM-1 §3.3
+   │
+   ├─ effective pipeline composed (§5.5)
+   │  (preference → availability → policy)
+   │  — composed AFTER the metadata chain, so a metadata
+   │    transformer rewriting session.pipeline routes THIS
+   │    utterance
+   │
+   ├─ pre-match context prune            ← CONTEXT-1 §4
+   │  (drop entries no longer live; this is the snapshot
+   │   every plugin sees for this match round)
    │
    ├─ for pipeline_id in effective pipeline:
    │     plugin = loaded_plugins[pipeline_id]     # skip if not loaded
@@ -611,6 +718,9 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     if filtered:  continue
    │
    │     session = match.updated_session or session   # §4.1, §4.2
+   │
+   │     ── match round closes here ──
+   │     post-match decrement turns_remaining--   ← CONTEXT-1 §4
    │
    │     ┌── post-match-pre-dispatch window ──────────────┐
    │     │ engine-side context promotion (CONTEXT-1 §5.1) │
@@ -629,15 +739,21 @@ ovos.utterance.handle                    ← entry (§9.1)
    │     (dialog-transformer chain ← TRANSFORM-1 §3.5)
    │     (tts-transformer chain   ← TRANSFORM-1 §3.6)
    │
-   ├─ if no plugin matched (or all matches filtered):
-   │     ovos.intent.unmatched                  (§9.3)
-   │     ovos.utterance.handled                   (§9.5)
-   │
-   └─ post-match decrement turns_remaining--   ← CONTEXT-1 §4
-      (runs after the match round whether or not any intent
-       matched; entries freshly written this round — CONTEXT-1
-       §4.1 — are exempt)
+   └─ if no plugin matched (or all matches filtered):
+         ── match round closes here ──
+         post-match decrement turns_remaining--  ← CONTEXT-1 §4
+         ovos.intent.unmatched                  (§9.3)
+         ovos.utterance.handled                   (§9.5)
 ```
+
+The post-match decrement runs **once**, on whichever branch the
+utterance took, at the point the match round closes — after the
+claiming plugin's `Match` is committed and before the dispatch goes
+out, or after the last plugin declined. Both branches close the same
+round, so both decrement (CONTEXT-1 §4); entries freshly written
+during this round are exempt per CONTEXT-1 §4.1. Placing the
+decrement before the dispatch keeps the dispatched handler and every
+plugin in the round looking at the same turn count.
 
 The flow diagram shows where companion-spec chains plug into this
 specification's iteration loop. The **audio-transformer chain**
@@ -645,6 +761,12 @@ specification's iteration loop. The **audio-transformer chain**
 the entry topic is emitted and is therefore not visible here. The
 **utterance** and **metadata** transformer chains run after entry
 and before iteration, against the candidate utterance list. The
+orchestrator composes the effective pipeline (§5.5) **after** the
+metadata chain and **MUST NOT** compose it earlier: a metadata
+transformer that writes `session.pipeline` is performing
+per-utterance routing, and composing before the chain would defer
+its decision to the next utterance. The
+
 **post-match-pre-dispatch window** is where
 CONTEXT-1 §5.1 sanctions engine-side `session.intent_context`
 mutation and where TRANSFORM-1 §3.4 inserts the intent-transformer
@@ -674,12 +796,22 @@ For each utterance, the orchestrator **MUST**:
   list. (If the empty list arrived together with cancellation
   context per OVOS-TRANSFORM-1 §8.1, the cancellation terminal
   path of §8.2 there takes precedence over no-match here.)
-- iterate `session.pipeline` in order;
+- compose the **effective pipeline** (§5.5) after those chains have
+  run, and iterate the effective pipeline in order — not
+  `session.pipeline` directly, which is a preference and has not yet
+  been narrowed by availability or policy;
 - for each `pipeline_id`, call `match` on the corresponding loaded
-  plugin (skipping unknown identifiers, §5);
-- stop at the **first plugin** that returns a non-`None` `Match`;
-- if no plugin returns a `Match`, emit `ovos.intent.unmatched`
-  (§9.3).
+  plugin;
+- stop at the **first `Match` that survives the checks below** — a
+  returned `Match` claims the utterance only after it is found
+  well-formed (§4.1), passes the `blacklisted_skills` and
+  `blacklisted_intents` checks (§5.3, §5.4), and passes the
+  `required_slots` check (below). A `Match` that fails any of them
+  is treated as a declination and iteration continues, so "first
+  match wins" means first *surviving* match, never merely first
+  non-`None` return;
+- if no plugin produces a surviving `Match`, emit
+  `ovos.intent.unmatched` (§9.3).
 
 **Evaluation order is the arbitration model.** The orchestrator
 deliberately does not compare confidence across plugins: a plugin
@@ -751,20 +883,21 @@ keyed on `session.session_id` (per OVOS-MSG-1 §5.4 —
 
 ### 6.4 Terminal events
 
-Every utterance terminates in exactly one of three ways, each
+Every utterance terminates in exactly one of five ways, each
 followed by the universal end-marker `ovos.utterance.handled`:
 
 | Outcome | Sequence of utterance-layer events |
 |---------|------------------------------------|
-| Matched by a plugin | `ovos.intent.matched` → dispatch + (handler trio §8) → `ovos.utterance.speak` ×0..N → `ovos.utterance.handled` |
+| Matched, handler completed | `ovos.intent.matched` → dispatch + `start`/`complete` (§8) → `ovos.utterance.speak` ×0..N → `ovos.utterance.handled` |
+| Matched, handler raised | `ovos.intent.matched` → dispatch + `start`/`error` (§8) → `ovos.utterance.speak` ×0..N → `ovos.utterance.handled` |
+| Matched, handler timed out | `ovos.intent.matched` → dispatch + `start`/`error` with a timeout `exception` (§8.3) → `ovos.utterance.handled` |
 | No plugin matched | `ovos.intent.unmatched` → `ovos.utterance.handled` |
 | Cancelled by a transformer | `ovos.utterance.cancelled` → `ovos.utterance.handled` (see OVOS-TRANSFORM-1 §8.2) |
 
-If a dispatched handler emits `ovos.intent.handler.error` (§8)
-instead of `.complete`, the orchestrator still emits
-`ovos.utterance.handled` afterwards. The "every utterance
-terminates with `ovos.utterance.handled`" invariant holds across
-all paths.
+The three matched rows differ only in which handler-trio terminal
+event fires; they are one dispatch path with three endings. The
+"every utterance terminates with `ovos.utterance.handled`"
+invariant holds across all five paths, and §9.5 lists the same five.
 
 ### 6.5 Long-running handlers and nested utterance lifecycles
 
@@ -857,7 +990,8 @@ dispatched handler has the same obligations as any skill
 
 A pipeline plugin that returns matches where `skill_id` equals its
 own `pipeline_id` is simply a component whose `skill_id` and
-`pipeline_id` happen to be the same identifier. It skips the
+`pipeline_id` are the same identifier — the two are one namespace
+(§3), so this is the ordinary case rather than a coincidence. It skips the
 OVOS-INTENT-4 registration step because it consumes no external
 intent registry — its `match` implementation decides directly
 whether to claim the utterance. There is no architectural
@@ -884,25 +1018,39 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
   both context keys carry the same identifier.
 - **`session.active_handlers` push.** The orchestrator **MUST**
   push `{skill_id: <skill_id>, activated_at: <orchestrator-stamped
-  Unix timestamp in seconds>}` onto `session.active_handlers`,
-  evicting any prior entry with the same `skill_id`. The list is
-  a recency record keyed by `activated_at` — consumers determine
-  "most recently activated" by comparing timestamps, not by list
-  position. The push is
-  **suppressed** only for dispatches on reserved intent_names
-  listed in §7.3 — a reserved-name dispatch represents a
-  continuation of an already-active skill's participation or its
-  termination, not a fresh activation. The orchestrator applies
-  the polymorphism rule (§7.0) uniformly and does not otherwise
-  distinguish skill from pipeline-plugin dispatches: suppression
-  **MUST** be keyed on the Match's `intent_name` appearing in the
-  §7.3 reserved-name registry — never on the producing
-  `pipeline_id`. The push is
-  applied after `Match.updated_session` is committed: a plugin
-  that mutates `active_handlers` via `updated_session` (e.g.,
-  STOP-1's global stop wiping the list) sees the stamp applied
-  on top, so the dispatched skill_id always lands at the head
-  unless the intent_name is reserved.
+  Unix timestamp in seconds>}` onto the **head** of
+  `session.active_handlers`, evicting any prior entry with the same
+  `skill_id`. The push is applied after `Match.updated_session` is
+  committed: a plugin that mutates `active_handlers` via
+  `updated_session` (e.g. STOP-1's global stop wiping the list)
+  sees the push applied on top, so the dispatched `skill_id`
+  always lands at the head unless the push is suppressed.
+  The push is **suppressed** for dispatches whose `intent_name` is
+  marked non-activating in the §7.3 reserved-name registry — such a
+  dispatch continues or terminates an already-active skill's
+  participation rather than starting a fresh one. Suppression
+  **MUST** be keyed on the Match's `intent_name` and its registry
+  row — never on the producing `pipeline_id`; the orchestrator
+  applies the polymorphism rule (§7.0) uniformly and does not
+  otherwise distinguish skill from pipeline-plugin dispatches. Not
+  every reserved name suppresses the push: the registry states it
+  per row.
+
+  **Recency ordering (normative, defined once here).**
+  `session.active_handlers` is a recency record. Consumers that need
+  "the most recently activated handler" — OVOS-STOP-1 §4.1 selecting
+  a stop target, OVOS-CONVERSE-1 selecting a converse claimant, or
+  any other — **MUST** resolve recency as follows:
+
+  1. `activated_at` is **authoritative**: the entry with the highest
+     `activated_at` is the most recently activated.
+  2. When two or more entries share the same `activated_at`, the
+     entry **nearest the head** of the list is the most recently
+     activated, because the head is where the orchestrator pushes.
+
+  Head position is therefore the tie-break, not the primary key, and
+  the two rules never disagree with the push mechanics above.
+  Consumers **MUST NOT** define their own recency order.
 
 The dispatch Message's `data`:
 
@@ -916,7 +1064,7 @@ The dispatch Message's `data`:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `lang` | string | yes | The content language of the match, taken directly from `Match.lang`. A `Match` with no `lang` is malformed; the orchestrator **MUST** treat it as if the plugin declined and continue iteration. |
+| `lang` | string | yes | The content language of the match, taken directly from `Match.lang`. A `Match` with no `lang` is malformed and never reaches dispatch (§4.1). |
 | `utterance` | string | yes | The candidate string that won the match. |
 | `slots` | object (string→string) | yes | The slot map (§4.3). MAY be empty. |
 
@@ -957,25 +1105,43 @@ pipeline plugin role. A reserved intent_name is one that:
 A reservation is a **namespace lease**, not a dispatch
 modification. Dispatches on reserved intent_names fire §7.1
 context stamping, §7.2 routing, and §8 handler-trio identically
-to ordinary dispatches. The one exception is the
-`session.active_handlers` push defined in §7.1, which is
-suppressed on reserved-name dispatches — a reserved name
-represents a continuation or termination of an already-active
-skill's participation, not a fresh activation. Stamping
-suppression is keyed on the Match's reserved `intent_name` (this
-registry), never on the producing `pipeline_id`. The reserving
-specification gets exclusive use of the name across the
-deployment's skill set; it gets no other privilege.
+to ordinary dispatches. The one dispatch property a reservation
+may vary is the `session.active_handlers` push of §7.1, and it
+varies **per name**, not for reserved names as a class: the
+**activation push** column below states, for each reserved name,
+whether a dispatch bearing it pushes an entry. Suppression is keyed
+on the Match's reserved `intent_name` and this registry, never on
+the producing `pipeline_id`. The reserving specification gets
+exclusive use of the name across the deployment's skill set; it
+gets no other privilege.
 
 Reserved intent_names:
 
-| Reserved intent_name | Reserving spec | Meaning of a Match bearing this name |
-|----------------------|----------------|--------------------------------------|
-| `converse` | OVOS-CONVERSE-1 §4 | a converse plugin's claim that `<skill_id>` (an active handler) wants this utterance — the orchestrator dispatches `<skill_id>:converse` and the owner's converse handler runs |
-| `response` | OVOS-CONVERSE-1 §5 | a converse plugin's signal that `<skill_id>` (the response-mode holder) is to receive the awaited utterance — the orchestrator dispatches `<skill_id>:response` and the owner's response handler runs |
-| `stop` | OVOS-STOP-1 §4 | a stop plugin's claim that `<skill_id>` (an active handler) should cease activity — the orchestrator dispatches `<skill_id>:stop` and the owner's stop handler runs |
-| `fallback` | OVOS-FALLBACK-1 §6.3 | a fallback plugin's claim that `<skill_id>` (a registered fallback handler) is willing to handle the utterance — the orchestrator dispatches `<skill_id>:fallback` and the handler runs |
-| `common_query` | OVOS-COMMON-QUERY-1 §3 | a common-query plugin's self-addressed match (`Match.skill_id` is the plugin's own `pipeline_id`) — the orchestrator dispatches `<pipeline_id>:common_query` and the plugin's bundled handler speaks the answer it selected during `match` |
+| Reserved intent_name | Reserving spec | Activation push | Meaning of a Match bearing this name |
+|----------------------|----------------|-----------------|--------------------------------------|
+| `converse` | OVOS-CONVERSE-1 §4 | suppressed | a converse plugin's claim that `<skill_id>` (an active handler) wants this utterance — the orchestrator dispatches `<skill_id>:converse` and the owner's converse handler runs |
+| `response` | OVOS-CONVERSE-1 §5 | suppressed | a converse plugin's signal that `<skill_id>` (the response-mode holder) is to receive the awaited utterance — the orchestrator dispatches `<skill_id>:response` and the owner's response handler runs |
+| `stop` | OVOS-STOP-1 §4 | suppressed | a stop plugin's claim that `<skill_id>` (an active handler) should cease activity — the orchestrator dispatches `<skill_id>:stop` and the owner's stop handler runs |
+| `fallback` | OVOS-FALLBACK-1 §6.3 | **pushes** | a fallback plugin's claim that `<skill_id>` (a registered fallback handler) is willing to handle the utterance — the orchestrator dispatches `<skill_id>:fallback` and the handler runs |
+| `common_query` | OVOS-COMMON-QUERY-1 §3 | suppressed | a common-query plugin's self-addressed match (`Match.skill_id` is the plugin's own `pipeline_id`) — the orchestrator dispatches `<pipeline_id>:common_query` and the plugin's bundled handler speaks the answer it selected during `match` |
+
+The `converse`, `response` and `stop` rows describe a skill that is
+**already** in `active_handlers`: `converse` and `response` continue
+an existing participation, and `stop` ends one. Pushing on those
+would restamp an activation the skill never re-earned.
+
+`fallback` is different and therefore **not** suppressed. A
+fallback handler was not active before the dispatch — the dispatch
+*is* its activation, and it is the same kind of activation an
+ordinary intent dispatch performs. Suppressing the push would leave
+the handler unreachable by OVOS-STOP-1 (which selects its target
+from `active_handlers`) and ineligible for a converse follow-up,
+which is exactly wrong for a long-running or conversational
+fallback such as a language-model handler.
+
+`common_query` is suppressed because the dispatch runs the
+plugin's own bundled handler, which speaks a single answer already
+selected during `match` and holds nothing afterwards.
 
 This specification fixes only the registry mechanism (reservation
 listing); the per-name semantics are owned by the reserving
@@ -1103,6 +1269,46 @@ Payload shape:
 specification recognizes. A conformant orchestrator subscribes to
 this topic; a conformant producer emits to it.
 
+### 9.1.1 The lifecycle identifier — `context.utterance_id`
+
+On receiving the entry Message the orchestrator stamps
+`context.utterance_id` — an opaque string naming this one
+**utterance lifecycle** — exactly once, at entry. Everything
+derived from the lifecycle — the transformer passes, the pipeline
+contest and its polls, the pongs, the dispatch, the terminal events
+of §9.5 — carries the same value, because OVOS-MSG-1 §5's
+derivations preserve `context` keys; no component ever copies it by
+hand. A component **MUST NOT** overwrite a `utterance_id` already
+present: regeneration downstream would detach every
+already-derived Message from its lifecycle.
+
+A component that opens a lifecycle without passing through the
+orchestrator — a plugin serving an out-of-band query — sits at
+lifecycle entry itself and stamps under the same rule.
+
+A `get_response` answer is a **new lifecycle**, not a continuation:
+the answer utterance enters at §9.1 like any other, gets its own
+`utterance_id`, and is claimed early by the session's response-mode
+holder. Continuity between the question's lifecycle and the
+answer's is session state (`response_mode`), never the identifier —
+an identifier shared across turns would let a stale poll answer
+from one turn decide the next, which is the failure this field
+exists to prevent. Tooling that wants to group an exchange groups
+by `session_id`.
+
+The value is opaque: consumers compare it for equality and do
+nothing else. It **MUST** be unique per lifecycle within the
+deployment (a UUID is RECOMMENDED; no format is normative). Two
+Messages carry the same `utterance_id` **iff** they belong to the
+same lifecycle — which is the entire correlation rule: a poll
+answer whose `utterance_id` differs from the poll's answers some
+other question. The poll protocols built on this one
+(OVOS-CONVERSE-1, OVOS-FALLBACK-1, OVOS-COMMON-QUERY-1) correlate
+by this field and define nothing of their own. OVOS-MSG-1 §5.4's
+no-central-correlation rule is untouched: no host assigns ids
+centrally, no host tracks them, and equality comparison by whoever
+cares is all there is.
+
 ### 9.2 `ovos.intent.matched`
 
 Emitted by the orchestrator after a plugin's `match` returns
@@ -1149,7 +1355,7 @@ with no plugin claiming the utterance. Broadcast.
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `utterances` | array of strings | no | The candidate utterance list that no plugin matched, as it stood after the utterance-transformer chain. Included for observability; consumers **MUST NOT** re-submit it without explicit user intent. |
-| `lang` | string | no | BCP-47 tag from the entry-topic Message (§9.1), if it was present. Absent when the entry-topic carried no `lang`. |
+| `lang` | string | no | The BCP-47 tag the match round ran in — the resolved tag the orchestrator passed to every `match` call (§4), whether it came from the entry-topic Message (§9.1) or from §3.2 evidence. Present whenever iteration ran; absent only when iteration never started (an empty utterance list per §6.2). |
 
 Both fields are optional. An observer that receives no fields still
 knows no plugin matched — the topic name alone is normative.
@@ -1241,8 +1447,17 @@ other plugins) discover that set at runtime, this specification
 defines a pull-query / scatter-response pattern keyed on
 `pipeline_id`.
 
-A pipeline plugin with bundled handlers **SHOULD** publish the set
-of `intent_name` values it owns through the query topic below.
+Every pipeline plugin **MUST** answer the query topic below with
+the set of `intent_name` values it currently owns (§10.4). The
+topic is keyed on the plugin's `pipeline_id` (§3), so a plugin
+referenced from several `session.pipeline` entries answers **once**,
+for the actor — there is no per-entry query and no per-entry
+answer. A
+plugin with no bundled handlers and nothing loaded answers with an
+empty `intents` array rather than staying silent, because silence is
+how a consumer detects an unloaded plugin. What a plugin **MAY**
+choose is how much per-intent detail it exposes beyond the required
+fields of §10.2, not whether it answers.
 Observers and introspection tools rely on this index to enumerate
 every handler in the deployment; without it, plugin-owned handlers
 are invisible to deployment-wide tooling that walks OVOS-INTENT-4
@@ -1357,13 +1572,31 @@ from the hosting process.
   exactly once;
 - emit `ovos.utterance.handled` (§9.5) exactly once per
   utterance, regardless of which terminal path was taken;
-- iterate `session.pipeline` in order (§6.2) and stop at
-  the first plugin returning a non-`None` `Match`;
+- resolve the utterance language **once** per utterance and pass
+  the same resolved tag to every plugin's `match` call (§4, §9.1);
+- compose the effective pipeline (§5.5) after the metadata-
+  transformer chain has run, iterate it in order (§6.2), and stop
+  at the first `Match` that survives the §4.1 well-formedness, §5.3
+  / §5.4 denylist, and `required_slots` checks;
+- reject a malformed `Match` as a declination and continue
+  iteration (§4.1);
+- enforce `blacklisted_skills` and `blacklisted_intents` against
+  every candidate `Match`, regardless of whether the producing
+  plugin filters (§5.3, §5.4);
+- verify every slot listed in the matched intent's `required_slots`
+  is present, and treat a shortfall as a declination (§6.2);
+- ignore any `Match` returned by a `match` call that already timed
+  out, and never dispatch it (§4.4);
 - skip unknown `pipeline_id`s without failing the utterance (§5);
 - emit `ovos.intent.unmatched` when no plugin claimed (§9.3);
 - emit `ovos.intent.matched` (§9.2) on every successful claim,
   before the dispatch;
 - dispatch on `<match.skill_id>:<match.intent_name>` per §7;
+- stamp `context["skill_id"]` and `context["pipeline_id"]` on every
+  dispatch (§7.1);
+- push the dispatched `skill_id` onto the head of
+  `session.active_handlers`, except where the §7.3 registry marks
+  the `intent_name` non-activating (§7.1);
 - handle a plugin exception by logging and continuing to the
   next plugin (§6.2), not by failing the utterance;
 - emit the handler-lifecycle trio (§8) wrapping every handler
@@ -1371,14 +1604,18 @@ from the hosting process.
   `complete` (on normal return) or `error` (on exception or
   timeout, §8.3) after;
 - remain able to accept and process new `ovos.utterance.handle`
-  messages while a handler is running (§6.5).
+  messages while a handler is running (§6.5);
+- keep servicing its bus subscriptions while a `match` call is in
+  flight, so that a plugin whose match strategy needs a bus
+  round-trip can complete it (§6.5).
 
 ### A **pipeline plugin** **MUST**:
 
 - expose a `match(utterances, lang, session) → Match | None` operation
   (§4);
-- when claiming, return a `Match` with `skill_id`, `intent_name`,
-  and `lang` per §4 — never a partial or speculative claim;
+- when claiming, return a well-formed `Match` carrying every
+  required field of §4.1 — `skill_id`, `intent_name`, `lang`,
+  `slots` and `utterance` — never a partial or speculative claim;
 - bear a `pipeline_id` distinct from any other loaded plugin's
   id (§3);
 - **respond** to every `ovos.pipeline.<own_pipeline_id>.intents.list`
