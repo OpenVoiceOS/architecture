@@ -39,7 +39,6 @@ open a PR adding it.
 | **Dispatch-shaped topic** | A topic containing `:`, assembled from identifiers to address a specific registered handler — canonically `<skill_id>:<intent_name>`; the `:` is the marker, and only a specification in this family may define a colon-bearing shape ([MSG-1 §2.1.1](msg-1.md)). |
 | **Dotted addressed topic** | An ordinary `:`-free dotted topic (`<x>.<y>.<verb>`) that names a specific recipient in one of its segments — e.g. `<skill_id>.common_query.request` — an addressed message, not a dispatch ([MSG-1 §2.1.1](msg-1.md), [COMMON-QUERY-1 §7](common-query.md)). |
 | **Recency-targeted stop** | See [STOP-1 §4.1](stop-1.md) — the stop plugin's no-answer fallback. |
-| **`<shared_pipeline_id>`** | See [STOP-1 §5.2](stop-1.md) — the `global_stop` dispatch identity. |
 | **Listening lifecycle signal** | A payload-free bus signal the audio input service emits or consumes around voice-command capture and sleep mode — `ovos.listener.wakeword`, `ovos.listener.record.started` / `.record.ended`, `ovos.listener.sleep`, `ovos.listener.awoken` ([AUDIO-IN-1 §6](audio-in.md)). |
 | **GUI template** | A member of the closed, curated `SYSTEM_*` vocabulary an application names to declare *what* to display; distinct from an INTENT-1 sentence template ([GUI-1 §3](gui-1.md)). |
 | **Render backend / Adapter** | An additive plugin that turns GUI template intents into a concrete presentation (screen, browser, terminal, face); every installed adapter receives every event ([GUI-1 §6](gui-1.md)). |
