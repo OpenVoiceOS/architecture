@@ -112,10 +112,12 @@ Within a session, namespaces form a **last-activated-on-top** stack
   protocol of §4 is still emitted; it is simply observed by nobody.
   An application **MUST NOT** require a display to function and
   **MUST NOT** block waiting for a GUI-originated event (§7).
-- The display **accompanies** a spoken interaction. Templates that
-  solicit a response (`SYSTEM_confirm`, `SYSTEM_select`) are visual
-  companions to a concurrent spoken prompt; the spoken path **MUST**
-  remain sufficient on a display-only or display-less client.
+- The display **accompanies** a spoken interaction. A template that
+  solicits a response is a visual companion to a concurrent spoken
+  prompt; the spoken path **MUST** remain sufficient on a
+  display-only or display-less client. (No such template is
+  normative in this version — the round-trip names are reserved,
+  §3.4.)
 
 ---
 
@@ -149,6 +151,17 @@ intent (§4.3). A page name that does not begin with `SYSTEM_` is **not
 a template of this specification**; a conforming GUI service **MUST
 NOT** dispatch it as a template (§4.3).
 
+A page name that **does** begin with `SYSTEM_` but names neither a
+template in §3.4's catalogue nor a name reserved by §3.4 is not
+recognised by any adapter conformant to this version. This is not a
+protocol error: it is the ordinary case of an adapter receiving a
+template it cannot render, and is handled exactly as §6.5 already
+requires — an adapter **MUST NOT** fail on it, and **MUST** treat it as
+an undispatchable template (decline as a no-op, or degrade if a
+degradation applies). The reserved prefix names the discriminator; it
+does not guarantee every `SYSTEM_`-prefixed name is currently defined
+or renderable.
+
 ### 3.3 Session-data typing rules
 
 Each template below lists its session-data keys. Unless stated
@@ -169,7 +182,10 @@ template events persist until the namespace is cleared (§4.3). A
 render backend **MUST** treat the session-data map delivered with an
 event as the authoritative current state for that namespace and
 **MUST NOT** assume a key absent from one event has been deleted
-unless the namespace was cleared.
+unless the namespace was cleared. Cumulative state, like the namespace
+stack itself, is scoped per `session_id` (§4.3, §5.1) — accumulation
+in one session's namespace has no effect on the same namespace name in
+another session.
 
 ### 3.4 Catalogue
 
@@ -203,9 +219,17 @@ template to render meaningfully, all others are optional.
 
 | Template | Keys | Meaning |
 |----------|------|---------|
-| `SYSTEM_audio_player` | `title` (string, *req*), `artist`, `album`, `image`, `position` (number, seconds), `duration` (number, seconds; `0` = unknown/streaming), `playing` (boolean) | A now-playing card for audio. Visual only; the stream is owned by the media subsystem (§7.1). |
+| `SYSTEM_audio_player` | `title` (string, *req*), `artist`, `album`, `image`, `position` (number, ms), `duration` (number, ms; `-1` = unknown/live), `playing` (boolean) | A now-playing card for audio. Visual only; the stream is owned by the media subsystem (§7.1). |
 | `SYSTEM_video_player` | `uri` (string, *req*), `title` (string), `playing` (boolean) | A video surface; the render backend renders the stream. |
 | `SYSTEM_media_player` | `media_title`, `media_artist`, `media_album`, `media_image`, `media_uri`, `media_position` (number, ms), `media_duration` (number, ms; `-1` = live), `media_playback_state` (string: `playing` \| `paused` \| `stopped` \| `loading` \| `error`), `media_playlist` (array of `{title, artist, image, uri, duration}`), `media_search_results` (array of `{title, artist, image, uri, skill_id, match_confidence}`), `media_playlist_position` (number) | The unified media-player UI (now-playing, queue, search results). Driven by the media subsystem, not by an ordinary application (§7.1). |
+
+The position/duration convention is **uniform across the player
+templates**: both `SYSTEM_audio_player` and `SYSTEM_media_player`
+count in **milliseconds**, with `-1` meaning unknown/live. Two
+templates sharing one screen role must not disagree on units — a
+producer targeting both, or an adapter rendering either, would
+otherwise need per-template unit tables for what is semantically
+the same pair of fields.
 
 #### Domain cards
 
@@ -221,16 +245,22 @@ criterion (§3.1).
 | `SYSTEM_map` | `latitude` (number, WGS-84, *req*), `longitude` (number, WGS-84, *req*), `zoom` (number, 1–20), `label` (string) | A geographic location; the backend chooses the map provider. |
 | `SYSTEM_face` | `sleeping` (boolean) | An avatar face. `sleeping` true is the resting/closed-eyes state, false the awake state. For backends that render a character rather than a screen layout. |
 
-#### Interactive companions
+#### Interactive companions — reserved for a future version
 
-These templates accompany a concurrent spoken prompt (§2.3). They emit
-an interaction event when the user acts on the visual element (§7.2);
-the spoken path remains sufficient on its own.
-
-| Template | Keys | Meaning |
-|----------|------|---------|
-| `SYSTEM_confirm` | `question` (string, *req*) | A yes/no companion to a spoken question. |
-| `SYSTEM_select` | `prompt` (string), `items` (array of `{label (req), value (req)}`) | A choice companion to a spoken set of options; `value` is the machine-readable token returned on selection. |
+**Non-normative in this version.** Two round-trip template names are
+**reserved** but not defined: `SYSTEM_confirm` (a yes/no companion to
+a spoken question, `question` string) and `SYSTEM_select` (a choice
+companion to a spoken set of options, `prompt` string plus `items`
+array of `{label, value}`). Their display leg is straightforward, but
+their **reply leg** — the interaction event carrying the user's
+answer back to the originating application (§7.2) — has no specified
+topic or payload schema, and a template whose interaction reply is
+unspecified is unimplementable interoperably: every producer/adapter
+pair would invent its own return channel. The names are reserved so
+that no application-defined template claims them; a future version
+will specify the full round trip. Producers **MUST NOT** emit them in
+this version; the spoken path (§2.3) covers the interaction on its
+own.
 
 ### 3.5 Image delivery
 
@@ -251,8 +281,8 @@ regardless of where it runs.
 
 `SYSTEM_html` and `SYSTEM_url` are **escape hatches** that hand a
 render backend opaque content (raw markup, or an arbitrary web page)
-instead of a semantic intent. They are retained for migration and
-edge cases but are **discouraged**: they defeat the consistency the
+instead of a semantic intent. They exist for edge cases where no
+semantic template fits but are **discouraged**: they defeat the consistency the
 closed vocabulary exists to provide (§3.1), they cannot be styled or
 degraded uniformly, and a render backend that is not a full web
 engine cannot honour them. A producer **SHOULD** prefer a semantic
@@ -285,6 +315,17 @@ Both keys are **protocol metadata, not session data**. The GUI service
 prefixed key it defines) before delivering session data to an adapter:
 an adapter receives content keys only. A producer **MUST NOT** use a
 `__`-prefixed key as application session data.
+
+`__from` **MUST** be the producer's own identifier — a producer
+**MUST NOT** set `__from` to a namespace it does not own. This
+specification defines no mechanism that verifies the claim: the GUI
+service trusts the value as delivered and acts on it (merging session
+data into that namespace, clearing that namespace, §4.2), so a Message
+with a forged `__from` clears or mutates another producer's namespace.
+Enforcing this constraint — verifying that the entity emitting a GUI
+Message is who `__from` claims — is a trust-boundary concern for
+layer-2 systems built on the Message bus (OVOS-MSG-1 §3.4), not
+something the GUI wire protocol itself can arbitrate.
 
 ### 4.2 Messages
 
@@ -341,6 +382,18 @@ A conforming GUI service **MUST NOT** dispatch it to adapters as a
 template; it MAY reject it or route it to a deployment-specific legacy
 path outside this specification's scope.
 
+When `page_names` carries more than one entry, all entries belong to
+**one namespace** — they are not independent activations. Only the
+entry at `index` is the active template (§4.3 activation applies to it
+alone); the other entries are **held**, not rendered, until a later
+`gui.page.show` from the same namespace changes which entry is active.
+A producer changes the active entry by re-emitting `gui.page.show` with
+the same (or an updated) `page_names` and the new `index`; there is no
+separate "switch index" Message. This specification does not define
+what the non-active entries are *for* beyond this holding behaviour —
+e.g. a paged or swipeable presentation is an adapter-side choice, not a
+normative one.
+
 #### `gui.clear.namespace` — clear a namespace
 
 Emitted by a producer when it is done displaying. `data` carries
@@ -363,9 +416,19 @@ active namespaces.
   | `__idle` | Behaviour |
   |----------|-----------|
   | `true` | Persistent — stays until cleared. |
+  | `false` | Not persistent — the render backend **MUST NOT** treat the namespace as idle-persistent; removal follows the same deployment default as an omitted `__idle`. |
   | a number *N* | Visible for *N* seconds, then auto-removed. |
-  | omitted / absent | A deployment default applies. |
+  | omitted / absent | A deployment default applies. RECOMMENDED default: `30` (auto-remove after 30 seconds). |
 
+  A namespace persisted with `__idle: true` stays on top until an
+  explicit `gui.clear.namespace`, even if its producer terminates or
+  crashes without emitting one — this specification defines no
+  liveness check on producers, so a vanished producer's persistent
+  namespace is not reclaimed by any mechanism here. This is a
+  deliberate simplicity trade-off: the GUI service does not track
+  producer liveness, and cleanup of such an orphaned namespace is left
+  to deployer policy (e.g. a supervisor that clears a skill's
+  namespaces on process exit).
 - **Deactivate / clear.** On `gui.clear.namespace`, on auto-removal by
   the `__idle` timer, or when another namespace supersedes it, the
   namespace is removed from the session's active stack and the
@@ -622,27 +685,18 @@ template's session data is a reflection of media state, not a command
 channel. The media-control wire surface is owned by the media
 subsystem and is out of scope here.
 
-### 7.2 Interactive companions
+### 7.2 Interactive companions (reserved)
 
-For the interactive templates (§3.4), when the user acts on the visual
-element the render backend **SHOULD** emit an interaction event back to
-the originating namespace, carrying the originating `session_id` in the
-Message context (so the application can attribute the answer to the
-session it asked in):
-
-- **`SYSTEM_confirm`** → an event reporting the boolean answer
-  (whether the user confirmed).
-- **`SYSTEM_select`** → an event reporting the `value` of the chosen
-  item (§3.4).
-
-The originating application **MUST** treat such an event as a
-*shortcut*: it registers a handler for it **and** independently
-handles the spoken response, and **MUST NOT** block waiting for the
-GUI event (§2.3). The exact event topic and payload schema are owned
-by the producing-side interface and are non-normative in this version;
-what this specification fixes is that the response **MUST** carry its
-originating `session_id` so the application can route the answer back
-to the correct session.
+The round-trip templates are reserved, not defined, in this version
+(§3.4). When a future version specifies them, the reply leg will
+follow the shape sketched here: the render backend emits an
+interaction event back to the originating namespace, carrying the
+originating `session_id` in the Message context so the application
+can attribute the answer to the session it asked in; the application
+treats the event as a *shortcut* — it independently handles the
+spoken response and never blocks waiting for the GUI event (§2.3).
+Until the event topic and payload schema are specified, there is no
+conformant way to emit or consume these templates.
 
 ---
 
@@ -658,7 +712,7 @@ to the correct session.
 - deliver image content as an `http(s)` URL or a `data:` URI, never a
   bare filesystem path (§3.5);
 - carry the `session_id` of the interaction in the Message context so
-  routing (§5) and interaction-response attribution (§7.2) work;
+  routing (§5) works;
 - omit absent optional keys rather than emit them as `null` (§3.3);
 - function with no display attached and never block on a GUI event
   (§2.3).
@@ -708,8 +762,6 @@ to the correct session.
   presentation rather than show nothing (§6.5);
 - broadcast status events and device-wide signals to all clients
   regardless of `session_id` (§5.3);
-- emit an interaction event carrying the originating `session_id` for
-  the interactive templates it presents (§7.2);
 - report connection status so the connectivity aggregate is accurate
   (§6.8);
 - re-read state from the GUI service's query surface rather than cache
