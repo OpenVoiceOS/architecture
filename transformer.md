@@ -11,15 +11,15 @@ the artifacts flowing through the assistant. The spec identifies
 kind of work in a voice operating system's utterance lifecycle
 (§2), defines the per-type
 contract for each (§3), and specifies the shared chain abstraction
-— ordering, error handling, cancellation, registration — that any
+— ordering, error handling, cancellation, introspection — that any
 orchestrator implementing chains follows (§4, §6, §7, §8).
 
-An orchestrator **MAY** implement transformer chains at any subset
-of the six injection points (none, some, or all). For each chain
-it does implement, this spec defines what the chain looks like and
-what it MUST do. The spec does **not** require any specific chain
-to be implemented; it defines the design pattern and the contract,
-not a feature list.
+Implementing any given chain is optional. This spec defines the
+design pattern and the per-chain contract, not a feature list —
+§9 states the rule normatively and is its single home: an
+orchestrator MAY implement transformer chains at any subset of the
+six injection points, and every obligation binds per implemented
+chain.
 
 It builds on three companion specifications:
 
@@ -88,16 +88,17 @@ A transformer is identified by a **`(type, transformer_id)` pair**.
 Constraints on `transformer_id` strings:
 
 - Non-empty.
-- Must match the topic-name syntax of OVOS-MSG-1 §2.1 (ASCII
-  letters, digits, `.`, `_`, `-`; no whitespace).
-- Must not contain `:` (the dispatch-topic separator of
-  OVOS-PIPELINE-1 §7).
+- ASCII letters, digits, `.`, `_`, and `-` only; no whitespace and
+  no other character.
+- Must not contain `:`. The `:` is reserved by OVOS-MSG-1 §2.1.1 as
+  the dispatch-topic marker, and OVOS-PIPELINE-1 §7 assembles the
+  `<skill_id>:<intent_name>` dispatch topic around it.
 - Unique within its type's registry. A single deployment MAY load
   transformers with the same `transformer_id` across different
   types; the six type registries are independent.
 
-A transformer **MAY** appear in a chain at most once for its
-type; a chain is an ordered set of distinct `transformer_id`s
+A transformer **MUST NOT** appear in a chain more than once for
+its type; a chain is an ordered set of distinct `transformer_id`s
 within a single type.
 
 ### 1.2 Scope
@@ -107,9 +108,8 @@ the six injection points in the utterance lifecycle and the
 per-type IO contracts (§2, §3), the per-session override mechanism
 (§5), the broadcast-query / scatter-response **introspection
 surface** (§6), the **utterance cancellation** plugin contract
-(§8), the **language disambiguation hierarchy** for
-`Message.context` (§7.1), conformance (§9), and the non-goals
-(§10).
+(§8), the **session-level language signals transformer chains
+produce** (§7.1), conformance (§9), and the non-goals (§10).
 
 It does **not** define:
 
@@ -190,11 +190,13 @@ list-valued keys.
 
 `<type>_transformer_ids` is the transformer chain's
 **self-attribution**. It is distinct from any
-`data["transformer_id"]` (singular) a topic's payload schema may
-carry as the **subject** of the Message — for example, the
-`transformer_id` payload field in
-`ovos.transformer.{type}.list` responses (§6) identifies the
-transformer the entry describes, not who emitted the response.
+payload field that names a transformer as the **subject** of the
+Message — for example the `cancel_by` field of
+`ovos.utterance.cancelled` (§8.1, §8.2) names the transformer that
+signalled the cancellation, and the `loaded` / `priorities` /
+`order` fields of an `ovos.transformer.{type}.list` response (§6)
+name the transformers the response describes. None of those name
+the emitter.
 
 #### Orchestrator-side enforcement
 
@@ -242,13 +244,17 @@ STT → text
   │
   ├─ metadata-transformer chain        (§3.3)
   │
-intent-context decay                   (OVOS-CONTEXT-1 §4)
+effective pipeline composed            (OVOS-PIPELINE-1 §6.1)
+  │
+intent-context prune                   (OVOS-CONTEXT-1 §4)
   │
 match round                            (OVOS-PIPELINE-1 §6)
   │
   ├─ intent-transformer chain          (§3.4)
   │
 dispatch + handler trio                (OVOS-PIPELINE-1 §7, §8)
+  │
+intent-context decrement               (OVOS-CONTEXT-1 §4)
   │
 skill emits speak()
   │
@@ -261,11 +267,10 @@ TTS → wav file
 playback
 ```
 
-An orchestrator **MAY** implement transformer chains at any subset
-of these injection points (none, some, or all). Each chain it
-implements MUST conform to the per-type contract of the matching
-§3 subsection; each chain it does not implement is simply a no-op
-at that point in the lifecycle. Implementations whose architecture
+Each chain an orchestrator implements MUST conform to the per-type
+contract of the matching §3 subsection (§9); each chain it does not
+implement is simply a no-op at that point in the lifecycle.
+Implementations whose architecture
 omits an upstream artifact entirely (a streaming STT that produces
 no discrete "STT → text" boundary, an end-to-end speech-to-speech
 model that bypasses intermediate text) **MAY** likewise omit the
@@ -273,12 +278,14 @@ chains for artifacts they don't materialise.
 
 Each implemented chain is run to completion before the next stage
 of the lifecycle proceeds. A chain whose transformers all raise
-still produces the input unchanged (§7) and the lifecycle
-continues. A chain or stage MAY be aborted early by **utterance
-cancellation** (§8) — the only sanctioned way to short-circuit the
-lifecycle before its natural terminal events; cancellation
-preserves OVOS-PIPELINE-1 §9.5's universal `ovos.utterance.handled`
-invariant.
+still passes the artifact on and the lifecycle continues (§7). A
+chain or stage MAY be aborted early by **utterance cancellation**
+(§8) — the only sanctioned way to short-circuit the lifecycle
+before its natural terminal events. Cancellation from any chain
+that runs after lifecycle entry preserves OVOS-PIPELINE-1 §9.5's
+universal `ovos.utterance.handled` invariant (§8.2); cancellation
+from the pre-entry audio chain suppresses the entry event instead,
+so no lifecycle starts and the invariant does not arise (§8.2.1).
 
 ---
 
@@ -332,7 +339,16 @@ artifact's language can mutate `lang` in lockstep.
   orchestrator **MUST** reflect the final output `lang` into the
   artifact-bearing Message's `data.lang`: set `data.lang` to the
   final value when non-`None`; unset `data.lang` when the final
-  value is `None` and the field was present on entry.
+  value is `None` and the field was present on entry. **The audio
+  chain (§3.1) is exempt** — it runs pre-STT, inside the audio
+  input service, and there is no artifact-bearing Message on the
+  bus yet to write back to. The audio chain's output `lang` is a
+  language classification of the captured audio; the audio input
+  service **MUST** reflect it into `session.detected_lang`
+  (OVOS-SESSION-1 §3.2.6) when non-`None`, where it feeds the STT
+  language-resolution precedence of OVOS-AUDIO-IN-1 §5.1 and
+  reaches `data.lang` only as the transcription language the
+  service declares on `ovos.utterance.handle`.
 - **Metadata (§3.3) and intent (§3.4) transformers do not
   receive `lang` as a parameter.** Intent transformers receive a
   `Match` whose `Match.lang` (OVOS-PIPELINE-1 §4.1) already names
@@ -344,22 +360,45 @@ artifact's language can mutate `lang` in lockstep.
 **Injection point.** Pre-STT. Operate on raw audio chunks from the
 microphone or any other audio source feeding the assistant.
 
-**Input.** A binary audio chunk, the optional `lang` parameter
-(§3.0), and a metadata object carrying at minimum the audio's
-sample rate, sample width, and channel count; the metadata
-object is otherwise extensible.
+**Input.** A four-part tuple:
 
-**Output.** A binary audio chunk, the (possibly mutated) `lang`
-value per §3.0, and an updated metadata object.
+1. a binary audio chunk;
+2. the optional `lang` parameter (§3.0);
+3. an audio **metadata object** carrying at minimum the audio's
+   sample rate, sample width, and channel count; the metadata
+   object is otherwise extensible;
+4. the **`Message.context`** object (OVOS-MSG-1 §2.3) for the
+   in-flight capture, including the `session` carrier (OVOS-MSG-1
+   §4) — the same surface §3.3 describes.
+
+**Output.** A four-part tuple of the same shape: a binary audio
+chunk, the (possibly mutated) `lang` value per §3.0, an updated
+metadata object, and a possibly mutated `Message.context`.
+
+The audio metadata object and `Message.context` are distinct
+surfaces with distinct lifetimes. The metadata object describes
+*this chunk* and does not outlive the audio chain.
+`Message.context` is the per-capture context the audio input
+service carries into `ovos.utterance.handle` (OVOS-AUDIO-IN-1 §5),
+and is where a transformer writes anything later lifecycle stages
+must see.
 
 **Permitted mutations.** A transformer MAY rewrite the audio
 buffer (noise reduction, gain control, format conversion) and MAY
-add or modify metadata keys (detected language, loudness, voice
-activity score). When the transformer changes the audio's physical
-format (sample rate, sample width, channel count), it **MUST**
-update the corresponding metadata fields to match; conversely it
-**SHOULD NOT** modify those physical-format metadata fields without
-having actually changed the audio.
+add or modify metadata keys (loudness, voice activity score).
+When the transformer changes the audio's physical format (sample
+rate, sample width, channel count), it **MUST** update the
+corresponding metadata fields to match; conversely it **SHOULD
+NOT** modify those physical-format metadata fields without having
+actually changed the audio.
+
+It MAY also mutate `Message.context` per the same permissive rules
+of §3.3. This is the surface the canonical audio-chain use cases of
+OVOS-AUDIO-IN-1 §4 write through: a language identifier sets
+`session.detected_lang` (§3.0, §7.1), and a voice-print recogniser
+writes its intermediate result as a top-level context key for a
+later metadata transformer to consolidate. It is also where the
+§8.1 cancellation keys are set.
 
 ### 3.2 Utterance transformers
 
@@ -452,9 +491,9 @@ includes:
   for such mutations, and §5.3 there fixes the cancellation
   semantics when a transformer mutation removes or replaces the
   current response-mode holder), changing `session.lang`
-  (OVOS-MSG-1 §4.2), overriding the six per-session transformer
-  chains (§5 of this spec) for this utterance, or any other field
-  on `session`;
+  (OVOS-SESSION-1 §3.2.1), overriding the six per-session
+  transformer chains (§5 of this spec) — which take effect on the
+  next utterance per §5.3 — or any other field on `session`;
 - adjusting routing keys `source` / `destination` (OVOS-MSG-1 §3).
   Routing-key mutation is a load-bearing change that affects every
   downstream `forward`/`reply`/`response` derivation and is the
@@ -482,8 +521,17 @@ the universe of candidates deterministically.
 >   transformer pathway of OVOS-CONTEXT-1 §5.2; the key-shape
 >   rules of OVOS-CONTEXT-1 §3 apply to every entry written.
 > - Mutating `session.pipeline` (OVOS-PIPELINE-1 §5) changes which
->   pipeline plugins are consulted for this utterance — a powerful
->   per-utterance routing primitive that is also easy to misuse.
+>   pipeline plugins are consulted for **this** utterance — a
+>   powerful per-utterance routing primitive that is also easy to
+>   misuse. The same-utterance effect is what the ordering of
+>   OVOS-PIPELINE-1 §6.1 provides: the effective pipeline is
+>   composed **after** the metadata-transformer chain has run, so
+>   the composition reads the pipeline list this chain leaves
+>   behind. Per-utterance routing is the reason the metadata hook
+>   sits where it does, and OVOS-CONVERSE-1 §3.3 relies on it.
+>   Note the asymmetry with the six transformer-chain fields of §5,
+>   which are composed at utterance start and therefore take effect
+>   on the next utterance (§5.3).
 > - Mutating session-level language signals (OVOS-SESSION-1 §3.2)
 >   changes how subsequent stages localize.
 > - Mutating `source` / `destination` (OVOS-MSG-1 §3) changes
@@ -505,17 +553,31 @@ chain over the resulting `Match`. This ordering lets an intent
 transformer read context the matching engine just wrote (for
 example, to enrich a slot based on a freshly-promoted entry).
 
-**Input.** The `Match` produced by the pipeline plugin that
-claimed the utterance — `skill_id`, `intent_name`, `slots`,
-`utterance` (OVOS-PIPELINE-1 §4.1) — together with the post-engine-
-mutation `session.intent_context` snapshot.
+**Input.** Two parts:
+
+1. the `Match` produced by the pipeline plugin that claimed the
+   utterance — `skill_id`, `intent_name`, `slots`, `utterance`
+   (OVOS-PIPELINE-1 §4.1);
+2. the **`Message.context`** object (OVOS-MSG-1 §2.3) of the
+   in-flight utterance — the same surface §3.3 describes,
+   carrying the `session` carrier and therefore the **live**
+   `session.intent_context` as of the post-engine mutation
+   described above. It is a live object, not a snapshot: writes a
+   transformer makes to it are visible to the rest of the
+   lifecycle, which is what OVOS-CONTEXT-1 §5.2 sanctions and what
+   §9 of this spec permits.
 
 **Output.** A `Match` of the same shape, possibly with an enriched
-`slots` map.
+`slots` map, and a possibly mutated `Message.context`.
+
+`Message.context` is also the **carrier for cancellation** from an
+intent transformer: a transformer that wants to abort the utterance
+sets the `canceled` / `cancel_reason` keys of §8.1 in the context
+it returns, exactly as transformers of every other type do. There
+is no `Match`-carried cancellation channel.
 
 **Permitted mutations.** A transformer MAY add entries to
-`Match.slots` and MAY overwrite existing entries it itself
-produced earlier in the chain. It **SHOULD NOT** delete or
+`Match.slots`. It **SHOULD NOT** delete or
 overwrite slot entries produced by the matching engine or by an
 earlier transformer in the chain, unless deletion is the
 transformer's deployer-configured purpose (PII redaction,
@@ -528,8 +590,12 @@ the handler elsewhere than the engine that matched intended.
 transformer returns a `Match` whose `skill_id` or `intent_name`
 differs from its input, the orchestrator **MUST** treat the return
 as a shape violation per §7 — discard the transformer's output and
-proceed with the prior step's `Match` unchanged. This is the
-orchestrator-side safety net for the MUST NOT above.
+proceed with the prior step's `Match` as it stands. This is the
+orchestrator-side safety net for the MUST NOT above. Per §7, "as it
+stands" means the `Match` and `Message.context` the orchestrator
+holds, partial in-place mutations included; the identity fields
+`skill_id` and `intent_name` are the only ones the orchestrator
+**MUST** restore, since they are the invariant being enforced.
 
 ### 3.5 Dialog transformers
 
@@ -614,13 +680,6 @@ Two ordering mechanisms are defined; deployers choose:
 The orchestrator **MUST** support both mechanisms and **MUST**
 apply explicit order when configured.
 
-Priorities are meaningful only under ascending order. A priority
-assignment authored for the inverse convention — descending order,
-where the lowest number runs *last* and, because each transformer's
-output overwrites its predecessor's, effectively "wins" — is the
-exact inverse of a conformant one and **MUST** be renumbered; run
-unrenumbered, such a chain executes backwards.
-
 ---
 
 ## 5. Per-session overrides
@@ -630,9 +689,11 @@ OVOS-SESSION-1 §2.2: six **preference** fields naming a per-type
 chain ordering (§5.1) and six **policy** fields naming a per-type
 denylist (§5.2). The composition rule of §5.3 layers them.
 
-All six preference fields propagate unchanged per OVOS-MSG-1 §4.1
-and are session-scoped; in the absence of a field, the
-deployer-configured default chain for that type is used.
+All twelve fields — the six preference fields and the six policy
+fields alike — propagate unchanged per OVOS-MSG-1 §4.1 and are
+session-scoped. In the absence of a preference field, the
+deployer-configured default chain for that type is used; in the
+absence of a policy field, nothing is denied.
 
 ### 5.1 Per-type chain ordering — `<type>_transformers`
 
@@ -724,11 +785,19 @@ order, mirroring OVOS-PIPELINE-1 §5.5:
    `<type>_transformers` field if set and non-empty; otherwise
    start from the deployer-configured default chain for that
    injection point (§4).
-2. **Availability.** Drop any `transformer_id` that does not
-   correspond to a transformer loaded for this type. Unknown
-   identifiers do not abort the utterance and do not trigger
-   fallback to the deployer default — the remaining known
-   identifiers are the effective ordered set.
+2. **Availability.** Drop any `transformer_id` that is not
+   **available at this hook**. A transformer is available at a
+   hook when it is (a) loaded for this type by the process that
+   runs the chain, **and** (b) eligible to run at this hook under
+   the deployer's §4 ordering configuration. Under priority-based
+   ordering every loaded transformer of the type is eligible.
+   Under an **explicit deployer order**, only the
+   `transformer_id`s named in that list are eligible — §4's "not
+   run at this hook" is a deployer-level exclusion, and a session
+   preference **MUST NOT** resurrect an excluded transformer.
+   Unavailable identifiers do not abort the utterance and do not
+   trigger fallback to the deployer default — the remaining
+   available identifiers are the effective ordered set.
 3. **Policy.** Drop any `transformer_id` listed in the
    corresponding `blacklisted_<type>_transformers`, even if it
    was explicitly requested in step 1. Policy overrides
@@ -747,6 +816,12 @@ Composing each chain from a live session would let an earlier chain
 rewrite which later chains run for the same utterance, making the
 lifecycle's transformer surface depend on mutation timing rather
 than on the state the utterance arrived with.
+
+**Nested lifecycles.** A nested lifecycle (OVOS-PIPELINE-1 §6.5)
+composes its own six chains from the session as committed at its
+start, and every transformer in them runs again. Nothing is
+deduplicated against the outer lifecycle — it is a different
+artifact.
 
 If every requested `transformer_id` is dropped by availability or
 policy, the effective chain is empty for that injection point and
@@ -810,16 +885,16 @@ reply convention) carries one orchestrator process's own slice:
 
 A `.response` carries **only the responder's local view**. It
 does **not** report a global chain order — chain composition is
-the §4 priority order plus the §5 per-session override applied
-across the union of responses, and any aggregating consumer (a
-developer tool, a monitoring service) is responsible for
-combining the slices.
+the §4 ordering plus the §5
+per-session override applied across the union of responses, and
+any aggregating consumer (a developer tool, a monitoring service)
+is responsible for combining the slices.
 
 **Response aggregation.** A requester that wants the full picture
 collects responses arriving on the corresponding `.response` topic
 within an implementation-defined window. The bus is async; there
 is no completeness signal. A requester that needs guaranteed
-completeness must keep its own roster of expected responders
+completeness **MUST** keep its own roster of expected responders
 (via service-discovery means out of scope here) and time out
 non-responders.
 
@@ -862,10 +937,20 @@ regulated environments) and the catch-and-proceed behaviour is the
 load-bearing contract.
 
 A transformer that returns an output of the wrong shape — wrong
-type, missing required field, list shrunk to empty for a non-empty
-input — is treated the same as a raised exception: the orchestrator
-**SHOULD** log and **MUST** proceed with the prior transformer's
-output as if this transformer had returned its input unchanged.
+type, missing required field — is treated the same as a raised
+exception: the orchestrator **SHOULD** log and **MUST** proceed
+with the prior transformer's output as if this transformer had
+returned its input unchanged. An empty utterance list is **not** a
+shape violation; §3.2 defines its two meanings, and OVOS-PIPELINE-1
+§6.2 depends on the non-cancellation one reaching the lifecycle.
+
+**What "returned its input unchanged" means.** §3 permits in-place
+mutation everywhere, so a call that raises part-way through has
+already changed the object the orchestrator holds. The rule is about
+**control flow, not state**: discard the failing call's return value
+and continue with the artifact and `Message.context` as they stand,
+partial mutation included. Nothing is unwound — this is the
+no-rollback rule below.
 
 Timeouts and per-transformer execution limits are
 **implementation-defined**. Deployers concerned about a slow
@@ -887,14 +972,16 @@ OVOS-CONTEXT-1 §5, telemetry emissions, external HTTP calls)
 **MUST NOT** be rolled back by the orchestrator if a later
 transformer in the chain raises or signals cancellation (§8). The
 chain is a best-effort enrichment pipeline, not a transaction. A
-transformer that needs all-or-nothing semantics must implement them
+transformer that needs all-or-nothing semantics implements them
 internally (e.g. stage its mutations and apply them only at chain
 end via a final commit step).
 
 **Mid-lifecycle session mutations propagate via `Message.context`.**
 When a transformer mutates the `session` carrier inside
 `Message.context` (`session.lang`, `session.pipeline`,
-`session.intent_context`, etc., per §3.2 / §3.3 / §3.5 permissions), the
+`session.intent_context`, etc. — every chain receives
+`Message.context` and may mutate it per §3.1 / §3.2 / §3.3 / §3.4 /
+§3.5 / §3.6), the
 mutated session rides forward as part of `Message.context` to
 every downstream stage that reads it. Downstream consumers
 **MUST** read live session values from the in-flight
@@ -922,8 +1009,12 @@ Several injection points are natural producers of session-level
 language signals defined by OVOS-SESSION-1 §3.2:
 
 - **§3.1 audio transformers** are the natural source for
-  `session.detected_lang` derived from acoustic features. An audio
-  language detector writes `session.detected_lang` after running.
+  `session.detected_lang` (OVOS-SESSION-1 §3.2.6) derived from
+  acoustic features. An audio language detector writes
+  `session.detected_lang` on the `session` carrier inside the
+  `Message.context` it receives per §3.1, where OVOS-AUDIO-IN-1
+  §5.1 reads it as the first term of the STT language-resolution
+  precedence.
 - **§3.2 utterance transformers** **MAY** refine
   `session.detected_lang` from text characteristics (script,
   function-word density). They **MAY** also overwrite
@@ -977,9 +1068,21 @@ signalled. `canceled` is the boolean flag the orchestrator
 recognises; `cancel_reason` is a short string identifying the
 cancellation reason. A context with `canceled: true` but no
 `cancel_reason`, or with `cancel_reason` set but `canceled` absent
-or false, is treated as a §7 shape violation; the orchestrator
-**SHOULD** log and **MUST** proceed as if the transformer returned
-its input unchanged.
+or false, is a **malformed cancellation signal** and is treated as
+a §7 shape violation: the orchestrator **SHOULD** log it and
+**MUST** continue the chain rather than cancel.
+
+Because §7 leaves partial in-place mutation standing, a malformed
+signal would otherwise remain in the context and be re-observed
+after the *next* transformer's call — cancelling the utterance and
+stamping `cancel_by` with the wrong `transformer_id`. To prevent
+that, the orchestrator **MUST**, before invoking the next
+transformer, remove `canceled` and `cancel_reason` from the context
+when it has judged them malformed. Clearing a malformed signal is
+the one sanctioned exception to the no-strip rule below; it is
+also what makes `cancel_by` attribution sound, since the
+orchestrator can then attribute the signal it does act on to the
+call that produced it.
 
 **[Informative] `cancel_reason` vocabulary.** Downstream consumers
 of `ovos.utterance.cancelled` — analytics, audit, transcript
@@ -1032,16 +1135,30 @@ On observing the signal:
 1. The orchestrator **MUST** stop running the current chain — no
    further transformers in this chain are invoked.
 2. It **MUST** skip every subsequent injection-point chain in §2
-   that has not yet started, including any chain belonging to a
-   downstream stage the orchestrator implements.
+   that has not yet started **and that runs in the same process**,
+   including chains belonging to downstream stages that process
+   implements. Chains in other orchestrator processes (§1) are not
+   reachable by direct suppression; they are skipped as a
+   consequence of step 3 — the cancelling process does not hand the
+   artifact on, so no downstream stage is ever entered.
 3. It **MUST** terminate the lifecycle per §8.2.
 
-The orchestrator **MUST NOT** strip or modify the `canceled` /
-`cancel_reason` / `cancel_by` keys between transformers — a later
-observer of the cancelled utterance's Messages (debugger,
-analytics) sees that it was cancelled, why, and by whom.
+Once a **valid** cancellation signal is observed, the orchestrator
+**MUST NOT** strip or modify the `canceled` / `cancel_reason` /
+`cancel_by` keys — a later observer of the cancelled utterance's
+Messages (debugger, analytics) sees that it was cancelled, why, and
+by whom. The rule protects valid signals only; a malformed signal
+is cleared per the paragraph above, precisely so that it never
+becomes a valid-looking one attributed to the wrong transformer.
 
 ### 8.2 Terminal events on cancellation
+
+The terminal-event rules below apply to cancellation signalled from
+a chain that runs **after** the utterance lifecycle has been
+entered — the utterance (§3.2), metadata (§3.3), intent (§3.4),
+dialog (§3.5), and TTS (§3.6) chains, all of which run downstream
+of `ovos.utterance.handle` (OVOS-PIPELINE-1 §9.1). §8.2.1 covers
+the audio chain, which runs before the lifecycle exists.
 
 On cancellation, the orchestrator **MUST** terminate the
 lifecycle with:
@@ -1076,6 +1193,39 @@ by cancellation — consistent with §7's no-rollback rule. The
 cancellation aborts what hasn't run yet; it does not unwind what
 has.
 
+#### 8.2.1 Cancellation before lifecycle entry — the audio chain
+
+The audio chain (§3.1) runs **pre-entry**: inside the audio input
+service, before STT, and therefore before `ovos.utterance.handle`
+(OVOS-PIPELINE-1 §9.1) has been emitted (OVOS-AUDIO-IN-1 §4, §5).
+There is no utterance lifecycle yet to terminate. The terminal-event
+pair above is not merely inconvenient here — it is unsatisfiable,
+because `ovos.utterance.handled` is the end-marker for a lifecycle
+that was never started, and under a split orchestrator (§1) the
+process that would emit it is a different process entirely.
+
+Accordingly, when an audio transformer signals cancellation the
+service running the chain:
+
+- **MUST** stop the chain and **MUST NOT** emit
+  `ovos.utterance.handle` — suppressing the entry event is what
+  cancellation means at this stage;
+- **MUST NOT** emit `ovos.utterance.handled`, and **MUST NOT**
+  emit `ovos.intent.unmatched`. Neither event may be emitted for a
+  lifecycle that never began; emitting `ovos.utterance.handled`
+  without a preceding entry event would break the pairing
+  OVOS-PIPELINE-1 §9.5 defines;
+- **MAY** emit `ovos.utterance.cancelled` **standalone**, carrying
+  `cancel_reason` and the stamped `cancel_by` (§8.1), so audit and
+  analytics consumers can see that audio was captured and refused.
+  A standalone `ovos.utterance.cancelled` is the one case in which
+  the event is not followed by `ovos.utterance.handled`; consumers
+  **MUST NOT** assume the pairing.
+
+The suppressed-entry rule is why cancellation at this hook does not
+threaten the OVOS-PIPELINE-1 §9.5 invariant: the invariant binds
+every lifecycle that starts, and this one does not start.
+
 ---
 
 ## 9. Conformance
@@ -1096,21 +1246,38 @@ the orchestrator does not implement, no obligations arise.
 - apply per-session chain overrides (§5) when the session carries
   a non-empty corresponding `session.*_transformers` field,
   falling back to the deployer-configured chain otherwise;
+- **MUST NOT** invoke any transformer whose `transformer_id` is
+  listed in the session's corresponding
+  `blacklisted_<type>_transformers` denylist (§5.2), even when the
+  same `transformer_id` is requested in the §5.1 preference field
+  — policy overrides preference (§5.3), the skip is silent, and an
+  unknown `transformer_id` in a denylist **MUST NOT** abort the
+  utterance;
 - catch transformer exceptions and shape-violations, log them,
-  and proceed with the prior transformer's output (§7);
+  discard the failing call's return value, and proceed with the
+  artifact and `Message.context` as they stand — partial in-place
+  mutation is not unwound (§7);
 - inspect the context object after every transformer for the
   `canceled` flag (§8.1) and terminate the lifecycle per §8.2 when
-  set, skipping every subsequent chain in §2 of this spec that
-  has not yet started; **MUST** stamp `cancel_by` from the
-  emitting transformer's `transformer_id` on observing the signal;
-- on any cancellation, emit `ovos.utterance.cancelled` followed
+  set, skipping every subsequent chain in §2 of this spec that runs
+  in the same process and has not yet started; **MUST** stamp
+  `cancel_by` from the emitting transformer's `transformer_id` on
+  observing the signal; **MUST** remove `canceled` and
+  `cancel_reason` from the context before invoking the next
+  transformer when the signal is malformed (§8.1);
+- on any cancellation from a chain that runs after lifecycle
+  entry, emit `ovos.utterance.cancelled` followed
   by `ovos.utterance.handled` (§8.2), carrying `cancel_reason` and
   the stamped `cancel_by`, and **MUST NOT** emit
   `ovos.intent.unmatched` on the cancellation path; **MUST NOT**
-  strip the `canceled` / `cancel_reason` / `cancel_by` keys from
-  `Message.context` on the terminal events or downstream
-  derivations; **MUST NOT** dispatch a Match that was reached
-  before cancellation.
+  strip the `canceled` / `cancel_reason` / `cancel_by` keys of a
+  valid signal from `Message.context` on the terminal events or
+  downstream derivations; **MUST NOT** dispatch a Match that was
+  reached before cancellation;
+- on cancellation from the **pre-entry audio chain** (§3.1),
+  suppress `ovos.utterance.handle` and emit neither
+  `ovos.utterance.handled` nor `ovos.intent.unmatched`; it **MAY**
+  emit a standalone `ovos.utterance.cancelled` (§8.2.1).
 
 When the orchestrator is implemented as a single process, the
 introspection obligations of §6 are met by that process. When the
