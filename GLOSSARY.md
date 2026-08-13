@@ -1,6 +1,6 @@
 # Glossary
 
-Terms defined across the OVOS specifications, with where each is
+Terms defined across the specifications, with where each is
 defined. This document is **non-normative** — each term's
 authoritative definition lives in the spec section linked from its
 entry. The glossary exists so a reader who encounters a term in

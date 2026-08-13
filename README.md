@@ -1,4 +1,4 @@
-# OVOS Formal Specifications
+# Voice Operating System Specifications
 
 Formal, implementation-agnostic specifications for a **voice
 operating system** — a platform that provides a stable application
@@ -7,7 +7,7 @@ binary interface for voice-interactive applications.
 This repository is the **source of truth** for how components
 talk to each other and what their data shapes mean. The specs are
 written generically so they can be implemented by any tool, in any
-language, and adopted beyond their origin project.
+language, and adopted by any voice-assistant project.
 
 ### What a voice operating system is
 
@@ -29,14 +29,14 @@ The analogy to a general-purpose OS is direct:
 | Loadable kernel modules | Pipeline plugins, transformer plugins |
 | System call ABI | The `match(utterances, lang, session) → Match` contract |
 
-The consequence is that OVOS is not a chatbot, not an LLM wrapper,
-and not a monolithic product. It is a **runtime**: swap the
-scheduler (pipeline ordering), the NLU engines (pipeline plugins),
+The consequence is that this corpus does not describe a chatbot, an
+LLM wrapper, or a monolithic product. It describes a **runtime**: swap
+the scheduler (pipeline ordering), the NLU engines (pipeline plugins),
 the dialogue policy (converse / context), the output layer (TTS,
 display), or any combination — the ABI stays stable and the rest
 keeps working. A skill written against the intent stack runs on any
 conformant orchestrator, under any pipeline configuration, in any
-language OVOS supports.
+language a deployment supports.
 
 > **Draft status.** Every spec in this repository is at **Draft**
 > status (the Status column below). A Draft spec is prescriptive:
@@ -51,15 +51,14 @@ language OVOS supports.
 The specs exist to make three things possible:
 
 - **Interoperability.** Multiple implementations — engines, hosts,
-  plugins, even non-OVOS assistants — can target the same observable
+  plugins, entire assistants — can target the same observable
   contract instead of reverse-engineering each other's code.
 - **Stability.** Implementation churn no longer drifts the contract.
   Each spec is a versioned document; behaviour changes go through
   a pull request with a version bump.
-- **Adoption beyond OVOS.** The specs are written
-  implementation-agnostically so other voice-assistant projects can
-  adopt the same formats, grammar, and bus contracts without
-  buying into OVOS as a whole.
+- **Portability.** The specs are written implementation-agnostically
+  so any voice-assistant project can adopt the same formats, grammar,
+  and bus contracts, independent of any one codebase.
 
 The specs cover formats and contracts only. They do not mandate
 implementation choices — programming language, internal design,
@@ -72,9 +71,9 @@ they fix is the **observable contract**.
 
 These specifications are **prescriptive, not descriptive**. They
 define the intended architecture; they are not a transcript of how
-any current code behaves. Where an implementation — in OpenVoiceOS
-or any other project — diverges from a spec here, that divergence
-is a **bug in the implementation**, not in the specification.
+any current implementation behaves. Where an implementation diverges
+from a spec here, that divergence is a **bug in the implementation**,
+not in the specification.
 
 Anyone is free to **adopt** these specifications and free to
 **propose changes** to them via pull request (see [contributing]
@@ -86,9 +85,8 @@ below). Adoption is voluntary; conformance, once adopted, is not.
 
 ## Specifications
 
-The **Version** column carries the V0/V1/V2 compatibility class
-([VERSIONING.md](VERSIONING.md)): `1` for a formalization compatible with the
-pre-spec status quo, `2` for one that is not backwards compatible.
+The **Version** column carries the specification's compatibility class
+([VERSIONING.md](VERSIONING.md); full policy in [appendix/versioning.md](appendix/versioning.md)).
 
 ### Intent stack — what a skill defines
 
@@ -133,7 +131,7 @@ pre-spec status quo, `2` for one that is not backwards compatible.
 
 | ID | Document | Version | Status |
 |----|----------|---------|--------|
-| OVOS-OCP-1 | [OVOS Common Playback: the Virtual Media Player](ocp-1.md) | 1 | Draft |
+| OVOS-OCP-1 | [Common Playback: the Virtual Media Player](ocp-1.md) | 1 | Draft |
 
 Each spec carries its own scope statement, design rationale, and
 conformance section in its header. Open the document for the full
@@ -146,26 +144,10 @@ picture — the tables above are an index.
 - *Surveying the architecture?* [appendix/overview.md §1](appendix/overview.md) for the three-stack narrative.
 
 For background — design rationale, comparisons with other systems,
-the catalogue of known divergences from current code, and known
+implementation pointers, the catalogue of known divergences, and known
 gaps — see [APPENDIX.md](APPENDIX.md) (index) or browse by topic under [appendix/](appendix/). For term definitions, see
 [GLOSSARY.md](GLOSSARY.md). For the version history of each spec,
 see [CHANGELOG.md](CHANGELOG.md).
-
----
-
-## Reference implementation
-
-[**ovos-spec-tools**](https://github.com/OpenVoiceOS/ovos-spec-tools)
-is a reference implementation — a dependency-light Python package
-providing the sentence-template expander, the locale resource
-loader, the dialog renderer, language matching, and the
-`ovos-spec-lint` linter. Components that don't want to reimplement
-the spec machinery themselves can depend on it. It is also the
-intended home of the conformance corpus.
-
-The bus stack (OVOS-MSG-1) has no comparable ground-up reference
-implementation; `ovos-bus-client` is the closest existing match
-but predates the spec.
 
 ---
 
@@ -178,21 +160,21 @@ request, never committed directly.
 Each PR that alters normative content **MUST**:
 
 - add a corresponding entry to [CHANGELOG.md](CHANGELOG.md);
-- set the spec's `Version` field to its V0/V1/V2 compatibility class
-  (`1` for a backwards-compatible formalization, `2` once any change makes
-  the spec incompatible with the pre-spec status quo). The field is the
-  compatibility class, not a per-revision counter (VERSIONING.md).
+- set the spec's `Version` field to its compatibility class — the field is a
+  class, not a per-revision counter (VERSIONING.md).
 
 PRs that touch only the non-normative material —
 [APPENDIX.md](APPENDIX.md) and [appendix/](appendix/) files,
 [GLOSSARY.md](GLOSSARY.md), this README, examples — do not
 require a version bump.
 
+For the reference implementation, ecosystem tooling, and who this
+corpus is produced for, see
+[appendix/overview.md §1.4–1.5](appendix/overview.md).
+
 ---
 
 ## Credits
-
-Produced for [OpenVoiceOS](https://openvoiceos.org).
 
 [![NGI0 Commons Fund](./ngi.png)](https://nlnet.nl/project/OpenVoiceOS)
 

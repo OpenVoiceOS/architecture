@@ -1,15 +1,15 @@
-# OVOS Common Playback: the Virtual Media Player
+# Common Playback: the Virtual Media Player
 
 **Spec ID:** OVOS-OCP-1 · **Version:** 2 · **Status:** Draft
 
-This specification defines the **OVOS Virtual Media Player** — a single
+This specification defines the **Virtual Media Player** — a single
 logical media player, scoped to a session, that every media voice command
 targets. It is the contract by which an orchestrator turns "play jazz",
 "pause", "next", "louder", and "stop the music" into observable playback
 state, and by which that state is mirrored to and from the host operating
 system over open standards (MPRIS).
 
-OCP stands for **OVOS Common Playback**: *common* because one player
+OCP stands for **Common Playback**: *common* because one player
 arbitrates all media for a session regardless of which application,
 provider, or output device ultimately serves a track — the same way the
 intent stack gives one utterance one handler.
@@ -70,7 +70,7 @@ Two request classes target the player and **MUST** be distinguished:
   queue without acquiring new media. §4.3.
 
 A control request **MUST NOT** require the player to have been started by
-OVOS: if the player is bridged to an external OS source (§6), control
+the voice OS: if the player is bridged to an external OS source (§6), control
 requests act on that source.
 
 ---
@@ -311,8 +311,8 @@ The virtual player **MAY** publish itself on the session bus as an MPRIS
 `MediaPlayer2` (e.g. `org.mpris.MediaPlayer2.OCP`), mapping §3 state and §4
 transport onto the MPRIS `PlaybackStatus`, `LoopStatus`, `Metadata`,
 `Position`, and the `Play`/`Pause`/`Next`/`Previous`/`Stop`/`Seek` methods.
-This makes OVOS playback visible to and controllable by ordinary desktop
-media keys and applets, with no knowledge of OVOS.
+This makes the virtual player's playback visible to and controllable by
+ordinary desktop media keys and applets, with no knowledge of the voice OS.
 
 A Role A exporter **MUST** report only MPRIS-valid strings (e.g.
 `PlaybackStatus ∈ {Playing, Paused, Stopped}`, `LoopStatus ∈ {None, Track,
@@ -323,20 +323,20 @@ session D-Bus is available (headless hosts).
 
 The virtual player **MAY** discover and control *other* MPRIS players on
 the host (`org.mpris.MediaPlayer2.*`). This is the key consequence of the
-common-playback model: **media playback that OVOS did not initiate is still
-controllable by voice**, provided the source speaks an open standard. "Pause
-the music" can pause a browser tab or a desktop player; "next" can skip the
-system's current player.
+common-playback model: **media playback that the virtual player did not
+initiate is still controllable by voice**, provided the source speaks an
+open standard. "Pause the music" can pause a browser tab or a desktop
+player; "next" can skip the system's current player.
 
 Role B is **off by default** and gated by configuration, because it acts on
-software OVOS does not own. When enabled, the player **MUST** maintain an
-ignore-list (at minimum its own export name from Role A) and **SHOULD**
+software the virtual player does not own. When enabled, the player **MUST**
+maintain an ignore-list (at minimum its own export name from Role A) and **SHOULD**
 scope control to the most recently active external player to avoid
 ambiguous broadcast.
 
 ### 6.3 Arbitration
 
-When both OVOS-initiated playback and external MPRIS sources are present,
+When both player-initiated playback and external MPRIS sources are present,
 the virtual player is the single arbiter of "the current media" for control
 requests (§4.3). The arbitration policy (prefer own playback, prefer most
 recently active, etc.) is implementation-defined, but the player **MUST**

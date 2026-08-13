@@ -338,7 +338,7 @@ is the flat content map plus `__from`.
 {
   "type": "gui.value.set",
   "data": {
-    "__from": "weather.openvoiceos",
+    "__from": "weather.example",
     "current_temp": 22,
     "condition": "Sunny"
   },
@@ -360,7 +360,7 @@ Emitted by a producer to present a template. The first entry of
 {
   "type": "gui.page.show",
   "data": {
-    "__from": "weather.openvoiceos",
+    "__from": "weather.example",
     "page_names": ["SYSTEM_weather"],
     "index": 0,
     "__idle": 30
