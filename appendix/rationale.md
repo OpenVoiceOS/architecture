@@ -256,16 +256,21 @@ the normative sections.
   (`MycroftSkill.set_context` auto-prefixes with
   `alphanumeric_skill_id`; `set_cross_skill_context` fans
   out via a bus event); CONTEXT-1 names the scopes
-  explicitly and routes both through one bus surface.
-- **Why private is the default.** A skill that calls
-  `ovos.context.set` without specifying `scope` gets a
-  private entry. This optimises for the safer case: a
-  cross-skill leak from an accidentally-shared entry is
-  harder to debug than a cross-skill miss from an
-  accidentally-private entry. The Adapt `set_context`
-  pattern is effectively skill-private, which the private
-  default matches. Cross-skill coordination is a conscious
-  decision that deserves an explicit `scope: "shared"`.
+  explicitly and writes both the same way — in place on the
+  session the writer carries or replies with (§5.0).
+- **Why private is the default.** A skill that writes a
+  bare key without a `<skill_id>:` prefix into
+  `session.intent_context` gets a shared entry; the safer
+  default is the reverse of that, which is why the short-form
+  `requires_context` / `excludes_context` declarations
+  (CONTEXT-1 §6) default to `scope: "private"`. This optimises
+  for the safer case: a cross-skill leak from an
+  accidentally-shared entry is harder to debug than a
+  cross-skill miss from an accidentally-private entry. The
+  Adapt `set_context` pattern is effectively skill-private,
+  which the private default matches. Cross-skill coordination
+  is a conscious decision that deserves an explicit
+  `scope: "shared"` declaration.
 - **Prior art for the negative gate.** Three in-tree
   intent engines under `/plugins-pipeline/` —
   [jurebes](https://github.com/OpenJarbas/jurebes),

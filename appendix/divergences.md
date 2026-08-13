@@ -81,6 +81,13 @@ defined by any spec** and should be removed or replaced:
   assistant-emitted Message on the default session (SESSION-2 §2.7).
   See §5.7 for the migration mapping and §5.5 for the removed-mechanism
   record.
+- **`add_context` / `remove_context`** (Adapt-specific) and
+  **`mycroft.skill.set_cross_context`** — emitted by shipped skills
+  and `MycroftSkill` helpers but **not defined by any spec**: the
+  write path CONTEXT-1 defines is the session mutation of §5.0/§5.3
+  of that spec, not a bus topic. These are retired the same way as
+  `ovos.session.update_default` above. See §5.5 for the
+  removed-mechanism record.
 
 ### 5.3 Prescriptive shape changes
 
@@ -365,10 +372,6 @@ defined by any spec** and should be removed or replaced:
 - **`ovos.intent.list` / `ovos.intent.describe`** (INTENT-4
   §10). Introspection topics served from the orchestrator's
   passive registration index.
-- **`ovos.context.set` / `.unset` / `.clear` / `.list`**
-  (CONTEXT-1 §5). Skill-facing API replacing Adapt-specific
-  `add_context` / `remove_context` plus
-  `mycroft.skill.set_cross_context`.
 - **`ovos.transformer.{type}.list`** (TRANSFORM-1 §6).
   Per-type introspection of loaded transformers.
 - **Materialize-default-session rule** on `forward` /
@@ -376,14 +379,36 @@ defined by any spec** and should be removed or replaced:
   convenience for in-process subsystems; compatible with
   existing behaviour.
 
-#### Removed mechanisms — session push topics
+#### Removed mechanisms — out-of-band state pushes
 
 The specs define **no topic on which any participant pushes a
-session at another**. Two mechanisms in shipped code do exactly
-that, and neither has a home in the spec family. This appendix is
+session at another**. Three mechanisms in shipped code do exactly
+that, and none has a home in the spec family. This appendix is
 the one place that record lives; the specs themselves describe only
 what exists.
 
+- **`add_context` / `remove_context`** (Adapt-specific) and
+  **`mycroft.skill.set_cross_context`** — the pre-CONTEXT-1 write
+  path for intent context, a bus message distinct from the session
+  it mutated. CONTEXT-1 §5.0 does not replace these with a new
+  topic; it removes the class of mechanism. A skill writes
+  `session.intent_context` directly on the session it carries or
+  replies with (CONTEXT-1 §5.1–§5.3), and the write travels with the
+  message per SESSION-1 §4 — there is nothing left to push
+  separately. The reasoning is the same as for `session.sync`
+  below: a mutation message that is not the session itself races
+  the reply the session belongs to.
+
+  *v1 history.* CONTEXT-1 v1 (commit `387125e`) briefly normatively
+  defined a topic-based equivalent — `ovos.context.set` / `.unset` /
+  `.clear` — as the skill-facing write API. The consistency-audit
+  commit `a94382f` deleted that topic table along with the rest of
+  the message-based write path, but its CHANGELOG entry mislabelled
+  the deleted topics "nonexistent" and pointed at `ovos.session.sync`
+  as their replacement — itself an out-of-band push topic later
+  retired by #160. This §5.0 addition completes that arc: the
+  write path settled on is the session-carried one, not a
+  replacement topic of either kind.
 - **`ovos.session.sync`** — a bare session broadcast. Shipped code
   implements `handle_session_sync` and a bare-sync bootstrap on bus
   connect. The spec has no equivalent: a named session is
@@ -496,8 +521,8 @@ responder's identity in `data.skill_id` and the round identified by
 
 | Predecessor topic | Status |
 |--------------|--------|
-| `add_context` / `remove_context` | Replaced by `ovos.context.set` / `.unset` under CONTEXT-1. |
-| `mycroft.skill.set_cross_context` / `remove_cross_context` | Replaced by `ovos.context.set` / `.unset` with `scope: "shared"` under CONTEXT-1. |
+| `add_context` / `remove_context` | Removed, not replaced by a topic — CONTEXT-1 §5.0 writes `session.intent_context` in place on the carried/replied session. See §5.5 "Removed mechanisms". |
+| `mycroft.skill.set_cross_context` / `remove_cross_context` | Same removal; a shared-scope (bare-key) entry under CONTEXT-1 §3. |
 | `<skill_id>.activate` | Activity-tracking emit currently in `ovos-core`; not part of any spec here. |
 
 #### Listening-lifecycle topics (AUDIO-IN-1)
