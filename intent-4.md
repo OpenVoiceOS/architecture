@@ -394,8 +394,8 @@ travels on the §6 payload's `blacklist` field. The `excluded` role
 (§5.2) is the keyword-intent suppression mechanism (INTENT-3 §4.2).
 
 The slot-value-exclusion role of a `.blacklist` paired with an
-`.entity` (INTENT-2 §4.3) is a different role again, and this
-specification defines no wire carrier for it.
+`.entity` (INTENT-2 §4.3) is a different role again; it travels on the
+§6 payload's `slot_blacklist` field.
 
 ---
 
@@ -419,7 +419,8 @@ INTENT-1 §3).
     "i want to listen to {query}"
   ],
   "blacklist": ["trailer", "music video"],
-  "required_slots": ["query"]
+  "required_slots": ["query"],
+  "slot_blacklist": {"query": ["it", "that"]}
 }
 ```
 
@@ -430,10 +431,13 @@ Field reference:
 | `samples` | array of strings | yes | OVOS-INTENT-1 templates with named slots (INTENT-1 §3, §5). |
 | `blacklist` | array of strings | no | Slot-free phrases (INTENT-2 §4.3) whose occurrence suppresses the match (INTENT-3 §5.5). |
 | `required_slots` | array of strings | no | Slot names the engine MUST extract for a match to be valid (INTENT-3 §5.3). |
+| `slot_blacklist` | object, slot name → array of strings | no | Per-slot exclusion sets (INTENT-2 §4.3): a bound value equal, whole-value and after the engine's normal utterance normalization, to a listed string is not accepted for that slot; the slot is left unresolved rather than bound. |
 
 As in §5.2, an absent list-valued key (`blacklist`,
-`required_slots`) is equivalent to an empty list; `samples` is the
-one list a producer must supply, and it must be non-empty (§6.3).
+`required_slots`) is equivalent to an empty list; an absent
+`slot_blacklist` is equivalent to an empty object — no exclusions;
+`samples` is the one list a producer must supply, and it must be
+non-empty (§6.3).
 
 ### 6.2 Slot sets
 
