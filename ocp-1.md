@@ -219,6 +219,35 @@ concurrent seekers from compounding each other's offsets.
 Control requests are **idempotent with respect to absent media**: issuing
 `pause` with nothing playing is a no-op, not an error.
 
+#### 4.3.1 Delegated control of skill-rendered playback
+
+When the now-playing entry's backend kind is skill-internal (§3.5), the
+originating skill renders the media and the player does not own the
+output. The player remains the single addressee of §4.3 control
+requests, and **MUST** forward the verbs it cannot act on itself to the
+rendering skill as
+
+`ovos.common_play.{skill_id}.{verb}`, verb ∈ `pause`, `resume`, `next`,
+`previous`, `stop`, `seek`
+
+where `{skill_id}` is the identifier the skill registered under.
+Skills join the player's roster by emitting a registration announcement
+on `ovos.common_play.announce`; its payload is implementation-defined in
+this version except for the `can_seek` declaration below.
+Delegation messages are emitted by the
+player itself, consistent with the §4.1 reservation; a skill subscribes
+to its own family and **MUST NOT** emit under it.
+
+The `seek` delegation carries the §4.2.2 payload: one absolute
+`position` in milliseconds.
+
+Seek is the one delegated verb a rendering skill may be unable to
+honour. A skill that can reposition its own rendering declares
+`can_seek: true` in its registration announcement. Absent that
+declaration the player **MUST** treat the skill's rendering as
+non-seekable: it does not delegate `seek` to the skill and **MUST NOT**
+advertise seekability for that media to OS integrations (§6.1).
+
 ### 4.4 State reports
 
 The player **MUST** announce state transitions so that GUIs, satellites,
@@ -311,6 +340,10 @@ The virtual player **MAY** publish itself on the session bus as an MPRIS
 `MediaPlayer2` (e.g. `org.mpris.MediaPlayer2.OCP`), mapping §3 state and §4
 transport onto the MPRIS `PlaybackStatus`, `LoopStatus`, `Metadata`,
 `Position`, and the `Play`/`Pause`/`Next`/`Previous`/`Stop`/`Seek` methods.
+The MPRIS capability properties (`CanSeek`, `CanPause`, …) **MUST** report
+the player's actual ability to honour the verb for the current media — in
+particular, `CanSeek` is `false` while the rendering source cannot be
+repositioned (§4.3.1).
 This makes the virtual player's playback visible to and controllable by
 ordinary desktop media keys and applets, with no knowledge of the voice OS.
 
@@ -369,6 +402,8 @@ another session's playback.
   `ovos.common_play.player.state` / `…media.state` / `…track.state` (§3.3,
   §4.4);
 - treat control requests as no-ops when no media is present (§4.3);
+- forward control verbs for skill-rendered media to the rendering skill
+  and honour its declared seek capability (§4.3.1);
 - scope a stop to the inbound session (§7);
 - reject a `ovos.common_play.play` request whose `media` entry lacks a
   `uri` before dispatching it to any backend (§4.2.1, §4.5);
