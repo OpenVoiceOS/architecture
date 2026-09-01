@@ -271,8 +271,38 @@ assignment (§4.6 Open items).
 
 `ovos.common_play.track.state` reports the §3.4 `TrackState` value.
 
-A consumer **MUST NOT** assume it can read player state synchronously; the
-state reports are the contract.
+The state reports are the contract for transitions: a consumer that needs to
+follow the player tracks them, and **MUST NOT** poll in their place.
+
+#### 4.4.1 Status query
+
+A consumer that joins late, or that needs a one-shot picture (a UI opening,
+an external controller registering the player), **MAY** ask for the current
+snapshot with `ovos.common_play.status` (empty payload). Reading state
+mutates nothing, so the query is not subject to the session gate that
+control requests are (§5); the player answers on
+`ovos.common_play.status.response`, as a reply to the query, with one flat
+object mirroring the report axes plus a summary of now-playing:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `player_state` | number | §3.1 value |
+| `media_state` | number | §3.2 value |
+| `loop_state` | number | §3.3 loop value |
+| `shuffle` | boolean | §3.3 shuffle flag |
+| `playback_type` | number | §3.5 value of now-playing; meaningful only while media is loaded |
+| `media_type` | number | media classification of now-playing (§4.5 `media_type`); meaningful only while media is loaded |
+| `playlist_position` | number | zero-based index of now-playing in the queue |
+| `playlist_size` | number | queue length |
+| `title`, `artist`, `image` | string | now-playing summary; empty strings when nothing is loaded |
+
+Every field is present in every answer, so a consumer can rely on the shape
+rather than on key presence; with nothing loaded, `media_state` reports
+`NO_MEDIA` and a consumer **MUST NOT** interpret `playback_type` or
+`media_type`. The numeric-code caveat of §4.6 applies to `media_state`
+here as it does in the reports. An answer with `STOPPED` means an idle
+player; no answer within the consumer's timeout means no player is
+listening on the bus.
 
 ### 4.6 Open items
 
