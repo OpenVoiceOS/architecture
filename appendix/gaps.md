@@ -59,6 +59,12 @@
   format, and `ovos-localize` (§1.4) provides the
   operations layer; what remains is the *scale* of the
   translated corpus.
+- **Scheduled events were unspecified.** No spec previously
+  claimed the timed and recurring event surface a voice OS
+  needs for alarms, timers, and reminders. SCHEDULER-1 now
+  claims it; the legacy `mycroft.scheduler.*` protocol is
+  mapped to it, with divergences and an adoption roadmap, in
+  [appendix/scheduler.md](scheduler.md).
 
 ### Bridge-specific gaps (OVOS-BRIDGE-1)
 
