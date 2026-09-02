@@ -26,3 +26,4 @@ The appendix is organized into topic-specific files:
 | [appendix/gaps.md](appendix/gaps.md) | §7 | Known gaps — deferred specs, tooling, corpora |
 | [appendix/persona-flow.md](appendix/persona-flow.md) | §8 | Persona lifecycle — annotated bus sequences for summon, conversation, dismiss, and out-of-band query |
 | [appendix/versioning.md](appendix/versioning.md) | §9 | Spec versioning policy — the V0/V1/V2 compatibility classes and the 1.0 release criterion |
+| [appendix/scheduler.md](appendix/scheduler.md) | §10 | SCHEDULER-1 in OpenVoiceOS — legacy wire protocol mapping, divergences, and the adoption roadmap |

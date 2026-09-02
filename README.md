@@ -133,6 +133,12 @@ The **Version** column carries the specification's compatibility class
 |----|----------|---------|--------|
 | OVOS-OCP-1 | [Common Playback: the Virtual Media Player](ocp-1.md) | 1 | Draft |
 
+### Scheduling stack — timed and recurring events
+
+| ID | Document | Version | Status |
+|----|----------|---------|--------|
+| OVOS-SCHEDULER-1 | [Scheduled Events](scheduler-1.md) | 1 | Draft |
+
 Each spec carries its own scope statement, design rationale, and
 conformance section in its header. Open the document for the full
 picture — the tables above are an index.
