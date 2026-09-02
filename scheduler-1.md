@@ -43,9 +43,9 @@ It does **not** define:
   exceptions lists, no calendar-scoped rules);
 - how a component discovers the current time zone (owned by the
   configuration model);
-- the session model. A fired event is a new message; its relation to
-  a session is defined in §4.4 by reference to the session lifecycle
-  specification.
+- the session model. A fired event replays the context of its
+  request; its relation to a session is defined in §4.4 by reference
+  to the session lifecycle specification.
 
 ---
 
@@ -85,6 +85,7 @@ It does **not** define:
 | `misfire` | string | no | `late` (default), `skip`, or `all` (§4.3). |
 | `grace_s` | number ≥ 0 | no | Seconds after the due instant during which a fire still counts as on time. Default 60. |
 | `ephemeral` | boolean | no | Default `false`. `true` schedules are never persisted (§5.3). |
+| `context` | object | no | The context of the request that created the schedule, stored verbatim and replayed on every fire (§3.5). |
 
 Exactly one of `at`, `in`, `every`, `local` MUST be present. A record
 that has `until` or `count` together with `at` or `in` is invalid.
@@ -169,6 +170,19 @@ schedule as an `at` on that instant: a delay that spans a restart is
 therefore only as accurate as the wall clock was when the request was
 accepted.
 
+### 3.5 Request context
+
+The scheduler stores the `context` of the request message with the
+record and replays it on every fire (§4.2). It stores what arrived: it
+MUST NOT add to, remove from, or rewrite the context it was given, and
+MUST take it from the request message rather than from the request
+body, so a component can only schedule a fire into a context it
+reached the scheduler from.
+
+`context` is part of the record, so §5.1 persists it and replay
+restores it. A schedule created by a remote participant still fires
+into that participant's context after a scheduler restart.
+
 ---
 
 ## 4. Bus protocol
@@ -247,11 +261,14 @@ the replacement is atomic and the previous timing is discarded.
 ### 4.2 The fired event
 
 For each occurrence the scheduler emits one message of type `event`
-with `data` equal to the record's `data`, and a context that carries a
-nested object under the key `scheduler`:
+whose `data` is the record's `data` and whose `context` is the
+record's `context` (§3.5), unchanged but for one added key,
+`scheduler`, describing the occurrence:
 
 ```json
 "context": {
+  "source": "sat-7",
+  "session": { "session_id": "sat-7-kitchen" },
   "scheduler": {
     "id": "morning-brief",
     "owner": "briefing",
@@ -270,13 +287,28 @@ nested object under the key `scheduler`:
 | `fired` | instant | When the scheduler emitted the message. |
 | `remaining` | integer or `null` | Occurrences left after this one, when bounded. |
 
-The fired message is a **new** message originating at the scheduler.
-The scheduler MUST NOT copy the context of the request that created
-the schedule into the fired message. In particular, a session
-identifier captured at request time MUST NOT be replayed; a fired
-event belongs to the default session unless the owner binds it to a
-session by other means. An owner that needs to recover state at fire
-time puts a key of its own into `data`.
+Everything outside the `scheduler` key came from the request. The
+scheduler MUST leave every other key of the stored context exactly as
+it received it, and MUST NOT drop or rewrite one.
+
+A context carries the routing identity of the participant that asked
+for the schedule — `source` and `destination` (MSG-1 §3) and the
+session carrier (MSG-1 §4, SESSION-1 §3.1) — and that identity is what
+a layer-2 deployment routes by. Replaying it verbatim is what makes an alarm
+asked for on a remote device ring on that device rather than wherever
+the scheduler happens to run. Whether a session snapshot inside the
+context is still current is a consumer's question, answered under the
+session lifecycle: a client owns the state of its named sessions and
+resolves currency on receipt (SESSION-2 §2.5, §4.1), and the
+orchestrator applies its normal derivation to whatever it dispatches.
+
+A request that carries no context — a component scheduling for itself
+on the device — produces a fire whose context is the `scheduler` key
+alone, and the default session applies as it does to any message that
+names none.
+
+An owner that needs state of its own at fire time puts a key into
+`data`.
 
 The scheduler SHOULD fire within one second of the due instant. An
 occurrence fired later than `due + grace_s` is a misfire even while
@@ -323,9 +355,11 @@ reported missed.
 ### 4.4 Sessions and context
 
 A fired event is bus traffic like any other message. Consumers apply
-the propagation rules of SESSION-2 to it, starting from the fresh
-context described in §4.2. Nothing in a schedule extends the life of
-a session.
+the propagation rules of SESSION-2 to the context it replays (§4.2).
+Nothing in a schedule extends the life of a session: a fire names the
+session its request named, and makes no claim that the session still
+exists. A consumer that no longer holds that session treats the fire
+as it treats any other message naming an unknown session.
 
 ---
 
@@ -506,6 +540,11 @@ A component-facing library that wraps this protocol MUST:
 - expose `list` so that a component can enumerate its own schedules
   and reconcile them with its own state.
 
+A library does nothing to make a schedule fire back at the participant
+that created it: the scheduler stores the request's context and
+replays it (§3.5). A library MUST NOT put routing keys or a session
+into the request body to that end.
+
 It SHOULD derive a default `id` from stable names the caller supplies,
 never from the identity of the handler function, and MUST document
 that an omitted `id` together with a renamed handler can orphan the
@@ -535,8 +574,9 @@ by the `scheduler.id` context field.
 4. Restore all non-ephemeral schedules on start, emit
    `ovos.scheduler.ready` with `schedules`, `missed` and `clock`, and only
    then apply the misfire policy and emit the replayed traffic (§5.4).
-5. Fire with a fresh context carrying the nested `scheduler` object
-   and no replayed session (§4.2).
+5. Store the request's context verbatim, persist it with the record so
+   it survives a restart, and fire with that context plus the added
+   `scheduler` object and no other change (§3.5, §4.2, §5.1).
 6. Emit `ovos.scheduler.missed` for every schedule with missed occurrences,
    respecting the consumption rules and the 100-entry caps (§4.3).
 7. Anchor fixed-period recurrences on the schedule, measure `in`
@@ -556,8 +596,9 @@ by the `scheduler.id` context field.
 3. Treat the fired event as idempotent per (`id`, `due`) (§5.1).
 4. Treat `ovos.scheduler.missed` as the signal that an occurrence did not
    happen on time, and decide what to tell the user.
-5. Put any state it needs at fire time into `data`, never rely on the
-   request context being replayed.
+5. Put any state it needs at fire time into `data` rather than in the
+   request context, which is replayed as it was and does not track
+   the world since.
 6. Mark process-bound schedules `ephemeral`.
 
 ### Non-goals
@@ -574,6 +615,6 @@ by the `scheduler.id` context field.
   stay clear of (§2.1.1) and the `response` derivation every answer in
   §4 is built with.
 - **SESSION-2** — [Session Lifecycle and State Ownership](session-2.md):
-  how consumers absorb the fresh context a fired event carries (§4.4).
+  how consumers absorb the context a fired event replays (§4.4).
 - the appendix, for the mapping of this specification to a concrete
   implementation and the list of known divergences.

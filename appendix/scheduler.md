@@ -52,7 +52,6 @@ policy, and no `ephemeral` flag.
 | §3.2 instants with offset | wire time is a bare epoch float; a naive datetime gets the configured zone in the client, then loses it |
 | §3.4.2 wall-clock recurrence | not available; skills compute the next occurrence themselves and re-schedule after each fire |
 | §3.4.1 anchored periods | after a missed period the next occurrence is re-anchored on the current time; the phase drifts |
-| §4.2 fresh context | the request's whole `context` (including a stale `session_id`) is stored and replayed at fire time |
 | §6.2 owner scoping | `remove_event` cancels any name from any caller; the client refuses to send a cancel unless it holds a local handler, so restored schedules cannot be cancelled |
 | §7.1 clock steps | wall clock only; suspend, NTP steps and manual changes misfire or storm |
 | §7.2 unsynchronized clock | requests made while the clock reads before a fixed date are refused and dropped, not deferred |
@@ -63,6 +62,29 @@ Consequences seen in the field: alarms fire at the old offset after a
 daylight-saving change, alarms set before a restart fire twice or not
 at all, and repeating housekeeping events silently stop after a core
 restart until the skill re-registers.
+
+## Context replay and the satellite alarm
+
+Storing the request's whole `context` and replaying it at fire time is
+what the implementation already does, and §4.2 prescribes it, so this
+is one behaviour the adapter does not have to change: the legacy
+service and a conforming one agree on the context of a fire, and the
+legacy store already round-trips it.
+
+It is also what makes a hub serving satellites work. A satellite asks
+for an alarm; the layer-2 substrate stamps the satellite's identifier
+into the request's routing keys and the satellite's session into its
+session carrier; the hub's scheduler stores that context with the
+record. When the alarm comes due, the fire carries the same context,
+the router reads the routing keys, and the alarm rings on the
+satellite that asked for it. Without the replay it would ring on the
+hub.
+
+Records written before the store carried a context restore without
+one and fire with the `scheduler` key alone, which is the local
+behaviour — the alarm rings on the hub. Owners that re-create their
+schedules on start (all of them do today) replace those records with
+context-bearing ones on the first boot after the change.
 
 ## Roadmap
 
