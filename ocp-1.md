@@ -304,6 +304,29 @@ here as it does in the reports. An answer with `STOPPED` means an idle
 player; no answer within the consumer's timeout means no player is
 listening on the bus.
 
+#### 4.4.2 Candidate and favourites queries
+
+Two further read-only queries expose state the player already holds; like
+the status query they mutate nothing and sit outside the session gate,
+and each is answered as a reply to the query message.
+
+`ovos.common_play.disambiguation` (empty payload) returns the full
+candidate set the current queue was chosen from — the `disambiguation`
+list of the last playback request (§4.2.1) — as
+`{"entries": [media entry, …]}`. The player re-sorts the answer by
+descending `match_confidence` regardless of the order the request
+carried; entries without a confidence sort after scored ones, and the
+relative order of equal-confidence entries is unspecified. An empty list
+means the player has no candidates to offer, whether because no request
+has been made or because the last request carried none — the query does
+not distinguish the two. A consumer that wants a different candidate
+simply issues a normal §4.2.1 playback request with that entry; no
+switching verb exists.
+
+`ovos.common_play.likes` (empty payload) returns the entries the user has
+marked with `ovos.common_play.like`, as `{"entries": [media entry, …]}`.
+Entries in both answers use the §4.5 media-entry shape.
+
 ### 4.6 Open items
 
 This version of the spec leaves the following unresolved; implementers
