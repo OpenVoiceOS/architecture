@@ -300,6 +300,7 @@ value as a description of an older utterance.
 | `blacklisted_dialog_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `blacklisted_tts_transformers` | array of string | OVOS-TRANSFORM-1 §5.2 |
 | `site_id` | string | OVOS-BRIDGE-1 §3.3 |
+| `location` | object | §3.5 (this spec) |
 
 Every field above is OPTIONAL on the wire. A producer that sets a
 field **MUST** use the wire type listed and the value space defined
@@ -638,6 +639,61 @@ specification places no maximum on session size.
 Other specifications claiming session fields via §2.2 inherit
 this rule for the fields they claim — they need not restate it.
 
+### 3.5 `location`
+
+`location` — object — the participant's declared **geographic
+position**: where the session originates, as the client reports it.
+It is a **client-owned** field (OVOS-SESSION-2 §2.5): the client is
+the authoritative source, and a consumer treats the value it receives
+as the client's declaration, not as ground truth verified by the
+orchestrator.
+
+`location` recognizes exactly three keys. Every key is **OPTIONAL**;
+an object containing none of them is equivalent to an omitted
+`location` (§2.1). Unlisted keys are **tolerated** per §2.4 but carry
+no normative meaning under this specification.
+
+| Key | Wire type | Value |
+|-----|-----------|-------|
+| `lat` | number | latitude in decimal degrees, WGS84, range -90 to 90. |
+| `lon` | number | longitude in decimal degrees, WGS84, range -180 to 180. |
+| `tz` | string | an IANA Time Zone Database identifier, for example `"Europe/Lisbon"`. |
+
+Each of `lat`, `lon`, and `tz` is independently omissible; a
+`location` object **MAY** carry any subset. A key that is present but
+malformed (wrong type, or a `lat`/`lon` value outside its range) is
+treated per §2's malformed-field rule: the offending key is dropped as if omitted, the
+rest of `location` is consumed normally.
+
+`location` carries only these three keys. Anything else a consumer
+wants — a city name, a country, a UTC offset, daylight-saving state
+— is derived from `lat`, `lon`, and `tz` out of band, by whichever
+component needs it and however it needs it. This specification
+defines no wire representation for derived location data and no
+consumer may expect one on the session.
+
+The one key this specification gives normative consumer behaviour to
+is `tz`:
+
+> When `location.tz` is present, it is the IANA zone name a consumer
+> **MUST** use to resolve wall-clock time for that session —
+> interpreting a naive time expression ("at 7am", an alarm or
+> reminder time, a scheduled action) against the session's local
+> time. When `location.tz` is absent, the consumer resolves
+> wall-clock time against its own deployment-configured timezone
+> (§2.1's default-fields rule).
+
+No other semantics of `location` — weather lookup, geographic
+routing, region-locked content — are defined here; a specification
+that needs one of those **MAY** claim it by citing this field's shape,
+per §2.2 item 4 (no collision).
+
+*Informative:* because `location` is client-owned, a single
+orchestrator may concurrently hold sessions whose `location` differs
+from its own deployment configuration and from each other — each
+satellite or remote client reports its own. This is the expected
+shape of a multi-device deployment, not a conflict to reconcile.
+
 ## 4. Propagation
 
 The Message-level propagation rule of OVOS-MSG-1 §4.1 — that
@@ -802,3 +858,5 @@ any field not claimed under §2.2 by a normative specification.
 - **OVOS-FALLBACK-1** — owns `session.fallback_handlers`.
 - **OVOS-PERSONA-1** — owns `session.persona_id`.
 - **OVOS-BRIDGE-1** — owns `session.site_id`.
+- **OVOS-SESSION-2** — §2.5 governs `session.location` as
+  client-owned state.
