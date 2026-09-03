@@ -523,12 +523,15 @@ A skill handler that needs to add, update, or remove entries:
    computing the stored key per §3. This is the handler boundary
    of OVOS-SESSION-2 §2.6, and `session.intent_context` is a field
    this specification lets the handler write.
-3. Emits at least one Message derived via MSG-1 `forward` from the
-   dispatch Message. `forward` carries the mutated session to the
-   orchestrator and on to the originating client through any
-   layer-2 transport that routes by those fields. **A handler that
-   emits no Message does not propagate its mutation** (SESSION-2
-   §2.6): the write stays in the handler's local copy.
+3. Reaches the orchestrator at handler completion (SESSION-2 §2.6):
+   the write rides the end-of-handler event regardless of whether
+   the handler emits anything of its own, and **a handler that
+   emits no Message of its own still propagates its mutation**
+   through that event. Any Message the handler separately derives
+   via MSG-1 `forward` from the dispatch Message carries the write
+   to the orchestrator and on to the originating client through any
+   layer-2 transport that routes by those fields, as of the moment
+   that Message is derived.
 
 Where `intent_context` is merged rather than carried whole — the
 orchestrator's default-session store (OVOS-SESSION-2 §5.1) — the
