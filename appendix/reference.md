@@ -59,6 +59,7 @@ OVOS-SESSION-1 §3.4.
 | `request_lang` | SESSION-1 §3.2.5 | signal (emitter hint) | n/a (string) |
 | `detected_lang` | SESSION-1 §3.2.6 | signal (lang-detect) | n/a (string) |
 | `site_id` | SESSION-1 §3.3 | opaque group identifier | n/a (string) |
+| `location` | SESSION-1 §3.5 | preference (client-owned) | object; absent ≡ empty |
 | `pipeline` | PIPELINE-1 §5.1 | preference (ordering) | ≡ absent |
 | `blacklisted_pipelines` | PIPELINE-1 §5.2 | policy (denylist) | ≡ absent |
 | `blacklisted_skills` | PIPELINE-1 §5.3 | policy (denylist) | ≡ absent |
