@@ -284,7 +284,7 @@ persona is re-summoned.
 
 ### 7.1 When to claim
 
-A persona plugin's `match` function evaluates two pathways in
+A persona plugin's `match` function evaluates three pathways in
 order:
 
 1. **Embedded persona commands.** The plugin detects utterances
@@ -323,10 +323,10 @@ order:
      support → return `None` (let another persona stage or fallback
      handle it).
 
-3. **Persona-fallback catch-all.** A persona plugin MAY register a
-   secondary `fallback_pipeline_id` (§9) in addition to its main
-   `pipeline_id`. When the pipeline invokes the plugin under its
-   `fallback_pipeline_id`, the match rules are:
+3. **Persona-fallback catch-all.** A persona plugin MAY be referenced
+   by a second `session.pipeline` entry, its `fallback_pipeline_id`
+   (§9). When the pipeline invokes the plugin under that entry, the
+   match rules are:
    - If `session.persona_id` is absent or empty → claim the utterance
      (this is the fallback case — no persona is active and no other
      stage matched).
@@ -563,7 +563,7 @@ The plugin responds to `ovos.persona.list` with:
 ```json
 {
   "pipeline_id": "<the plugin's pipeline_id>",
-  "fallback_pipeline_id": "<optional: the plugin's fallback pipeline_id>",
+  "fallback_pipeline_id": "<the persona-fallback entry>",
   "personas": [
     {
       "persona_id": "alice",
@@ -582,7 +582,7 @@ The plugin responds to `ovos.persona.list` with:
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
 | `pipeline_id` | string | yes | The plugin's main pipeline_id. |
-| `fallback_pipeline_id` | string | no | The plugin's persona-fallback pipeline_id, if registered (§9). |
+| `fallback_pipeline_id` | string | no | The `session.pipeline` entry naming this plugin's persona-fallback position, if configured (§9). |
 | `personas` | array | yes | One object per supported persona identity. |
 | `personas[].persona_id` | string | yes | The persona identity (§3). |
 | `personas[].name` | string | no | Human-readable display name. |
@@ -628,17 +628,16 @@ preference, context — is a deployment or skill concern, not a plugin
 concern. The persona plugin only declares its tags; it does not
 participate in selection.
 
-**Persona-fallback pipeline_id.** A persona plugin MAY register a
-secondary pipeline position — its `fallback_pipeline_id` — that acts
+**Persona-fallback entry.** A persona plugin MAY be referenced by a
+second pipeline position — its `fallback_pipeline_id` — that acts
 as a catch-all when no persona is active and no skill matched. The
 plugin exposes `fallback_pipeline_id` in its `ovos.persona.list`
 response (§8.7). A deployment that enables persona-fallback includes
-this `pipeline_id` as a stage in its configured pipeline
-(OVOS-PIPELINE-1 §5.1), positioned per §10. When invoked
-under this id, the plugin applies route 3 match logic (§7.1): it
-claims utterances where `session.persona_id` is absent or matches a
-supported identity, and returns `None` when another persona's id is
-active.
+that entry in its configured pipeline (OVOS-PIPELINE-1 §5.1),
+positioned per §10. When invoked under that entry, the plugin applies
+route 3 match logic (§7.1): it claims utterances where
+`session.persona_id` is absent or matches a supported identity, and
+returns `None` when another persona's id is active.
 
 Only one persona-fallback stage SHOULD be active in a given pipeline.
 When multiple plugins expose a `fallback_pipeline_id`, pipeline order
@@ -742,10 +741,11 @@ session.pipeline: [
 ]
 ```
 
-`persona` and `persona_fallback` are different pipeline_id values
-registered by the same plugin. A deployment that does not use the
-persona-fallback feature simply omits `persona_fallback` from the
-pipeline; a deployment that uses no persona stage at all omits both.
+`persona` and `persona_fallback` are two `session.pipeline` entries
+for the same plugin, both dispatching under its single `pipeline_id`
+(§10). A deployment that does not use the persona-fallback feature
+simply omits `persona_fallback` from the pipeline; a deployment that
+uses no persona stage at all omits both.
 
 **`fallback_low` remains the final stage.** A persona-fallback stage
 claims every utterance that reaches it when no persona is active
@@ -780,9 +780,8 @@ at different pipeline positions are conformant.
 
 | Topic | Direction | Purpose |
 |-------|-----------|---------|
-| `<pipeline_id>:<intent_name>` | orchestrator → persona | Active-persona dispatch (§8.1, §7.1 routes 1–2) |
+| `<pipeline_id>:<intent_name>` | orchestrator → persona | Dispatch for all three match routes — active-persona and persona-fallback alike (§8.1, §7.1 routes 1–3) |
 | `<pipeline_id>:converse` | orchestrator → persona | Follow-up dispatch during multi-turn interactions (§8.3) |
-| `<fallback_pipeline_id>:<intent_name>` | orchestrator → persona | Persona-fallback dispatch (§7.1 route 3, §9) |
 | `ovos.persona.query` | any component → persona | Out-of-band query (§8.5) |
 | `ovos.persona.answer` | persona → any component | Query response (§8.5) |
 | `ovos.persona.list` | any component → persona | Enumerate supported persona identities (§8.7) |
@@ -807,10 +806,10 @@ treat their absence as evidence that no transition occurred. Session
 state is authoritative — a consumer that needs every transition reads
 `persona_id` from the session instead.
 
-The reply topics are named `ovos.persona.answer` and
-`ovos.persona.list.response`. The asymmetry is deliberate: `answer` is
-the persona's own vocabulary for what it produces, and renaming either
-one now would break deployed subscribers for no behavioural gain.
+The two reply topics are named differently on purpose:
+`ovos.persona.answer` is the persona's own vocabulary for what it
+produces, while `ovos.persona.list.response` names a generic
+introspection response.
 
 All dispatch topics follow the PIPELINE-1 §7 topic shape and fire the
 handler-lifecycle trio (PIPELINE-1 §8). The persona handler emits
@@ -839,7 +838,7 @@ listing the intent names it dispatches on.
 - when invoked under its **main** `pipeline_id`, after the
   summon/release check, read `session.persona_id` and return `None`
   when the field is absent or empty (§7.1 route 2);
-- when invoked under a registered `fallback_pipeline_id`, claim the
+- when invoked under its persona-fallback entry, claim the
   utterance when `session.persona_id` is absent or empty, and return
   `None` when it names an identity this plugin does not support
   (§7.1 route 3);
@@ -888,8 +887,8 @@ listing the intent names it dispatches on.
   resolves the persona identity (§7.5);
 - expose an out-of-band query interface on `ovos.persona.query` /
   `ovos.persona.answer` (§8.5);
-- register a `fallback_pipeline_id` and apply route 3 match logic when
-  invoked under it (§7.1, §9);
+- be referenced by a persona-fallback entry and apply route 3 match
+  logic when invoked under it (§7.1, §9);
 - support runtime persona management on `ovos.persona.register` /
   `ovos.persona.deregister` (§9).
 
