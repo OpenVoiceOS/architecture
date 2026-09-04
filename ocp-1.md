@@ -357,7 +357,8 @@ entry** objects:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `uri` | string | yes | Where the media lives; scheme selects the backend/extractor. |
+| `uri` | string | yes\* | Where the media lives; scheme selects the backend/extractor. \*Not required when `playlist` (below) is present and non-empty (§4.5.1). |
+| `playlist` | array of media entries | no | Marks this entry as a playlist rather than a playable track; see §4.5.1. |
 | `title` | string | no | Display title. |
 | `artist` | string | no | Display artist. |
 | `image` | string | no | Artwork, delivered per the GUI image rules (OVOS-GUI-1 §3.5). |
@@ -370,6 +371,53 @@ entry** objects:
 
 Consumers **MUST** ignore unknown media-entry fields; providers ride
 extra metadata on entries freely.
+
+#### 4.5.1 Playlist-as-entry
+
+A media entry **MAY** itself be a playlist: it carries a `playlist`
+field, an array of media entries, in place of a playable `uri`. The
+`playlist` field's presence with at least one member is the
+discriminator — a consumer distinguishes a playlist entry from a
+regular entry by checking for a non-empty `playlist` array, not by
+`media_type` or any other field. A playlist entry's own `uri`, when
+present, is not a playable stream: it is an opaque handle the
+producing component uses to expand the playlist lazily, and only that
+component is expected to resolve it.
+
+Playlist entries **MAY** nest — a `playlist` member is itself free to
+carry a `playlist` field. A consumer that does not understand nesting
+**MUST** treat a playlist entry by flattening it depth-first into its
+leaves (§4.5.2) before acting on it. Players **MAY** refuse entries
+nested deeper than 8 levels; producers **MUST NOT** construct
+playlists that reference themselves, directly or through a descendant
+(cyclic references are invalid regardless of nesting depth).
+
+#### 4.5.2 Flat projection
+
+A player's internal organization of the queue is
+implementation-defined; a tree of nested playlist entries is a legal
+internal representation. The queue-state surfaces — the §4.4.1 status
+query's `playlist_position` and `playlist_size`, and any queue view
+derived from them — report the flat, depth-first traversal of the
+queue's leaves in current playback order, never the nested structure;
+`playlist_position` indexes into that traversal. Shuffle policy **MAY**
+reorder the traversal between one report and the next, so a consumer
+**MUST NOT** assume a leaf's position is stable across state reports
+once shuffle is active.
+
+The §4.4.2 disambiguation response is not a queue-state surface: it
+carries candidate entries in their §4.5 shape, nesting included, since
+a candidate that is itself an album or playlist is exactly the case
+§4.5.1 exists to represent. A consumer that does not understand
+nesting applies the §4.5.1 flattening obligation itself before
+presenting or selecting among the candidates.
+
+Repeat-track is a property of the player's cursor, not of any
+playlist node: with it active, the player re-plays the current leaf
+in place of advancing, and an explicit `next`/`previous` still moves
+by leaf as usual (§4.3). A node cycling its own children on
+exhaustion is a distinct, node-scoped behavior and does not by itself
+imply cursor-level repeat.
 
 ---
 
