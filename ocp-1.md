@@ -223,6 +223,8 @@ than an offset.
 | `ovos.common_play.next` | advance the queue |
 | `ovos.common_play.previous` | retreat the queue |
 | `ovos.common_play.seek` | move the position within now-playing |
+| `ovos.common_play.shuffle.set` / `.unset` / `.toggle` | set, clear, or flip the §3.3 shuffle mode |
+| `ovos.common_play.repeat.set` / `.unset` / `.toggle` | set, clear, or flip the §3.3 loop mode |
 
 Control requests are **idempotent with respect to absent media**: issuing
 `pause` with nothing playing is a no-op, not an error.
@@ -330,6 +332,12 @@ has been made or because the last request carried none — the query does
 not distinguish the two. A consumer that wants a different candidate
 simply issues a normal §4.2.1 playback request with that entry; no
 switching verb exists.
+
+`ovos.common_play.like` and `ovos.common_play.unlike` are control requests
+(§4.3) carrying `{"uri": string}`; a player **MUST** add the named entry to,
+or remove it from, the reserved "liked songs" collection (§4.4.3). When
+`uri` is absent, the request acts on now-playing. Both are scoped by the
+session gate (§5) like the other control requests.
 
 `ovos.common_play.likes` (empty payload) returns the entries the user has
 marked with `ovos.common_play.like`, as `{"entries": [media entry, …]}`.
