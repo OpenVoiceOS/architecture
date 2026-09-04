@@ -269,10 +269,10 @@ after one hop and the reply would never reach the user.
 
 The pong is addressed to `sat-7` rather than to the converse plugin,
 and the plugin still receives it — delivery is by **topic
-subscription**, and `destination` is informational (§3.4). Stopping
-an internal poll from being relayed out to the satellite is a bridge
-concern — the bridge does not relay internal-coordination topics —
-not something the routing keys arbitrate.
+subscription**, and `destination` is informational (§3.4). Whether an
+internal poll reaches the satellite at all is a bridge concern
+governed by **OVOS-BRIDGE-1 §3.2**, not something the routing keys
+arbitrate.
 
 ### 3.2 `source`
 
@@ -294,10 +294,10 @@ exchange.
 
 `destination` — string — opaque identifier of the intended
 consumer. Absence means **broadcast** — every subscriber to the
-topic is an intended consumer. A Message addresses **one**
-consumer or all of them; there is no multi-address form. A producer
-that wants several specific consumers emits one Message per
-consumer, or broadcasts.
+topic is an intended consumer. A Message addresses one consumer or
+all of them; there is no multi-address form. A producer that wants
+several specific consumers emits one Message per consumer, or
+broadcasts.
 
 A producer **MUST NOT** emit an empty string as `destination`; no
 identifier is ever the empty string. A consumer that receives one
@@ -381,7 +381,11 @@ and the derived Message then carries the mutated session forward.
 Fields the component does not own **MUST** be carried through
 unchanged, whether or not the component understands them. Outside
 those boundaries, propagation preserves the existing session
-unchanged (§5.1).
+unchanged, subject to one further exception that applies
+alike across `forward`, `reply`, and `response`: the default-session
+store exception of OVOS-SESSION-2 §5.1, under which the carrier is
+re-stamped from that store on `session_id == "default"` rather than
+carried through verbatim.
 
 ### 4.2 The layer-2 picture
 
@@ -429,7 +433,7 @@ routing and session field. The forwarder does **not** become the new
 If the source Message has no `session`, the derivation **MAY**
 materialize a default session on the result per OVOS-SESSION-1. A
 `session` already present is carried unchanged, subject to the
-owned-field exception of §4.1.
+exceptions of §4.1.
 
 ### 5.2 `reply(T', D')`
 
@@ -604,10 +608,9 @@ A producer **SHOULD**:
   `context` keys it does not understand, without rejecting the
   Message over a key it does not own (§2.3);
 - treat the values of `source` and `destination` as opaque, comparing
-  them by string equality only, per member where `destination` is an
-  array (§3.4); the contents of `session` are opaque to this
-  specification — consumers consult OVOS-SESSION-1 for the field set
-  and consumption semantics;
+  them by string equality only (§3.3); the contents of `session` are
+  opaque to this specification — consumers consult OVOS-SESSION-1 for
+  the field set and consumption semantics;
 - not require any of `source`, `destination`, or `session` to be
   present — they are all optional, and a Message without them is
   well-formed.

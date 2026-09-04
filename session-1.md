@@ -35,8 +35,8 @@ This specification defines:
 - the **closed set of fields claimed in this version** (§3), each
   cited to its owner specification;
 - the **propagation behaviour** of fields across the Message
-  derivations of OVOS-MSG-1 §5.1–§5.3, and the strengthening of
-  OVOS-MSG-1 §4.1 that this specification applies to them (§4);
+  derivations of OVOS-MSG-1 §5.1–§5.3, and the narrowing of default
+  materialization this specification applies to them (§4);
 - **serialization** (§5) and **conformance** (§6).
 
 It does **not** define:
@@ -100,7 +100,11 @@ defer by omitting the field; this specification provides no other
 deferral surface (no `null`, no sentinel value, no separate
 "unset" Message). An omitted field is interpreted identically at
 every consumer that sees it: the consumer **MUST** fill the field
-with its own deployment default at the point of consumption.
+with its own deployment default at the point of consumption. The
+orchestrator's default-session store is the one carve-out: an
+omitted field on a Message written into that store leaves the stored
+value unchanged rather than being filled from a deployment default,
+per **OVOS-SESSION-2 §5.1**, which owns that write path.
 
 This applies uniformly across the whole field set:
 
@@ -623,7 +627,7 @@ canonical cases:
    rather than emit the reserved string.
 2. **A per-component override field whose value matches the
    deployment default.** Producers **SHOULD NOT** populate
-   `pipeline`, `intent_context`, the six `*_transformers` lists,
+   `pipeline`, the six `*_transformers` lists,
    `blacklisted_skills`, `blacklisted_intents`,
    `blacklisted_pipelines`, or `site_id` with a value the consumer
    would compute as the deployment default anyway. Set them only
@@ -705,18 +709,21 @@ shape of a multi-device deployment, not a conflict to reconcile.
 The Message-level propagation rule of OVOS-MSG-1 §4.1 — that
 `session` rides unchanged across the `forward`, `reply`, and
 `response` derivations of OVOS-MSG-1 §5.1–§5.3 — applies to every
-field of §3, with one deliberate **strengthening**.
+field of §3.
 
-OVOS-MSG-1 §4.1 states propagation as a **SHOULD** for consumers, so
-that a producer with no session awareness is still conformant at the
-envelope level. Within the field set §3 claims, this specification
-raises it to a **MUST**: a consumer that derives a Message from one
-carrying a `session` **MUST** propagate that `session` unchanged. The
-registry only works if a field survives every hop between the
-component that sets it and the component that reads it, and a
-consumer that silently drops the carrier breaks fields it has never
-heard of. Nothing else about OVOS-MSG-1 §4.1 is modified; a producer
-originating a Message is still free to emit no `session` at all.
+OVOS-MSG-1 §4.1 states propagation as a **MUST** for the component
+that derives the Message (a producer obligation under OVOS-MSG-1
+§7), and that obligation carries unchanged into the field set §3
+claims: a component that derives a Message from one carrying a
+`session` **MUST** propagate that `session` unchanged. The registry
+only works if a field survives every hop between the component that
+sets it and the component that reads it, and a component that
+silently drops the carrier while deriving a Message breaks fields it
+has never heard of. A producer originating a Message is still free
+to emit no `session` at all. On the default
+session the orchestrator re-stamps the carrier from its
+default-session store instead of carrying it through verbatim
+(**OVOS-SESSION-2 §5.1**).
 
 For the avoidance of doubt:
 
@@ -782,10 +789,9 @@ envelope itself fails to parse.
 - when setting any field listed in §3, use the wire type fixed by §3
   and the value space fixed by the owner specification;
 - propagate `session` unchanged across the Message derivations of
-  OVOS-MSG-1 §5.1–§5.3, per §4 of this specification (which raises
-  OVOS-MSG-1 §4.1's SHOULD to a MUST), except when acting as
-  the owner of a session field and mutating it at a permitted
-  boundary (OVOS-SESSION-2 §2.6);
+  OVOS-MSG-1 §5.1–§5.3, per §4 of this specification, except when
+  acting as the owner of a session field and mutating it at a
+  permitted boundary (OVOS-SESSION-2 §2.6);
 - not strip session fields it does not understand (§2.4, §4).
 
 A producer **MUST NOT**:
@@ -797,7 +803,7 @@ A producer **MUST NOT**:
 A producer **SHOULD NOT**:
 
 - populate a per-component override field (§3 — `pipeline`,
-  `intent_context`, the six `*_transformers`, `blacklisted_skills`,
+  the six `*_transformers`, `blacklisted_skills`,
   `blacklisted_intents`, `blacklisted_pipelines`, `site_id`) with a
   value that matches the deployment default merely as a form of
   explicit confirmation. Omit the field and let the orchestrator's
