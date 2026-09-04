@@ -16,8 +16,8 @@ Dependencies: OVOS-MSG-1 (envelope and derivations), OVOS-PIPELINE-1
 OVOS-SESSION-2 (mutation boundaries), OVOS-CONVERSE-1 (`response_mode`
 and `converse_handlers` field definitions).
 
-The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**, **MAY**
-are used as in RFC 2119.
+The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
+**RECOMMENDED**, **MAY** are used as in RFC 2119.
 
 ---
 
@@ -204,9 +204,14 @@ ping round when:
 
 - `can_handle` is absent, or is present but not a JSON boolean —
   a truthy non-boolean value MUST NOT be coerced to `true`;
-- `skill_id` is absent, or does not match the `skill_id` of the
-  handler that emitted the Message as identified by the MSG-1
-  derivation metadata.
+- `skill_id` is absent, or names a skill_id outside the
+  `active_handlers` pool this ping round queried (§4.1 step 3).
+  Identity is the payload `skill_id`, bound to the ping round by the
+  inbound `session_id` the ping carries, and verified against that
+  pool — never against a `skill_id` inferred from MSG-1 derivation
+  metadata, which carries no identity for the responding component
+  (OVOS-MSG-1 §5.2). OVOS-COMMON-QUERY-1 §7.1.1 binds a claim
+  response's payload identity to its own contest the same way.
 
 When a handler emits more than one pong in a ping round, the first
 valid pong wins and later pongs from the same `skill_id` MUST be
@@ -235,9 +240,11 @@ lifecycle event.
 
 ### 4.4 Self-pruning of `active_handlers`
 
-A handler that cannot be stopped SHOULD remove itself from
-`session.active_handlers` by emitting any session-carrying Message
-with the updated list, so that future ping rounds bypass it.
+A handler that cannot be stopped SHOULD remove its own entry from
+`session.active_handlers` by mutating the session it holds during its
+dispatch, before it completes — the handler boundary (OVOS-SESSION-2
+§2.6). The orchestrator syncs that mutation into the round's working
+session at handler completion, so that future ping rounds bypass it.
 
 ---
 
@@ -429,7 +436,8 @@ handler-lifecycle trio. No other topic in this table does.
 
 - subscribe to `ovos.stop.ping` and respond with a `reply`-derived
   `ovos.stop.pong` carrying `can_handle` for the inbound `session_id` (§4.2);
-- remove itself from `session.active_handlers` when it cannot be stopped (§4.4).
+- remove its own entry from `session.active_handlers`, via an
+  in-place handler-boundary mutation, when it cannot be stopped (§4.4).
 
 ### Non-skill component performing user-visible activity — MUST:
 
