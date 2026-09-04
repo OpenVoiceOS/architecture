@@ -1,6 +1,6 @@
 [← APPENDIX.md](../APPENDIX.md) · Non-normative
 
-## 10. SCHEDULER-1 in OpenVoiceOS
+## 10. OVOS-SCHEDULER-1 in OpenVoiceOS
 
 This page maps the scheduled-events specification to the OpenVoiceOS
 implementation, lists where the implementation diverges, and gives the
@@ -40,7 +40,7 @@ namespace, and it is applied by the client, not checked by the
 service), no `local` recurrence, no `until`/`count`, no misfire
 policy, and no `ephemeral` flag.
 
-## Divergences from SCHEDULER-1
+## Divergences from OVOS-SCHEDULER-1
 
 | spec clause | implementation today |
 |---|---|
@@ -116,7 +116,7 @@ and what needs the new protocol.
 Every item is a bug fix under the current contract and ships as an
 alpha of the repository it touches.
 
-### Stage 2 — implement SCHEDULER-1
+### Stage 2 — implement OVOS-SCHEDULER-1
 
 1. A new scheduler service implementing §3–§7: RFC 3339 instants,
    `every` and `local` recurrences, write-ahead store in the state

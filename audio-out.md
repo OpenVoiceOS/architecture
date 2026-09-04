@@ -140,7 +140,7 @@ Language is taken from `data.lang` in the received Message
 session (OVOS-SESSION-1 §3.2).
 
 When synthesis fails for a segment — the whole utterance, or one
-sentence-segmented chunk of it (§4.9) — the service **SHOULD**
+sentence-segmented chunk of it (appendix §4.9) — the service **SHOULD**
 attempt a fallback for that segment. Selection and fallback logic
 are deployment concerns. Beyond that, this spec fixes no bus
 contract for partial-utterance failure: whether a failed segment is

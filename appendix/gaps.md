@@ -61,7 +61,7 @@
   translated corpus.
 - **Scheduled events were unspecified.** No spec previously
   claimed the timed and recurring event surface a voice OS
-  needs for alarms, timers, and reminders. SCHEDULER-1 now
+  needs for alarms, timers, and reminders. OVOS-SCHEDULER-1 now
   claims it; the legacy `mycroft.scheduler.*` protocol is
   mapped to it, with divergences and an adoption roadmap, in
   [appendix/scheduler.md](scheduler.md).

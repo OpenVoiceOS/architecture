@@ -1,6 +1,6 @@
 # Scheduled Events Specification
 
-**Spec ID:** SCHEDULER-1 · **Version:** 1 · **Status:** Draft
+**Spec ID:** OVOS-SCHEDULER-1 · **Version:** 1 · **Status:** Draft
 
 This document defines the **scheduler**: the service that fires a
 named event on the message bus at a wall-clock instant, once or on a
