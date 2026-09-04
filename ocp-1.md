@@ -198,12 +198,20 @@ implementation-defined in this version.
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `position` | number (ms) | yes | Absolute position within now-playing to move to. |
+| `seekValue` | number (ms) | no | Absolute position within now-playing to move to. Takes precedence when both fields are present. |
+| `seconds` | signed number (s) | no | Offset from the current position; negative seeks backward. |
 
-Seek is **absolute**: relative "skip forward N" commands are resolved
-to an absolute position by the requester (which can read the state
-reports of §4.4), not by the player — one addressing mode keeps
-concurrent seekers from compounding each other's offsets.
+Exactly one of `seekValue`, `seconds` **SHOULD** be present. A relative
+`seconds` offset is resolved by the player against its own live
+position at the moment the request is handled, atomically with respect
+to that position: concurrent seekers cannot interleave a stale read
+with a write, because no requester ever reads the position before
+computing the offset. A requester that instead computed an absolute
+target from a previously read state report (§4.4) would not have that
+guarantee — a second request could land between the read and the
+write. `seekValue` exists for requesters that own a position UI, such
+as a seekbar, and therefore need to address an absolute point rather
+than an offset.
 
 ### 4.3 Control requests
 
@@ -238,8 +246,8 @@ Delegation messages are emitted by the
 player itself, consistent with the §4.1 reservation; a skill subscribes
 to its own family and **MUST NOT** emit under it.
 
-The `seek` delegation carries the §4.2.2 payload: one absolute
-`position` in milliseconds.
+The `seek` delegation carries the §4.2.2 payload: `seekValue` and/or
+`seconds`.
 
 Seek is the one delegated verb a rendering skill may be unable to
 honour. A skill that can reposition its own rendering declares
