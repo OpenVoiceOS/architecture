@@ -6,8 +6,8 @@ This specification defines the **fallback pipeline plugin** — a
 pipeline plugin that handles utterances no earlier stage claimed.
 It maintains a registry of fallback skills, constructs an ordered
 handler pool from that registry and the session's preferences,
-queries skills in pool order to find a willing handler, and
-dispatches to the first one that claims the utterance.
+asks the whole pool at once whether any skill is willing, and
+dispatches to the claimant that ranks highest in pool order.
 
 It builds on four companion specifications:
 
@@ -41,7 +41,7 @@ This specification defines:
   denylists for access control;
 - **pool construction** (§5) — how the ordered handler pool is
   derived from registration, session preference, and policy;
-- **the match contract** (§6) — the sequential per-skill query,
+- **the match contract** (§6) — the broadcast willingness contest,
   selection algorithm, and Match shape;
 - **the dispatch and handler contract** (§7) — what the selected
   skill receives;
@@ -73,9 +73,10 @@ that:
   fallback handlers, each with a default ordering priority (§3);
 - at each match call, constructs an ordered handler pool from the
   registry, session preference, and policy (§5);
-- queries pool members in order until a willing skill is found (§6);
-- returns a `Match` delegating to that skill, or `None` if the
-  pool is exhausted (§6).
+- polls the whole pool with one broadcast ping and takes the
+  willing skill that ranks highest in pool order (§6);
+- returns a `Match` delegating to that skill, or `None` if no
+  pool member is willing (§6).
 
 The fallback plugin does not handle utterances itself.
 
@@ -268,10 +269,11 @@ ping for the round:
 `ovos.fallback.ping`
 
 derived from the inbound utterance Message via `reply`
-(**OVOS-MSG-1 §5.2**). Every registered fallback skill evaluates
-**in parallel** and answers with `reply` of the ping — claim or
-explicit decline. One Message asks the whole pool; the round's
-latency is one collection window, not a sum of per-skill waits.
+(**OVOS-MSG-1 §5.2**). Every fallback skill the ping concerns
+evaluates **in parallel** and answers with `reply` of the ping —
+claim or explicit decline (see **Who answers** below). One Message
+asks the whole pool; the round's latency is one collection window,
+not a sum of per-skill waits.
 
 Payload:
 
@@ -285,6 +287,19 @@ whether it can produce a meaningful response. This is the point
 at which the fallback skill parses the utterance — it may query a
 knowledge base, run a classifier, call an LLM, or apply any other
 internal logic. The reply carries only the decision.
+
+**Who answers.** Neither the ping's topic nor its payload names the
+round's pool: pool membership is derived plugin-side from the
+registry, the stage's priority range and the denylists (§5), and no
+session field carries the result. A skill therefore decides by the
+one test available to it — its own registration against the ping's
+`context.session` — and a skill whose registration is scoped to a
+different `session_id`, or whose `skill_id` appears in
+`session.blacklisted_skills`, **SHOULD NOT** pong. Every other
+registered fallback skill SHOULD answer, in parallel. Selection does
+not depend on that restraint being honoured: the plugin **MUST**
+ignore a pong whose `skill_id` does not name a member of the
+effective pool.
 
 Each skill replies with:
 
@@ -355,9 +370,8 @@ deployment running one **MUST** raise that stage's ceiling above the
 stage's real evaluation latency. Left at the default, such a skill
 is silently a non-responder.
 
-**Stage collection ceiling.** A sequential poll costs up to
-`pool_size × ceiling`; the broadcast form costs one window whatever
-the pool size. Either way that total is the stage's *collection
+**Stage collection ceiling.** The broadcast form costs one window
+whatever the pool size. That window is the stage's *collection
 ceiling*, and a deployment **MUST** set the OVOS-PIPELINE-1 §4.4
 match bound for this stage at or above it. A shorter bound kills the
 stage mid-poll on every utterance, silently.
@@ -539,7 +553,8 @@ identically regardless of how many stages are present.
 - treat a skill silent at window close, or a malformed pong, as
   `can_handle: false` (§6.1);
 - discard a pong whose `context.utterance_id` or session does not
-  match the round (§6.1);
+  match the round, or whose `skill_id` does not name a member of
+  the effective pool (§6.1);
 - select the highest-ranked claimant in pool order (§6.2);
 - return a `Match` with `intent_name: "fallback"` targeting the
   selected skill (§6.3);
@@ -593,6 +608,6 @@ identically regardless of how many stages are present.
 - **OVOS-SESSION-1** — session field registry and the omission
   rule.
 - **OVOS-INTENT-4** — session-scoped registration model (§11).
-- **OVOS-CONVERSE-1** — the dotted-addressed per-skill query
-  pattern this specification follows.
+- **OVOS-CONVERSE-1** — the broadcast poll over static topics
+  this specification follows (§4.2 there).
 - **OVOS-PERSONA-1** — the persona stage that precedes fallback.

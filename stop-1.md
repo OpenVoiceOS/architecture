@@ -43,7 +43,7 @@ interaction teardown (a skill-side or orchestrator-side concern).
 
 Skills and other pipelines **MUST NOT** register `stop` under
 OVOS-INTENT-4. A registration naming this intent_name is malformed per
-OVOS-INTENT-4 §5.3 — consumers log at WARN and do not index.
+OVOS-INTENT-4 §5.3/§6.3 — consumers log at WARN and do not index.
 
 The intent_name `global_stop` is **not** reserved. The stop plugin
 uses it for its own self-dispatch (`<stop_plugin_id>:global_stop`, §5),
@@ -339,8 +339,11 @@ The stamping push (PIPELINE-1 §7.1) is suppressed for the reserved
 intent_name `stop`, so the removal in `updated_session` is the final
 state. It is not suppressed for `global_stop`: the committed state
 after a `global_stop` dispatch is `active_handlers ==
-[<the stop plugin's own entry>]`, not `[]` (§5.2). `converse_handlers`
-carries no such stamp and stays empty.
+[<the stop plugin's own entry>]`, not `[]` (§5.2). The same push
+stamps the stop plugin onto `converse_handlers`, whose stamping rule
+is uniform for every dispatch (**OVOS-CONVERSE-1 §3.1** owns that
+field); the emptying required here is therefore the state the stop
+plugin commits, not the state that survives the dispatch.
 
 ### 6.3 Denylists
 

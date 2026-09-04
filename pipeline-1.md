@@ -1042,9 +1042,10 @@ The dispatch Message's `context` (OVOS-MSG-1 §4):
   per row.
 
   **Recency ordering (normative, defined once here).**
-  `session.active_handlers` is a recency record. Consumers that need
-  "the most recently activated handler" — OVOS-STOP-1 §4.1 selecting
-  a stop target, OVOS-CONVERSE-1 selecting a converse claimant, or
+  `session.active_handlers` is a recency record, and so is any list a
+  specification defines with the same `{skill_id, activated_at}` shape
+  (OVOS-CONVERSE-1 §2.1). Consumers that need "the most recently
+  activated handler" — OVOS-STOP-1 §4.1 selecting a stop target, or
   any other — **MUST** resolve recency as follows:
 
   1. `activated_at` is **authoritative**: the entry with the highest
@@ -1098,7 +1099,7 @@ pipeline plugin role. A reserved intent_name is one that:
 - skills and pipelines **MUST NOT** register under OVOS-INTENT-4;
   a registration naming a reserved intent_name is malformed and
   every consumer (including the orchestrator's manifest) treats it
-  under the OVOS-INTENT-4 §5.3 malformed-payload rules — log at
+  under the OVOS-INTENT-4 §5.3/§6.3 malformed-payload rules — log at
   WARN, do not index;
 - a pipeline plugin **MAY** emit as the `intent_name` of a
   returned `Match` to signal "this match was produced by the
