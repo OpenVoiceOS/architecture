@@ -270,22 +270,33 @@ happen only at these boundaries:
   PIPELINE-1 §4.2's and is not restated here;
 - **handler boundaries** — a dispatched handler (skill or
   plugin-bundled handler per PIPELINE-1 §7.0) MAY mutate
-  session in-place, within the limit that it writes only fields
-  it owns. OVOS-MSG-1 §4.1 otherwise forbids a producer to
-  modify a session present on the source Message; the
-  owned-field allowance in that section is what makes this
-  boundary conformant, and a handler write to a field it does
-  not own remains forbidden. The handler's emissions via
-  `forward` / `reply` / `response` (OVOS-MSG-1 §5) carry the
-  mutated session forward. **A handler that emits no Message has no
-  bus-visible way to propagate its session mutations.** The
-  handler-lifecycle trio `.complete` (PIPELINE-1 §8) is
-  orchestrator-emitted from the dispatch context the
-  orchestrator holds — it does not reflect handler-side
-  in-place changes, particularly for handlers running
-  out-of-process. A handler that mutates session and needs
-  that state visible in terminal events MUST emit at least
-  one Message (typically `ovos.utterance.speak`).
+  session in-place at any point before it completes, within the
+  limit that it writes only fields it owns. OVOS-MSG-1 §4.1
+  otherwise forbids a producer to modify a session present on
+  the source Message; the owned-field allowance in that section
+  is what makes this boundary conformant, and a handler write
+  to a field it does not own remains forbidden. The owned set
+  includes `session.intent_context`, which OVOS-CONTEXT-1 §5.3
+  lets the handler write. The session a handler receives on its dispatch
+  Message is the round's single working session. At handler
+  completion the orchestrator syncs the round's working session
+  with the handler's mutations; for `session_id == "default"` it
+  also merges them into the default-session store the same way
+  it merges an inbound Message at intake (§5.1), including the
+  entry-level merge OVOS-CONTEXT-1 §5.3 defines for
+  `session.intent_context`. The synced map is authoritative for
+  the round's decay: an entry the pre-match prune removed is
+  removed from the store by this sync, not preserved by the
+  absent-key rule. The handler-lifecycle `.complete` /
+  `.error` event (PIPELINE-1 §8) — the event the orchestrator
+  emits when the dispatched handler finishes — carries the
+  session as synced at completion, and every event of the round
+  emitted afterward, including the orchestrator's canonical
+  end-of-utterance event `ovos.utterance.handled` (PIPELINE-1
+  §9.5), derives from that synced session in turn. The handler's
+  own `forward` / `reply` / `response` emissions (OVOS-MSG-1 §5)
+  are unaffected by this and continue to carry the session as of
+  the moment each is derived.
 
 **Session mutation discipline.** A handler SHOULD NOT mutate
 session fields unless the mutation is necessary for the
@@ -303,11 +314,14 @@ override it.
 Bus events emitted *outside* these boundaries — the
 asynchronous, normal-event-handler kind that any component may
 emit at any time — carry a session but do not update anyone's
-working state. The orchestrator **MUST NOT** merge the session
-of such a Message into the working session snapshot for the
-utterance in progress, and a component **MUST NOT** make its own
-behaviour depend on such a merge having happened. The bus is
-asynchronous and not part of the utterance lifecycle (§2.1).
+working state. The handler-lifecycle trio is not one of these:
+it is emitted at a boundary this section fixes, not incidentally,
+so it always carries the round's working session. The
+orchestrator **MUST NOT** merge the session of such a Message
+into the working session snapshot for the utterance in progress,
+and a component **MUST NOT** make its own behaviour depend on
+such a merge having happened. The bus is asynchronous and not
+part of the utterance lifecycle (§2.1).
 
 Such a Message **MAY** still affect subsequent utterances on the
 session: the client receives it and merges per §3, and the
@@ -508,9 +522,9 @@ orchestrator operation:
   the store, so handlers and components see the current
   default state on the dispatch they receive;
 - session mutations during the lifecycle (transformer
-  boundaries §2.6, `Match.updated_session` per PIPELINE-1
-  §4.2, in-handler mutations) propagate into the store
-  through the standard derivation chain.
+  boundaries §2.6, `Match.updated_session` per PIPELINE-1 §4.2,
+  in-handler mutations, synced at handler completion per §2.6)
+  propagate into the store.
 
 **Merge semantics for inbound default-session Messages.** An
 **omitted inbound field leaves the stored field unchanged** —

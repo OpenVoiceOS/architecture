@@ -290,7 +290,12 @@ snapshot it wants downstream consumers to see, and the
 orchestrator MUST use that snapshot for the dispatch and every
 subsequent stage of the utterance lifecycle (§6). When
 `updated_session` is absent, the inbound utterance's session is
-carried unchanged.
+carried unchanged. An `updated_session` names the round's own
+session: its `session_id` equals the session id the orchestrator
+retrieved at intake (§6.1). An `updated_session` carrying a
+different `session_id` is a plugin fault — the orchestrator MUST
+ignore it, log the fault, and continue the round on its own
+working session.
 
 The `updated_session` pathway is **only effective for a claiming
 match**. A plugin that returns `null` (declines) does not return
@@ -731,7 +736,7 @@ ovos.utterance.handle                    ← entry (§9.1)
    │
    │     ovos.intent.matched                  (§9.2)
    │     dispatch on <match.skill_id>:<match.intent_name>  (§7)
-   │     (handler runs; emits lifecycle trio §8)
+   │     (handler runs; orchestrator emits lifecycle trio §8)
    │     ovos.utterance.speak (×0..N)          (§9.6)
    │     ovos.utterance.handled               (§9.5)
    │     break
@@ -1176,9 +1181,12 @@ The three broadcast notification topics are the
 | `ovos.intent.handler.error` | The handler raised. |
 
 Each trio Message is produced via OVOS-MSG-1 §5.1 `forward` from the
-originating dispatch Message — `context` (including `session`) is
-preserved unchanged. The trio is broadcast so any observer (loggers,
-transcript viewers, analytics, fallback chains) can subscribe.
+originating dispatch Message; `source` and `destination` are
+preserved unchanged. `start` carries the dispatch session; `complete`
+and `error` carry the session as synced at handler completion
+(OVOS-SESSION-2 §2.6). The trio is broadcast so any observer
+(loggers, transcript viewers, analytics, fallback chains) can
+subscribe.
 
 ### 8.1 Order and obligations
 
