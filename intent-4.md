@@ -945,7 +945,13 @@ original registration (§10). A party holding intents disabled
 - subscribe to any subset of the registration topics and consume
   what fits its matching strategy — a plugin that consumes none
   and matches by internal rules (e.g. an LLM persona) is also
-  conformant.
+  conformant; a plugin that indexes registrations **MUST** also
+  honour the §8 retraction and enable/disable topics for what it
+  indexed — `ovos.intent.deregister`, `ovos.entity.deregister`,
+  `ovos.skill.deregister`, and `ovos.intent.enable` /
+  `ovos.intent.disable` — so a skill's registrations cannot outlive
+  its unload or drift out of step with its declared enabled state
+  in that plugin's index.
 
 A plugin **MUST NOT** index a malformed registration (§§5.3, 6.3,
 7.2 — including registrations whose `intent_name` is reserved,
