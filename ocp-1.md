@@ -273,7 +273,7 @@ All three share one payload shape:
 |-------|------|----------|---------|
 | `state` | number | yes | The numeric code of the new state on the topic's axis (§3.1 `PlayerState`, §3.2 `MediaState`, or the track axis below). |
 
-Currently, numeric codes are assigned only for `PlayerState` (0/1/2);
+Numeric codes are assigned only for `PlayerState` (0/1/2);
 `MediaState` and track-state values remain symbolic pending future
 assignment (§4.6 Open items).
 
@@ -335,21 +335,6 @@ switching verb exists.
 marked with `ovos.common_play.like`, as `{"entries": [media entry, …]}`.
 Entries in both answers use the §4.5 media-entry shape.
 
-### 4.6 Open items
-
-This version of the spec leaves the following unresolved; implementers
-**MUST NOT** assume a numeric encoding for them beyond what is stated:
-
-- **`MediaState` numeric codes** (§3.2) — members are named but no
-  stable numeric code is assigned yet, unlike `PlayerState` (§3.1).
-- **Track-state numeric codes** (§3.4) — the `TrackState` members
-  (`disambiguation`, `queued`, `playing`, each qualified by
-  `PlaybackType`, §3.5) are named but not yet numbered.
-
-Until these are assigned, `MediaState` and track-state values travel
-symbolically; a future version of this spec fixes their numeric codes
-the way §3.1 already fixes `PlayerState`'s.
-
 ### 4.5 The media entry
 
 Playback requests and state consumers exchange tracks as **media
@@ -365,7 +350,7 @@ entry** objects:
 | `playback` | number | no | Requested playback kind on the `PlaybackType` axis (§3.5). |
 | `status` | *reserved* | no | The entry's current track-state value (§3.4, §4.4). Reserved in this version pending the track-state numeric assignment (§4.6 Open items): producers **SHOULD** omit this field, and consumers **MUST** ignore any value present until numeric `TrackState` codes are assigned. |
 | `media_type` | number | no | Content classification (music, radio, podcast, video, …) used for result ranking. |
-| `length` | number (ms) | no | Track duration in milliseconds; `-1` = unknown/live. One time convention across the media surface: durations and positions count in milliseconds with `-1` meaning unknown/live (§4.2.2) — the convention OVOS-GUI-1 v2 adopts uniformly for its media templates (OVOS-GUI-1 §3.4). |
+| `length` | number (ms) | no | Track duration in milliseconds; `-1` = unknown/live. One time convention across the media surface: durations and positions count in milliseconds with `-1` meaning unknown/live (§4.2.2) — the convention OVOS-GUI-1 adopts uniformly for its media templates (OVOS-GUI-1 §3.4). |
 | `match_confidence` | number 0–100 | no | Provider's self-reported relevance for the originating query. |
 | `skill_id` | string | no | The provider that produced this entry. |
 
@@ -418,6 +403,21 @@ in place of advancing, and an explicit `next`/`previous` still moves
 by leaf as usual (§4.3). A node cycling its own children on
 exhaustion is a distinct, node-scoped behavior and does not by itself
 imply cursor-level repeat.
+
+### 4.6 Open items
+
+This version of the spec leaves the following unresolved; implementers
+**MUST NOT** assume a numeric encoding for them beyond what is stated:
+
+- **`MediaState` numeric codes** (§3.2) — members are named but no
+  stable numeric code is assigned yet, unlike `PlayerState` (§3.1).
+- **Track-state numeric codes** (§3.4) — the `TrackState` members
+  (`disambiguation`, `queued`, `playing`, each qualified by
+  `PlaybackType`, §3.5) are named but not yet numbered.
+
+Until these are assigned, `MediaState` and track-state values travel
+symbolically; a future version of this spec fixes their numeric codes
+the way §3.1 already fixes `PlayerState`'s.
 
 ---
 
