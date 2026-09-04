@@ -470,18 +470,23 @@ context entry removed writes the removal into its own session copy
 way.
 
 *Rationale (non-normative).* A mutation broadcast as a message
-distinct from the session it modifies races the reply whose session
-snapshot it was meant to affect: the reply can be built, forwarded,
-and observed by the client before the separate mutation message is
-applied, so the client's own copy of the session disagrees with the
-orchestrator's for the span of that race. Writing through the
-session removes the race by removing the second object — the
-mutation and its carrier are the same write, so there is nothing
-left to arrive out of order. OVOS-SESSION-2 §2.7 states the general
-form of this constraint: there is no topic on which a session is
-pushed at another participant — a session field has exactly one
-path to the consumer, the session it rides on, never a second push
-channel that can disagree with it.
+distinct from the session it modifies would race the reply whose
+session snapshot it was meant to affect: the reply could be built,
+forwarded, and observed by the client before the separate mutation
+message was applied, so the client's own copy of the session would
+disagree with the orchestrator's for the span of that race. Writing
+through the session avoids the race because there is no second
+object to race with: the mutation and the session are the same
+write. A handler's `forward`-derived Messages carry that write as of
+the moment each is derived (§5.3), and the end-of-handler event
+carries it as synced at handler completion (SESSION-2 §2.6) whether
+or not the handler emits anything of its own — so no separate
+mutation message ever exists to arrive out of order with the session
+it modifies. OVOS-SESSION-2 §2.7 states the general form of this
+constraint: there is no topic on which a session is pushed at
+another participant — a session field has exactly one path to the
+consumer, the session it rides on, never a second push channel that
+can disagree with it.
 
 ### 5.1 Pipeline plugin — `Match.updated_session`
 
@@ -791,10 +796,12 @@ unaffected by this specification.
 
 **A skill** that uses intent context **MUST**:
 
-- mutate `session.intent_context` in place during its dispatch and
-  emit at least one `forward`-derived Message (§5.3) — the only
-  normative mutation pathway available to handlers; a mutation the
-  handler never emits has no effect on anyone else's session;
+- mutate `session.intent_context` in place during its dispatch (§5.3);
+  the mutation reaches the orchestrator at handler completion
+  (SESSION-2 §2.6) whether or not the handler emits a Message of its
+  own, and any `forward`-derived Message the handler emits carries
+  the session as of the moment it is derived; conformance is judged
+  on the session the end-of-handler event carries;
 - choose the key scope explicitly (§3): `private` prefix for
   skill-internal state, bare key for facts other skills may key
   off;
