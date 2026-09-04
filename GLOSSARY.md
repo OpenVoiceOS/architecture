@@ -70,7 +70,7 @@ open a PR adding it.
 | **Summon** | Activating a persona for a session by setting `persona_id`, whether by self-summon, one-off query, or an external component ([PERSONA-1 §5](persona.md)). |
 | **Dismiss** | Deactivating the active persona for a session by clearing `persona_id`, returning the pipeline to no-persona mode ([PERSONA-1 §6](persona.md)). |
 | **No-persona mode** | The pipeline state with no active persona (`persona_id` absent); only deterministic intent-matching and fallback stages handle utterances ([PERSONA-1 §4](persona.md)). |
-| **Persona-fallback** | A persona plugin's secondary `fallback_pipeline_id` stage, positioned after all skill stages, that claims utterances when no persona is active and nothing else matched ([PERSONA-1 §7.1, §9](persona.md)). |
+| **Persona-fallback** | A second `session.pipeline` entry referencing a persona plugin, its `fallback_pipeline_id`, positioned after all skill stages, that claims utterances when no persona is active and nothing else matched ([PERSONA-1 §7.1, §9](persona.md)). |
 | **`persona_id`** | The session field naming the active persona; absent or empty means no persona is active ([PERSONA-1 §3](persona.md)). |
 | **Virtual Media Player** | The single addressable, per-session arbitration point that owns the now-playing track, playback queue, and transport state, regardless of which backend does the work ([OCP-1 §2](ocp-1.md)). |
 | **Media entry** | The object playback requests and state consumers exchange to describe one track — `uri`, `title`, `artist`, `status`, and related fields ([OCP-1 §4.5](ocp-1.md)). |
