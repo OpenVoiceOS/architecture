@@ -104,10 +104,8 @@ Per **OVOS-PIPELINE-1 §9.1**, `lang` on this topic is present only
 when the producer authoritatively knows the content language. The
 audio input service satisfies that condition by construction: it
 selected the STT decoder (§5.1) and therefore knows, without
-inference, which language the decoder was run in. It **SHOULD**
-always set `lang` for that reason — omission is conformant (the
-field stays optional on the topic per §9.1) but only expected when
-the service could not resolve a decode language at all (§5.1).
+inference, which language the decoder was run in. It therefore
+always sets `lang`.
 
 The service **MUST NOT** emit `ovos.utterance.handle` when STT
 produced no usable transcription — an empty result, a decode
@@ -294,8 +292,9 @@ word (push-to-talk, `ovos.mic.listen`) emit no wake-word signal.
 - run the audio-transformer chain (OVOS-TRANSFORM-1 §3.1) before
   STT (§4);
 - assign a session in `context.session` per §5.2;
-- emit `ovos.utterance.handle` with `data.utterances` and `data.lang`
-  (§5);
+- emit `ovos.utterance.handle` with `data.utterances` and set
+  `data.lang` to the language the decoder ran in (§5.1); never a
+  synthesized value (OVOS-PIPELINE-1 §9.1);
 - emit `ovos.stt.failed` instead when STT produced no usable
   transcription, and no `ovos.utterance.handle` for that capture
   (§5);
