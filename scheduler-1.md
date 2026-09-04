@@ -85,7 +85,7 @@ It does **not** define:
 | `misfire` | string | no | `late` (default), `skip`, or `all` (§4.3). |
 | `grace_s` | number ≥ 0 | no | Seconds after the due instant during which a fire still counts as on time. Default 60. |
 | `ephemeral` | boolean | no | Default `false`. `true` schedules are never persisted (§5.3). |
-| `context` | object | no | The context of the request that created the schedule, stored verbatim and replayed on every fire (§3.5). |
+| `context` | object | no | Not sent by the owner: captured from the request message's own context (§3.5), never sent in the body. The scheduler stores it verbatim and replays it on every fire. |
 
 Exactly one of `at`, `in`, `every`, `local` MUST be present. A record
 that has `until` or `count` together with `at` or `in` is invalid.
@@ -225,8 +225,9 @@ message-constant registry rather than repeating the literals.
 
 ### 4.1 Requests
 
-`ovos.scheduler.schedule` carries a complete schedule record (§3.1). The
-scheduler validates it, persists it (§5.1), and only then answers.
+`ovos.scheduler.schedule` carries a complete schedule record (§3.1),
+minus the captured `context` (§3.5). The scheduler validates it,
+persists it (§5.1), and only then answers.
 The response carries `id`, `owner`, `next` (the next occurrence as an
 instant, or `null` when there is none), and `replaced` (`true` when a
 schedule with the same identity existed).
@@ -317,10 +318,10 @@ once.
 
 ### 4.3 Misfire policy
 
-An occurrence is a misfire when the scheduler fires it later than
-`due + grace_s`, or cannot fire it at all (it was due while the
-scheduler was not running, or while the clock was stepped past it).
-The record's `misfire` field decides what happens:
+An occurrence is a misfire when the scheduler does not fire it by
+`due + grace_s`, whether it was running or not: downtime and clock
+steps change nothing, grace is measured from the due instant. The
+record's `misfire` field decides what happens:
 
 | value | behaviour |
 |---|---|
@@ -368,8 +369,9 @@ as it treats any other message naming an unknown session.
 ### 5.1 Write-ahead persistence
 
 The scheduler MUST persist every accepted `ovos.scheduler.schedule` and
-every `ovos.scheduler.cancel` before sending the response. It MUST persist,
-for every schedule, the due instant of the most recent occurrence it
+every `ovos.scheduler.cancel` before sending the response, except a
+schedule declared `ephemeral` (§5.3), which is never persisted. It MUST persist,
+for every persisted schedule, the due instant of the most recent occurrence it
 fired — after emitting the fired event, and before any further
 emission or response; an occurrence at or before that instant is never
 fired again. Persistence MUST be atomic at the file or transaction
@@ -410,11 +412,12 @@ as a conversation keep-alive.
 
 When the scheduler starts it MUST first load every persisted schedule
 and compute its occurrences from the current time, then emit
-`ovos.scheduler.ready`, and only then apply the misfire policy of §4.3 to
-any occurrence that was due while it was down, emitting the late fires
-and the `ovos.scheduler.missed` messages that policy calls for. Emitting
-readiness before the replayed traffic gives an owner that subscribes
-on `ovos.scheduler.ready` a chance to hear its own late fires.
+`ovos.scheduler.ready`, and only then apply the misfire policy of
+§4.3 to any occurrence it did not fire by `due + grace_s`, emitting
+the late fires and the `ovos.scheduler.missed` messages that policy
+calls for. Emitting readiness before the replayed traffic gives an
+owner that subscribes on `ovos.scheduler.ready` a chance to hear its
+own late fires.
 
 `ovos.scheduler.ready` carries `schedules` (count restored), `missed`
 (count of schedules that had missed occurrences), and `clock`
@@ -456,12 +459,16 @@ registered handler.
 
 `ovos.scheduler.schedule`, `ovos.scheduler.cancel`, `ovos.scheduler.get`, and
 `ovos.scheduler.list` act only on schedules whose `owner` equals the
-request's `owner`. Where the bus carries an authenticated component
-identity, the scheduler MUST refuse a request whose `owner` differs
-from that identity with the error `not_owner`. Where the bus does not
-authenticate, the scheduler MUST still scope every one of those
-operations to the `owner` field, so that a component cannot reach or
-create under another component's identity by omission.
+request's `owner`. Where a deployment supplies the scheduler with an
+authenticated component identity for a request, by a mechanism
+outside this specification, the scheduler MUST refuse a request whose
+`owner` differs from that identity with the error `not_owner`. The
+base bus carries no such identity: absent one, the scheduler MUST
+still scope every one of those operations to the `owner` field the
+request states, so that a component cannot
+reach or create under an owner it did not name; this is scoping, not
+authentication, and does not stop a component that deliberately
+states another component's owner id.
 
 A privileged administrative component MAY be granted the pseudo-owner
 `*` for `ovos.scheduler.list` and `ovos.scheduler.cancel`. How that grant is
@@ -566,9 +573,9 @@ by the `scheduler.id` context field.
 
 1. Validate every field of §3.1 and answer every request exactly once,
    with the `response` derivation and one of the §4 error codes (§4).
-2. Persist before answering, and persist the most recent fired
-   occurrence after emitting it and before any further emission or
-   response (§5.1), atomically.
+2. Persist before answering, except a schedule declared `ephemeral`
+   (§5.3), and persist the most recent fired occurrence after emitting
+   it and before any further emission or response (§5.1), atomically.
 3. Replace on identical identity, never duplicate, and keep the stored
    anchor of an unchanged period (§3.4.1, §5.2).
 4. Restore all non-ephemeral schedules on start, emit
