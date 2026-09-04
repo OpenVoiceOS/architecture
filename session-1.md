@@ -244,6 +244,12 @@ An explicit `null` for the whole `session` value is **absence**, not a
 malformed carrier: it resolves to the default session per §2.1, the
 same as an omitted `session` key.
 
+A Message dropped under this rule never enters the utterance
+lifecycle: it has no session to carry it, so the orchestrator emits
+no `ovos.utterance.handled` and no other lifecycle event on its
+behalf (OVOS-PIPELINE-1 §9.5 counts only entry-topic Messages whose
+`session` carrier is well-formed).
+
 ---
 
 ## 3. Fields claimed in this version
