@@ -125,9 +125,12 @@ turn on the lights
 
 ### 3.2 Alternatives `( | )`
 
-Parentheses enclose **branches** separated by the pipe `|`. Each combination
-takes exactly one branch from each group. A group SHOULD contain at least one
-`|` (that is, at least two branches); a single-branch group is degenerate —
+Parentheses enclose **branches** separated by the pipe `|`. A group's branches
+are its `|`-separated segments: `(a|b|c)` has three branches, `(word)` has one
+branch (`word`), and `()` has one branch, the empty string. This definition
+applies uniformly, including during expansion (§4.1). Each combination takes
+exactly one branch from each group. A group SHOULD contain at least one `|`
+(that is, at least two branches); a single-branch group is degenerate —
 loaders accept it, warn, and fold it to the bare branch (§3.6) — and the
 empty `()` is malformed (§3.6).
 
@@ -199,8 +202,8 @@ contains one:
 
 - **Unbalanced metacharacters** — an unmatched `(`, `)`, `[`, `]`, `{`, `}`,
   `<`, or `>`.
-- **Empty group** — the empty `()`. A group expresses a *choice between
-  branches*; with no branch there is nothing to choose.
+- **Empty group** — the empty `()`. Its one branch (§3.2) is the empty
+  string, so the group expresses no choice at all.
 - **Empty sample** — a template whose sample set (§4) contains the empty
   string: for some combination of branches it yields a sample with no literal
   words and no slots. The simplest cases are a template consisting only of
@@ -225,7 +228,8 @@ contains one:
 - **Cyclic vocabulary reference** — a chain of inline vocabulary references
   that includes itself; its resolution would not terminate.
 
-A **single-branch group** — a parenthesised group with no `|`, e.g.
+A **single-branch group** — a parenthesised group with no `|` and a
+non-empty branch, e.g.
 `(word)` — is degenerate but **not** malformed: loaders MUST accept it,
 SHOULD warn, and MUST treat it as exactly the bare branch (`(word)` ≡
 `word`). The folding is semantically lossless — the template denotes the
