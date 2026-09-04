@@ -335,6 +335,40 @@ switching verb exists.
 marked with `ovos.common_play.like`, as `{"entries": [media entry, …]}`.
 Entries in both answers use the §4.5 media-entry shape.
 
+#### 4.4.3 Named stored collections
+
+A player **MAY** maintain named stored collections of media entries
+beyond the single reserved "liked songs" collection of §4.4.2 —
+user-curated groupings (e.g. a playlist a user builds by name) as well
+as collections the player derives itself (e.g. an ordering over play
+history). "Liked songs" **MUST** remain a reserved collection name,
+answered exclusively by `ovos.common_play.likes` (§4.4.2) with its
+existing payload shape; it is not additionally exposed through the
+query below.
+
+`ovos.common_play.collection` reads a stored collection by name, as
+`{"name": string}`, and is answered as a reply to the query message on
+`ovos.common_play.collection.response` with
+`{"name": string, "entries": [media entry, …]}`, `name` echoing the
+request so a consumer with several in-flight queries can match a
+response to its request. `entries` is always a flat list; entries use
+the §4.5 media-entry shape, and a member of the list **MAY** itself be
+a §4.5.1 playlist entry, which is how nesting within a stored
+collection is expressed — the response as a whole is never itself a
+single playlist-shaped entry in place of the list. An unknown name
+**MUST** answer with an empty `entries` list, not an error: the query
+does not distinguish an empty collection from a name the player does
+not recognize. Like the §4.4.1 status query and the §4.4.2 queries,
+this query mutates nothing and sits outside the session gate (§5).
+
+The response shape does not distinguish a curated collection from one
+the player derives read-only (e.g. a play-history ordering); a
+consumer tells them apart only by name, never by inspecting the
+answer. This version of the spec defines read access to named
+collections only; which names exist, how a name comes to hold
+entries, and any mutation of a collection's contents are not defined
+here (§4.6 Open items).
+
 ### 4.5 The media entry
 
 Playback requests and state consumers exchange tracks as **media
@@ -414,6 +448,10 @@ This version of the spec leaves the following unresolved; implementers
 - **Track-state numeric codes** (§3.4) — the `TrackState` members
   (`disambiguation`, `queued`, `playing`, each qualified by
   `PlaybackType`, §3.5) are named but not yet numbered.
+- **Named collection mutation** (§4.4.3) — this version defines
+  read-only access to named stored collections; creating, renaming, or
+  writing to a collection (adding/removing entries, saving the active
+  queue as a collection) is not defined.
 
 Until these are assigned, `MediaState` and track-state values travel
 symbolically; a future version of this spec fixes their numeric codes
