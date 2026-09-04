@@ -222,8 +222,9 @@ the bridge is a transparent carrier. It extracts the session from
 the external payload and places it in the bus Message context
 unchanged, and copies the session from outbound bus Messages back
 into the external payload. The client is the authority for its own
-session state per **OVOS-SESSION-2 §2**; the bridge MUST NOT inspect
-or modify the session content.
+session state per **OVOS-SESSION-2 §2**; when carrying a session on
+behalf of such a participant, the bridge **MUST NOT** inspect or
+modify the session content on its own initiative.
 
 A layer-2 system (§4.1) MAY apply policy mutations to the session
 after extraction and before bus injection — this is an additional
@@ -591,7 +592,8 @@ buffer them indefinitely.
 - perform "topology hiding" by overwriting the `source` of outbound
   messages with a generic assistant ID (§3.2);
 - mutate the `session` object to inject layer-2 policy or metadata
-  before bus injection (§4.1);
+  before bus injection (§4.1) — a deployment-level decision distinct
+  from the relaying-mode transparency obligation of §3.4.1;
 - connect spec-compliant voice-OS deployments as peers (§4.2);
 - relay intent registration messages from satellite-side skills to
   the hub, and emit `ovos.skill.deregister` on satellite disconnect
