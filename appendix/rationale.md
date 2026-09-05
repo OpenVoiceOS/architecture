@@ -28,11 +28,15 @@ the normative sections.
   keeps both and makes engines declare which they accept.
   The cost is that a developer must choose per intent and
   know which engines an installation runs.
-- **Slot typing is deferred** (INTENT-1 §5.3). Interpreting
-  a slot value as a number or date is inseparable from how
-  ASR output is normalized — and normalization is specified
-  separately. Specifying typing first would be incoherent, so
-  a slot value is an opaque sequence of words.
+- **A typed slot declares an expectation, not a coercion**
+  (INTENT-1 §3.4, §5.6). Interpreting a slot value as a
+  number or date is inseparable from how ASR output is
+  normalized — and normalization is specified separately.
+  A placeholder may therefore say what kind of datum it
+  expects, but the slot still fills with the words the user
+  spoke; the normalized value travels beside the utterance
+  as a hint, computed before matching by whichever component
+  the deployment gives that job to.
 - **`.blacklist` vs `excluded`** (INTENT-3 §4.2, §5.4). The
   template grammar is purely generative — it cannot express
   "not this". Template intents therefore need a separate
@@ -309,16 +313,18 @@ the normative sections.
   existence is justified by what the lifecycle holds at
   that exact moment — what's possible there that isn't
   possible elsewhere.
-- **Intent transformers as the system-typing home.**
-  INTENT-1 §5.3 defers slot value typing pending a text
-  normalization specification. TRANSFORM-1 §3.4 is the
-  spec'd injection home for typing: a deployer ships
-  date / number / duration parsing once, and every skill
-  receives typed values in `Match.slots` regardless of
-  which engine matched. The OVOS analogue of ASK's
-  `AMAZON.DATE` and Dialogflow's `@sys.date-time`, but as
-  an injected enrichment rather than a built-in engine
-  feature.
+- **A stage of its own for typed slots.** TRANSFORM-1 §3.7
+  is the spec'd home for computing typed values: a deployer
+  ships date / number / duration parsing once, before any
+  matcher runs, and every skill sees the same values
+  regardless of which engine matched. The stage sits outside
+  the six chains because its output is neither the utterance
+  nor the context but a separate map (INTENT-1 §5.6), and
+  because a closed set of value types is what lets a
+  consumer rely on the shape it finds. `Match.slots` stays a
+  string map either way — this is the OVOS analogue of ASK's
+  `AMAZON.DATE` and Dialogflow's `@sys.date-time`, offered
+  beside the match rather than substituted into it.
 - **Concrete in-tree plugins as prior art.** Nine plugins
   live under `/plugins-transformer/`, covering five
   of the six injection points: utterance transformers
@@ -442,8 +448,8 @@ the normative sections.
     resolved intent identity and the user's free-text capture
     values. Before match, the intent is unknown — there's
     nothing to enrich. After dispatch, the handler has
-    already been called — too late to add typed equivalents
-    or contextual fallbacks. The capture map is the universal
+    already been called — too late to add contextual
+    fallbacks. The capture map is the universal
     interface every engine produces (OVOS-INTENT-3 §7), so
     enrichment here is engine-agnostic.
   - **Dialog (§3.5)** — the only stage where the assistant's
@@ -482,16 +488,10 @@ the normative sections.
     `session.intent_context` for downstream pipeline plugins
     and skills to read as gates, without round-tripping
     through CONTEXT-1 §5 bus events).
-  - **Intent §3.4:** system entity injection — the canonical
-    use. Parse free-text capture values into typed system
-    entities (dates, numbers, durations, named locations,
-    ordinals) and add typed equivalents under
-    conventionally-named keys for skill handlers to consume
-    uniformly. This is OVOS-INTENT-1 §5.3's deferred value
-    typing; this chain is the agreed home for applying that
-    normalization globally so individual skills do not each
-    implement it. Also: named-entity recognition over capture
-    values; per-skill enrichment a deployer wants applied
+  - **Intent §3.4:** enrichment that needs the resolved
+    intent — named-entity recognition over capture values,
+    contextual defaults drawn from the session, per-skill
+    enrichment a deployer wants applied
     without each skill re-implementing it.
   - **Dialog §3.5:** translation to the user's preferred
     language when it differs from the rendering language;
@@ -521,12 +521,13 @@ the normative sections.
     themselves. Also: an LLM that reads the utterance text
     and decides per-utterance which `session.pipeline`
     configuration to apply.
-  - **Intent §3.4:** the strongest match in the stack. A
-    small LLM can extract structured entities (dates,
-    durations, quantities) from free-text capture values and
-    inject the typed forms into `Match.captures` — once,
-    centrally — so every skill receives the same typed payload
-    regardless of which engine matched.
+  - **Intent §3.4:** enrichment that reads the resolved
+    intent alongside the capture values — flagging a capture
+    the handler is likely to reject, or deriving a session
+    signal from what the user asked for. Extracting dates,
+    durations and quantities belongs earlier, in the
+    typed-slots stage (§3.7), where every engine sees the
+    result and the value shapes are closed (INTENT-1 §5.6).
   - **Dialog §3.5:** the most prominent LLM application —
     response rewriting under a persona prompt. A `tone` or
     `persona` directive on a dialog transformer routes the

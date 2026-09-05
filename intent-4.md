@@ -416,11 +416,13 @@ INTENT-1 §3).
   "samples": [
     "(play|put on) {query}",
     "(play|put on) {query} (on|using) {engine}",
-    "i want to listen to {query}"
+    "i want to listen to {query}",
+    "play {query} for {duration:length}"
   ],
   "blacklist": ["trailer", "music video"],
   "required_slots": ["query"],
-  "slot_blacklist": {"query": ["it", "that"]}
+  "slot_blacklist": {"query": ["it", "that"]},
+  "slot_types": {"length": "duration"}
 }
 ```
 
@@ -431,6 +433,7 @@ Field reference:
 | `samples` | array of strings | yes | OVOS-INTENT-1 templates with named slots (INTENT-1 §3, §5). |
 | `blacklist` | array of strings | no | Slot-free phrases (INTENT-2 §4.3) whose occurrence suppresses the match (INTENT-3 §5.5). |
 | `required_slots` | array of strings | no | Slot names the engine MUST extract for a match to be valid (INTENT-3 §5.3). |
+| `slot_types` | object, slot name → type name | no | The typed-slot declarations of the templates in `samples`, derived from their `{type:name}` placeholders (OVOS-INTENT-1 §3.4, §5.6). |
 | `slot_blacklist` | object, slot name → array of strings | no | Per-slot exclusion sets (INTENT-2 §4.3): a bound value equal, whole-value and after the engine's normal utterance normalization, to a listed string is not accepted for that slot; the slot is left unresolved rather than bound. |
 
 As in §5.2, an absent list-valued key (`blacklist`,
@@ -438,6 +441,16 @@ As in §5.2, an absent list-valued key (`blacklist`,
 `slot_blacklist` is equivalent to an empty object — no exclusions;
 `samples` is the one list a producer must supply, and it must be
 non-empty (§6.3).
+
+Every slot name in this payload is the **bare name** — the name without any
+type prefix. `required_slots` lists bare names, `slot_blacklist` and
+`slot_types` are keyed by bare names, and a template's `{duration:length}`
+placeholder declares the slot `length`. `slot_types` is redundant with the
+`samples` it was derived from, and carrying it saves a consumer from parsing
+the templates to learn what a slot expects. A consumer that does not implement
+typed slots **MUST** ignore it and read the templates by the degrade rule of
+OVOS-INTENT-1 §3.4; this is the §6.3 unknown-field tolerance applied to a
+named field. An absent `slot_types` is equivalent to an empty object.
 
 ### 6.2 Slot sets
 
@@ -930,7 +943,14 @@ protocol is needed; the existing destination-based routing
   `ovos.skill.deregister` to retract its registrations, paired with
   the local release of the handler (§9, INTENT-3 §6.1);
 - conform its underlying templates, vocabularies, and entities to
-  OVOS-INTENT-1 and OVOS-INTENT-2.
+  OVOS-INTENT-1 and OVOS-INTENT-2;
+- name slots by their **bare names** throughout a template payload, and when
+  it sends `slot_types`, derive it from the `{type:name}` placeholders of the
+  same `samples` (§6.1).
+
+A consuming plugin that does not implement typed slots **MUST** ignore
+`slot_types` and **MUST NOT** treat its presence as malforming the
+registration (§6.1, §6.3).
 
 A skill **SHOULD** query the manifest (§10) to confirm a
 registration landed; there is no acknowledgement. A skill **SHOULD**

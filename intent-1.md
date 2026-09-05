@@ -38,7 +38,10 @@ training-data contract. It does **not** cover matching, generalization, scoring,
 confidence, or how an engine ranks competing intents — those are
 engine-specific.
 
-This specification is deliberately **unopinionated about slot value types** — see §5.3.
+A slot value is always text (§5.2). A placeholder MAY also carry a
+**type prefix** that tells an engine what kind of datum the slot expects, and a
+separate map of **typed slots** MAY accompany an utterance as a hint — see §5.3
+and §5.6.
 
 ### 1.1 Where this grammar is used
 
@@ -75,7 +78,8 @@ by the time it reaches the engine, be **normalized** to:
 
 - **lowercase** characters only;
 - **alphanumeric word tokens** separated by **single spaces**;
-- **no punctuation** and **no bracket characters** (`( ) [ ] { } | < >`).
+- **no punctuation** and **no bracket characters** (`( ) [ ] { } | < >`), and
+  no colon (`:`), which §3.4 reserves as the slot type-prefix separator.
 
 Normalization (lowercasing, punctuation and apostrophe stripping, whitespace
 collapsing, locale-specific transliteration) is performed **upstream** of the
@@ -87,7 +91,10 @@ Two consequences follow:
 
 - **Input-direction templates MUST be authored in the same normalized form**:
   literal words are lowercase, alphanumeric, single-space separated.
-- The grammar metacharacters `( ) [ ] { } | < >` **cannot occur as literal input**.
+- The grammar metacharacters `( ) [ ] { } | < >` **cannot occur as literal
+  input**, and neither can `:` where the grammar reads it, inside a slot's
+  braces (§3.4); outside braces a colon is ordinary punctuation the
+  normalization above has already removed.
   They are therefore exclusively structural, and **no escape mechanism is
   needed or provided**. This is a deliberate consequence of the voice-input
   scope.
@@ -108,9 +115,10 @@ A template is literal text interspersed with the tokens below.
 | Alternatives | `(a\|b\|c)` | expansion | A choice of branches (§3.2). |
 | Optional | `[x]` | expansion | An optional segment; equivalent to `(x\|)`. |
 | Named slot | `{name}` or `{{name}}` | slot | A placeholder filled with a value; the two forms are equivalent (§3.4, §5). |
+| Typed named slot | `{type:name}` | slot | A named slot carrying a type prefix (§3.4, §5.6). |
 | Vocabulary reference | `<name>` | expansion | Expands to a named vocabulary (§3.7). |
 
-There is no slot-typing syntax, no digit token, and no legacy wildcard. A
+There is no digit token and no legacy wildcard. A
 named slot has two equivalent spellings, `{name}` and `{{name}}` (§3.4); the
 double-brace spelling is a slot, not a brace-escaping form — the grammar
 provides no way to write a literal brace, and none is needed (§2).
@@ -172,7 +180,8 @@ between them. The double-brace form is a slot, **not** an escape: `{{` … `}}`
 never produces a literal brace, and the grammar provides no brace-escaping form
 (§2 makes brace characters impossible as literal input, so none is needed).
 
-A slot **name** — the text inside the braces in either form — MUST consist only
+A slot **name** — the text inside the braces in either form, after any type
+prefix below — MUST consist only
 of lowercase ASCII letters, digits, and underscores (`a`–`z`, `0`–`9`, `_`),
 MUST NOT begin with a digit, and MUST NOT contain whitespace inside the braces.
 These rules apply identically to `{name}` and `{{name}}`. A slot MAY appear
@@ -185,6 +194,29 @@ it is currently {temperature} degrees
 ```
 
 Slots are used only by `.intent` and `.dialog` files (§1.1).
+
+**Type prefix.** The text inside the braces MAY be written as `type:name`,
+where `name` obeys the charset rules above and `type` names one of the
+registered typed-slot types of §5.6. The prefix declares what kind of datum
+the slot expects; the slot's **name is `name`**, the prefix is not part of it.
+Both brace spellings accept the prefix, so `{date:when}` and `{{date:when}}`
+are the same slot. A placeholder written without a prefix — `{name}` — is
+unchanged by this and remains valid everywhere a slot may appear; the prefix
+is never required.
+
+```
+remind me to {task} at {date:when}
+set the lights to {color:shade}
+```
+
+A **degrade rule** keeps typed placeholders portable across tools. A loader
+that does not implement typed slots **MUST** treat `{type:name}` as `{name}`:
+strip the prefix, keep the slot. Such a loader is fully conformant — a typed
+placeholder never makes a template unusable. Both loaders agree on every slot
+name and on the surface text a match returns, and they produce the **identical
+sample set**, because expansion emits every placeholder in its bare `{name}`
+form whether or not the template wrote a prefix (§4.1). The type is therefore a refinement an engine MAY act on, never a
+gate on whether a template loads.
 
 ### 3.5 Nesting
 
@@ -223,6 +255,8 @@ contains one:
   the adjacent pair `{a} {b}`, is therefore malformed.
 - **Repeated slot name** — using the same `{name}` more than once in one
   template (`{x} and {x}`). A template defines each slot name exactly once.
+  The comparison is on the slot **name**, so `{x} and {date:x}` repeats a name
+  and is malformed.
 - **Undefined vocabulary reference** — a `<name>` (§3.7) for which no
   vocabulary `name` is available to the expander.
 - **Cyclic vocabulary reference** — a chain of inline vocabulary references
@@ -236,6 +270,14 @@ SHOULD warn, and MUST treat it as exactly the bare branch (`(word)` ≡
 same sample set with or without the parentheses — and a construct with an
 unambiguous meaning is a stylistic slip, not an error; the warning is the
 author's cue to write the branch as plain literal text.
+
+An **unregistered type prefix** — `{type:name}` whose `type` is not one of the
+registered types of §5.6 — is likewise **not** malformed. A loader MUST treat
+it as `{name}` by the degrade rule (§3.4) and SHOULD warn, exactly as a loader
+without typed-slot support does. Rejecting the template would make the set of
+loadable templates depend on which type registry a given tool carries, which is
+the portability the degrade rule exists to protect; the warning is the author's
+cue that a prefix is misspelled or unsupported.
 
 **Structural adjacent-slot detection.** Because the adjacent-slots check is
 defined over the expanded sample set, a naive implementation must expand the
@@ -331,7 +373,12 @@ The sample set is obtained by:
 5. Remove duplicates. The remaining distinct strings are the sample set.
 
 Named slots `{...}` are opaque throughout: they are carried through unchanged
-and are **never** expanded.
+and are **never** expanded. A typed placeholder (§3.4) is a named slot and is
+carried through the same way, except that expansion **MUST** emit it in its
+bare `{name}` form: the type prefix is stripped, and no sample sentence
+contains a `{type:name}` token. Two templates that differ only in their
+prefixes therefore expand to exactly the same sample set, which is what makes
+the degrade rule lossless for training data.
 
 A template whose sample set contains the empty string is **malformed** (§3.6);
 an engine cannot train on an empty sample.
@@ -404,21 +451,20 @@ A slot value is a **sequence of one or more words**, returned as text. Under
 match-time fill the engine captures a span of the utterance; under
 caller-supplied fill the value is whatever string the caller provides.
 
-### 5.3 Slot value types — deliberately unspecified
+### 5.3 A slot value is never coerced
 
-This specification does **not** define slot *value types* (numbers, dates,
-durations, enumerations) and does **not** define any coercion of a slot value.
-A slot value is an opaque sequence of words, as in §5.2.
+A filled slot value is an opaque sequence of words, as in §5.2. This
+specification defines **no coercion**: a slot never stops being text because
+it carries a type prefix, and no tool rewrites a slot value into a number, a
+timestamp, or any other datum on the strength of that prefix.
 
 Interpreting a slot value as a typed datum is inseparable from **text
 normalization** of ASR output — for example, whether a spoken `"forty two"`
 should become the integer `42` depends entirely on how numerals are normalized
-upstream, which this grammar does not prescribe (§2). Specifying typing
-without first specifying normalization would be incoherent.
-
-Slot value types are therefore **out of scope** for this specification, as is
-the normalization they depend on (§2). There is exactly one slot form,
-`{name}`, with no `{name:type}` variant.
+upstream, which this grammar does not prescribe (§2). Typed slots (§5.6)
+respect that separation: the normalized value is computed elsewhere, before
+matching, and is offered alongside the utterance as a hint. The slot itself
+still fills with the surface words the user spoke.
 
 ### 5.4 Value sets
 
@@ -447,6 +493,8 @@ A template *declares* a slot name if that name appears anywhere in the
 template. Optionality does not change this: a slot inside an optional group
 (`[{x}]`, §5.1) is still declared, so a template `say [{x}]` and a template
 `say {x}` declare the **same** slot set and may coexist in one definition.
+Neither does a type prefix: the declared name is the bare name, so `say {x}`
+and `say {number:x}` also declare the same slot set.
 
 This guarantees that a dialog's required fill values are the same regardless
 of which phrase is chosen. If two phrasings genuinely need different slots,
@@ -463,6 +511,85 @@ different slots.
 
 A tool MUST reject a `.dialog` definition whose templates do not all declare
 the same slot set.
+
+### 5.6 Typed slots
+
+A **typed slot** is the pairing of a type prefix on a placeholder (§3.4) with a
+map of candidate typed values computed from the utterance before matching
+begins. Like a value set (§5.4), it is a **hint, not a vocabulary**: it tells an
+engine where a datum of a given kind was found and what that datum normalizes
+to, and an engine MAY ignore it entirely.
+
+**Registered types.** This specification registers four types. Each fixes the
+JSON representation of a normalized value:
+
+| Type | Normalized value |
+|------|------------------|
+| `number` | A JSON number. |
+| `duration` | A JSON number: the length in seconds. |
+| `date` | A string: an RFC 3339 timestamp, resolved in the session's timezone (OVOS-SESSION-1 §3.5 `location.tz`, and the deployment's configured zone when the session declares none). |
+| `color` | An object `{"hex": "#rrggbb", "name": <string or null>}`, where `hex` is lowercase and `name` is a human-readable colour name when one is known and `null` otherwise. |
+
+A type outside this table is unregistered; a placeholder naming one degrades to
+an untyped slot (§3.6).
+
+**The typed-slot map.** Typed values reach an engine as a map from type name to
+a list of entries:
+
+```json
+{
+  "date": [
+    { "span": [17, 26], "surface": "tomorrow", "value": "2026-04-12T00:00:00+01:00" }
+  ],
+  "number": []
+}
+```
+
+Each entry has exactly three keys:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `span` | array of two integers | `[start, end]` — the half-open range of the datum, counted in Unicode code points. |
+| `surface` | string | The text the datum was read from. |
+| `value` | per the table above | The normalized value for this type. |
+
+`span` and `surface` are tied by one invariant: `utterance[start:end] ==
+surface`. The invariant is also the selector. Entries are computed over every
+candidate utterance and share one map, so a consumer applies an entry only to
+a candidate that satisfies the invariant, and to none when no candidate does.
+Text rewritten after an entry was computed invalidates its span, which is why
+an utterance transformer that rewrites text discards the map
+(OVOS-TRANSFORM-1 §3.2).
+
+Entries **MAY** overlap — the same words can read as more than one datum, and
+the map states every reading rather than choosing between them; an engine
+chooses. A type's list **MAY** be empty, meaning the type was computed and
+nothing of that kind was found. A type **absent** from the map was **not
+computed**, which is not the same claim and MUST NOT be read as "nothing
+found".
+
+**How an engine may use it.** An engine **MAY** use the map to constrain where
+`{type:name}` matches — preferring or requiring a span the map lists for that
+type — and **MAY** report the corresponding normalized value alongside the
+match. An engine that does none of this is conformant; a typed placeholder it
+does not act on behaves exactly as the untyped `{name}` (§3.4).
+
+`Match.slots[name]` remains the **surface string** in every case
+(OVOS-PIPELINE-1 §4.3): the slot map's value type does not change, and a
+consumer that ignores typed slots sees what it always saw. A consumer that
+wants the normalized value looks it up **by surface**: for the slot's declared
+type, it takes the entry whose `surface` equals the slot value. A slot value
+that occurs more than once in the utterance matches more than one entry; the
+readings are then ambiguous, and a consumer **SHOULD** take the first. Spans
+exist for the engine, which knows which occurrence it matched; a consumer
+downstream of the match has only the string.
+
+How a value is computed — which parser, which locale rules, which
+normalization of ASR output — is **out of scope** here. This specification
+requires only that the values be determined **before intent matching**, so that
+they are available to every engine in the pipeline on equal terms.
+OVOS-TRANSFORM-1 §3.7 places that computation in the utterance lifecycle, in a
+stage of its own between the transformer chains and the first matcher.
 
 ---
 
@@ -502,6 +629,11 @@ On receiving training data a conformant engine **MUST**:
    `{...}` slots as match-time-filled (§5.1–§5.2). How the engine learns from
    and generalizes beyond those samples is its own concern (§4).
 
+An engine that does not implement typed slots **MUST** apply the degrade rule
+(§3.4) and treat every `{type:name}` as `{name}`; an engine that does
+implement them **MUST** still fill `Match.slots[name]` with the surface string
+(§5.6).
+
 ---
 
 ## 7. Conformance
@@ -513,13 +645,20 @@ expanded, and filled* — never how an engine *matches*.
 - **Expander.** A tool that turns a template into its sample set. It MUST accept
   the token set of §3, resolve inline vocabulary references (§3.7, §4.1 step 1),
   reject the malformed forms of §3.6, produce exactly the sample set defined by
-  §4, and never expand `{...}` slots.
+  §4, and never expand `{...}` slots. It MUST accept a typed placeholder
+  `{type:name}` whatever its `type` and MUST emit it as `{name}` in every
+  sample (§4.1), so that the sample set depends neither on whether a prefix
+  was written nor on which types the expander knows; it SHOULD warn on a type
+  it does not recognize (§3.6).
 
 - **Intent engine.** A tool that consumes **slot-bearing** input templates
   (`.intent`). It MUST embed a conformant expander, assume the input model of
   §2, honour the training-data contract of §6, treat `{name}` as a
   match-time-filled slot (§5.1–§5.2), and treat value sets as optional
-  refinements (§5.4). Matching, generalization, and scoring are deliberately
+  refinements (§5.4). It MUST treat typed slots as an optional refinement too
+  (§5.6): it MAY use the typed-slot map to constrain where `{type:name}`
+  matches, MUST return the surface string in the slot map either way, and MUST
+  NOT require the map to be present. Matching, generalization, and scoring are deliberately
   unconstrained — an engine MAY add fuzzy matching, neural classification, or
   any scoring strategy. A tool that consumes only **slot-free** input resources
   (`.voc`, `.entity`, `.blacklist`) — for example a keyword-based engine — does
@@ -528,7 +667,8 @@ expanded, and filled* — never how an engine *matches*.
 - **Dialog renderer.** A tool that consumes `.dialog` templates. It MUST read
   the `.dialog` file or take the inline phrases, embed a conformant expander,
   verify that all phrases in a dialog definition declare the same slot set
-  (§5.5), fill `{name}` slots by caller-supplied values before rendering, and
+  (§5.5), comparing bare names — `{when}` and `{date:when}` declare the same
+  slot, so they may coexist in one definition — fill `{name}` slots by caller-supplied values before rendering, and
   MUST NOT emit a phrase containing an unfilled slot (§5.1). Unlike the
   Intent engine role, no slot in a `.dialog` template is ever filled at
   match time (§5.1) — dialog training data is out of §6's scope.

@@ -20,6 +20,9 @@ open a PR adding it.
 | **Expansion** | Resolving `(a\|b)` / `[x]` into a finite set of concrete sentences ([INTENT-1 §4](intent-1.md)). |
 | **Sample / sample set** | A concrete sentence produced by expansion; the set of all of them for a template ([INTENT-1 §4](intent-1.md)). |
 | **Slot** | A named placeholder `{name}` filled with a value rather than written out ([INTENT-1 §3.4, §5](intent-1.md)). |
+| **Typed slot** | A placeholder written `{type:name}`, declaring what kind of datum the slot expects; a loader without typed-slot support reads it as `{name}` ([INTENT-1 §3.4, §5.6](intent-1.md)). |
+| **Typed-slot map** | The hint accompanying an utterance: type name → list of `{span, surface, value}` entries naming where a datum of that type was found and what it normalizes to ([INTENT-1 §5.6](intent-1.md)), carried as `data.typed_slots`. |
+| **Typed-slots transformer** | A transformer that computes the typed-slot map from the utterance and the session, in a stage of its own between the transformer chains and the first matcher; it returns the map and changes nothing else ([TRANSFORM-1 §3.7](transformer.md)). |
 | **Slot map** | The names→values mapping a match produces — slot names or vocabulary names as keys ([PIPELINE-1 §4.3](pipeline-1.md)). |
 | **Resource file / role** | A skill's plain-text files: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`, `.prompt` ([INTENT-2 §1](intent-2.md)). |
 | **Vocabulary** | A named slot-free phrase set; the unit a keyword intent constrains over ([INTENT-3 §4.1](intent-3.md)). |

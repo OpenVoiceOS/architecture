@@ -12,9 +12,9 @@
   …) — these need to be claimed under SESSION-1 §2.2's field
   registry by their respective owning specs (a preferences
   spec, OCP / locale specs as appropriate).
-- **Text normalization of ASR output.** The basis for slot
-  value typing (INTENT-1 §5.3). Deferred to its own
-  specification.
+- **Text normalization of ASR output.** The basis on which a
+  typed slot's value is computed (INTENT-1 §5.6). Deferred to
+  its own specification.
 - **A machine-checkable conformance corpus** of `template →
   sample set` pairs for INTENT-1 expansion, so expander
   conformance can be verified automatically. A parallel
