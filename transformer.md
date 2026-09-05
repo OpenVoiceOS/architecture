@@ -105,7 +105,8 @@ within a single type.
 
 This specification defines the shared chain model (§1, §4, §7),
 the six injection points in the utterance lifecycle and the
-per-type IO contracts (§2, §3), the per-session override mechanism
+per-type IO contracts (§2, §3), the **typed-slots stage** that runs
+between them and the first matcher (§3.7), the per-session override mechanism
 (§5), the broadcast-query / scatter-response **introspection
 surface** (§6), the **utterance cancellation** plugin contract
 (§8), the **session-level language signals transformer chains
@@ -117,11 +118,10 @@ It does **not** define:
   are black boxes; only the IO contract at the injection point is normative.
 - **How transformers are loaded, discovered, configured, or
   instantiated** — deployment concerns.
-- **Slot value typing schemas.** Intent transformers (§3.4) are
-  the canonical home for system-type entity injection (dates,
-  numbers, durations, etc.), but the *typed value formats*
-  themselves are out of scope for this specification
-  (OVOS-INTENT-1 §5.3).
+- **Typed value formats.** The typed-slots stage (§3.7) is where
+  values are computed, but the value shapes themselves — date
+  encoding, number representation, duration units — are fixed by
+  OVOS-INTENT-1 §5.6, not here.
 - **Streaming / end-to-end pipeline shapes.** The §2 flow diagram
   describes the canonical staged flow most transformers depend on
   (mic → STT → text → intent → speak → TTS → playback);
@@ -244,6 +244,8 @@ STT → text
   │
   ├─ metadata-transformer chain        (§3.3)
   │
+  ├─ typed-slots stage                 (§3.7)
+  │
 effective pipeline composed            (OVOS-PIPELINE-1 §6.1)
   │
 intent-context prune                   (OVOS-CONTEXT-1 §4)
@@ -266,6 +268,13 @@ TTS → wav file
   │
 playback
 ```
+
+The **typed-slots stage** (§3.7) shares the lifecycle diagram but is not one
+of the six chains: it produces neither the utterance nor the context but a
+separate map, and it claims none of the per-session override fields (§5),
+context attribution keys (§1.3), or introspection topics (§6) that the six
+types each own. Everything this section says about the six chains should be
+read as excluding it unless §3.7 says otherwise.
 
 Each chain an orchestrator implements MUST conform to the per-type
 contract of the matching §3 subsection (§9); each chain it does not
@@ -293,7 +302,8 @@ so no lifecycle starts and the invariant does not arise (§8.2.1).
 
 For each of the six injection points, this section defines the
 chain's input artifact, what the chain MAY/MUST change, and any
-type-specific conformance rules. Design rationale for each injection
+type-specific conformance rules. §3.7 defines the typed-slots stage
+in the same terms, with the §2 carve-out in force. Design rationale for each injection
 point — why each is the only point in the lifecycle where its class
 of work is possible — is in
 [appendix/rationale.md §4.7](appendix/rationale.md).
@@ -437,6 +447,17 @@ work warrants it (e.g. a translation transformer that normalizes
 `session.lang` to the internal language after translating). The
 §3.3 coordination guidance on companion-spec reserved keys
 applies here equally.
+
+**Typed slots.** Deriving typed values from the utterance is not this
+chain's work — it happens later, in the typed-slots stage (§3.7). What binds
+here is the consequence of rewriting text, and it binds the orchestrator, not
+the transformer: a typed-slot entry's `span` and `surface` are anchored to the
+utterance they were computed from (OVOS-INTENT-1 §5.6), so when the utterance
+chain returns a list that differs from its input, the orchestrator **MUST**
+discard any `data.typed_slots` present on the Message before the stage runs:
+its spans index the text as it stood, and the rewrite invalidates them. A map reaches this point only when a
+producer put one on the entry Message, since the stage runs later; the stage
+then computes its own against the text the chain leaves behind.
 
 > **Empty-list semantics.** A transformer MAY return an empty list.
 Two distinct outcomes share this shape: (1) **no plausible
@@ -649,6 +670,74 @@ defeats the staging. The transformer MAY also mutate
 `Message.context` per the same permissive rules of §3.3 — for
 example writing playback metadata (final audio format, duration,
 applied effects) for observability.
+
+### 3.7 Typed-slots transformers
+
+**Injection point.** After the utterance and metadata chains (§3.2, §3.3),
+before the first matcher sees the utterance. The transcription is final at
+this point and no engine has claimed anything, so every pipeline plugin
+downstream is offered the same values on the same text.
+
+**Input.** Three things: the candidate utterance list as the preceding chains
+left it; the session (OVOS-MSG-1 §4), from which the transformer reads what
+the computation needs, notably the language and `location.tz`
+(OVOS-SESSION-1 §3.2, §3.5) for resolving a `date`; and the **set of types
+declared by registered intents**. The orchestrator knows that set from the
+registrations it observes (OVOS-INTENT-4 §6.1 `slot_types`, or the
+`{type:name}` placeholders of the templates themselves) and hands the
+transformer the set — never the registry.
+
+**Exactly one transformer runs.** Where a deployment loads more than one
+typed-slots transformer, the orchestrator runs the one §4's ordering places
+first — the first entry of an explicit `transformer_id` list where the
+deployment configures one, otherwise the loaded transformer with the lowest
+`priority` number — and no other. A deployment that loads two of equal
+priority with no explicit list gets a stable but unspecified choice and
+**SHOULD** configure the list. The stage produces one map, so ordering selects
+here rather than sequences: running several would leave the question of
+whether a second transformer's `date` entries replace, extend, or duplicate
+the first's.
+
+**Output.** The **typed-slots map** of OVOS-INTENT-1 §5.6, and nothing else.
+
+**Permitted mutations.** None. A typed-slots transformer **MUST NOT** alter
+`utterances` — the spans it publishes index the text as it stands — and
+**MUST NOT** mutate `Message.context`, including the session and
+`session.intent_context`. Its whole contribution is the returned map, which
+the orchestrator places at `data.typed_slots` on the Message (OVOS-PIPELINE-1
+§9.1) and carries to dispatch (OVOS-PIPELINE-1 §7.1). A component that wants
+to rewrite text or write context is an utterance or metadata transformer and
+belongs in the chain for that (§3.2, §3.3).
+
+The input is a list, and the map is one map for the list: a transformer
+computes entries over **every** candidate it is given. An entry's `span`
+indexes the candidate for which `utterance[start:end] == surface` holds, and
+that invariant is how a reader tells which candidate an entry belongs to — the
+engine knows which candidate it matched, and a consumer downstream resolves by
+surface and never needs to know (OVOS-INTENT-1 §5.6).
+
+**Lazy computation.** Computing a type costs time on every utterance and a
+type nothing declares is time spent on a value nothing will read. A
+transformer **SHOULD** therefore compute only the declared types it was
+given, and **MAY** compute every registered type where the deployment asks
+for that. A type it does not compute is absent from the map, which
+OVOS-INTENT-1 §5.6 distinguishes from a type computed and found empty.
+
+**The type set is closed.** The valid keys are exactly the types registered in
+the OVOS-INTENT-1 §5.6 table. A transformer **MUST NOT** emit a key outside
+it, and an orchestrator **MUST** drop every such key from **any**
+`data.typed_slots` map it carries onward, whether the stage produced that map
+or it arrived on the entry Message from a producer; it **SHOULD** log each
+drop, and carries the remaining types normally. Adding a type is an amendment to
+that table, not something a deployment settles locally: a consumer reads
+`data.typed_slots` expecting the value shapes the table fixes, and a
+locally-invented type would give it a key whose value it cannot interpret.
+
+**One map, replaced not merged.** When the stage runs, the map it returns
+**replaces** any map already present on the Message; the map that travels
+onward is the one present after the stage. A deployment that runs no
+typed-slots transformer carries whatever the entry Message held, minus the
+dropped keys.
 
 ---
 
@@ -1301,6 +1390,44 @@ implemented chains. Such an orchestrator simply does not offer
 transformer extensibility at the points this specification
 covers.
 
+**An orchestrator that implements the typed-slots stage** (§3.7)
+**MUST**:
+
+- discard any `data.typed_slots` on the Message when the utterance
+  chain returned a list differing from its input, before the stage
+  runs (§3.2);
+- run the stage after the utterance and metadata chains and before
+  the first matcher, invoking exactly one transformer — the one
+  §4's ordering places first, which is the first entry of an
+  explicit `transformer_id` list where the deployment configures
+  one and otherwise the lowest `priority` number loaded (§3.7);
+- place the returned map at `data.typed_slots`, replacing any map
+  already present (OVOS-PIPELINE-1 §9.1);
+- hand the transformer the set of types declared by registered
+  intents (§3.7).
+
+**An orchestrator that carries a `data.typed_slots` map** **MUST**
+drop from it every key naming a type not registered in
+OVOS-INTENT-1 §5.6, **SHOULD** log each drop, and **MUST** carry
+what remains through to dispatch as it stands after the stage
+(OVOS-PIPELINE-1 §7.1, which is that obligation's home for an
+orchestrator running no stage at all). A deployment that neither
+runs the stage nor receives a map emits no `data.typed_slots`,
+which every consumer treats as "not computed"
+(OVOS-INTENT-1 §5.6).
+
+**A typed-slots transformer** **MUST**:
+
+- return only the typed-slots map of OVOS-INTENT-1 §5.6, keyed by
+  registered type names;
+- leave `utterances` and `Message.context` untouched (§3.7);
+- be re-entrant, and declare a `priority` (§4), by which the
+  orchestrator selects it when several are loaded (§3.7).
+
+It **SHOULD** compute only the declared types it was given, and
+**MAY** compute every registered type where the deployment asks
+for that (§3.7).
+
 **Each orchestrator process** that implements one or more chains
 **MUST**:
 
@@ -1376,12 +1503,10 @@ true` or `cancel_reason`:
 
 ## 10. Non-goals
 
-- **Slot value typing schemas.** Intent transformers (§3.4) are
-  where typed system entities are injected, but the typed value
-  formats themselves (date encoding, number representation,
-  duration units) are out of scope for this specification
-  (OVOS-INTENT-1 §5.3). This spec defines the injection pathway
-  only, not what gets injected.
+- **Typed value formats and how a value is derived.** §3.7
+  defines when the typed-slots map is computed and what may be in
+  it; the value shapes are OVOS-INTENT-1 §5.6's, and the parsing
+  that produces them is out of scope for this specification.
 - **Behavioural contracts for any specific transformer type beyond
   the IO shape and the canonical use-case list.** Whether an
   utterance transformer normalizes contractions, translates,
@@ -1448,6 +1573,5 @@ true` or `cancel_reason`:
   this spec.
 - *Intent Definition Specification* (OVOS-INTENT-3) — the intent
   and `Match` model that §3.4 operates on; §7 slot-map shape.
-- *Sentence Template Grammar Specification* (OVOS-INTENT-1) — §5.3
-  deferred slot value typing, for which §3.4 of this spec is the
-  agreed injection home.
+- *Sentence Template Grammar Specification* (OVOS-INTENT-1) — §5.6
+  typed slots, whose map §3.7 of this spec computes.

@@ -452,9 +452,9 @@ Whichever method defined an intent, a successful match yields one uniform
   are slot names (§5.2). A slot map **MAY** be empty.
 
 Slot values are **opaque sequences of words**, returned as text. This
-specification defines **no** value typing or coercion — consistent with
-OVOS-INTENT-1 §5.2–§5.3, which places slot typing out of scope alongside
-the text normalization it depends on.
+specification defines **no** coercion — consistent with OVOS-INTENT-1
+§5.2–§5.3, where a slot value stays text even when its placeholder declares a
+type, and the normalized datum is a separate hint (OVOS-INTENT-1 §5.6).
 
 In classifier terms the qualified intent name is the **label** and the slot
 map is the **payload**: the label selects which handler runs, the payload is

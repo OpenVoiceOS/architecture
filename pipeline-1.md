@@ -348,6 +348,12 @@ chooses to surface. It **MAY** be empty.
 The orchestrator does not interpret the slot map; it forwards
 it to the dispatched handler.
 
+Slot values stay strings even for a typed slot (OVOS-INTENT-1 §5.6). When a
+`data.typed_slots` map is present after the typed-slots stage, the
+orchestrator forwards it on the dispatch Message (§7.1), so a handler that
+wants a normalized value looks up the entry whose `surface` equals the slot
+value rather than expecting a non-string in `slots`.
+
 ### 4.4 Match-phase timeout and latency discipline
 
 The `match` operation is logically synchronous from the orchestrator's
@@ -701,6 +707,7 @@ ovos.utterance.handle                    ← entry (§9.1)
    │
    ├─ utterance-transformer chain runs   ← TRANSFORM-1 §3.2
    ├─ metadata-transformer chain runs    ← TRANSFORM-1 §3.3
+   ├─ typed-slots stage runs             ← TRANSFORM-1 §3.7
    │
    ├─ effective pipeline composed (§5.5)
    │  (preference → availability → policy)
@@ -792,7 +799,9 @@ Pseudocode is informative; normative rules are in §§4–9.
 For each utterance, the orchestrator **MUST**:
 
 - run the utterance-transformer and metadata-transformer chains
-  (OVOS-TRANSFORM-1 §3.2, §3.3) before pipeline iteration begins;
+  (OVOS-TRANSFORM-1 §3.2, §3.3) before pipeline iteration begins,
+  followed by the typed-slots stage where the deployment runs one
+  (OVOS-TRANSFORM-1 §3.7);
 - if the utterance-transformer chain returns an **empty
   utterance list**, skip pipeline iteration entirely and proceed
   directly to `ovos.intent.unmatched` (§9.3) — `match()` is
@@ -871,6 +880,12 @@ and continue iteration to the next plugin. This check operates
 after the `blacklisted_skills` / `blacklisted_intents` backstop
 (§5.3, §5.4) and uses the same observable semantics: no bus event
 is emitted; it is observable only as a non-match.
+
+Neither backstop consults `data.typed_slots`. Typed slots are an engine-side
+refinement (OVOS-INTENT-1 §5.6): the orchestrator checks that a required slot
+is present in the slot map and never that its value parses as the declared
+type. Judging a value against its type is matching, which belongs to the
+plugin that claimed the utterance.
 
 The primary obligation to enforce `required_slots` still lies with
 the engine during `match()`. The orchestrator backstop is a
@@ -1073,6 +1088,7 @@ The dispatch Message's `data`:
 | `lang` | string | yes | The content language of the match, taken directly from `Match.lang`. A `Match` with no `lang` is malformed and never reaches dispatch (§4.1). |
 | `utterance` | string | yes | The candidate string that won the match. |
 | `slots` | object (string→string) | yes | The slot map (§4.3). MAY be empty. |
+| `typed_slots` | object | no | The typed-slot map (OVOS-INTENT-1 §5.6) as it stands on the entry Message after the typed-slots stage (§9.1, OVOS-TRANSFORM-1 §3.7), so a handler can look up a normalized value by the `surface` matching its slot value. The orchestrator carries it unchanged except that it drops any key naming an unregistered type (OVOS-TRANSFORM-1 §3.7); it computes nothing itself, and omits the key entirely when no map is present after the stage. |
 
 `skill_id` and `intent_name` are not repeated in the payload — they are the topic's `<skill_id>:<intent_name>` prefix and suffix. A handler that needs them splits the topic on `:`.
 
@@ -1273,6 +1289,14 @@ Payload shape:
 |-------|------|----------|---------|
 | `utterances` | array of strings | yes | One or more candidate utterance strings. |
 | `lang` | string | no | BCP-47 language tag of the utterance. **Present only when the producer authoritatively knows the content language** (e.g. a chat client emitting text it locally typed in `de-DE`, or an audio service emitting text from an STT decoder run in `en-US`). When absent, the content language is **not authoritatively known**; producers **MUST NOT** synthesize a value on the wire. On receipt, the orchestrator **MUST** resolve the language once from OVOS-SESSION-1 §3.2 evidence fields and pass the resolved tag to every plugin's `match` call (§4) — a single resolution point keeps all stages matching in the same language; plugins MAY refine but MUST NOT re-derive independently. |
+
+The typed-slots stage adds a `typed_slots` map to this payload when the
+deployment runs one, replacing any map already present
+(OVOS-TRANSFORM-1 §3.7, OVOS-INTENT-1 §5.6). It is not a producer field: a
+component emitting on this topic supplies `utterances` and, when it knows it,
+`lang`. A map that arrives from a producer regardless is subject to the same
+closed-set drop as the stage's own output, and the map that reaches dispatch
+is whichever one is present once the stage has run (§7.1).
 
 `ovos.utterance.handle` is the only entry topic name this
 specification recognizes. A conformant orchestrator subscribes to
@@ -1598,6 +1622,10 @@ from the hosting process.
   plugin filters (§5.3, §5.4);
 - verify every slot listed in the matched intent's `required_slots`
   is present, and treat a shortfall as a declination (§6.2);
+- carry `data.typed_slots` onto the dispatch Message when a map is present
+  after the typed-slots stage, dropping keys naming unregistered types and
+  changing nothing else (§7.1, OVOS-TRANSFORM-1 §3.7), and **MUST NOT**
+  consult it in the §6.2 backstops;
 - ignore any `Match` returned by a `match` call that already timed
   out, and never dispatch it (§4.4);
 - skip unknown `pipeline_id`s without failing the utterance (§5);
@@ -1628,7 +1656,9 @@ from the hosting process.
   (§4);
 - when claiming, return a well-formed `Match` carrying every
   required field of §4.1 — `skill_id`, `intent_name`, `lang`,
-  `slots` and `utterance` — never a partial or speculative claim;
+  `slots` and `utterance` — never a partial or speculative claim, with every
+  slot value a string even where the intent declared a typed slot
+  (§4.3, OVOS-INTENT-1 §5.6);
 - bear a `pipeline_id` distinct from any other loaded plugin's
   id (§3);
 - **respond** to every `ovos.pipeline.<own_pipeline_id>.intents.list`
