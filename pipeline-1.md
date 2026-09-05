@@ -1391,12 +1391,13 @@ matched-and-handler-timed-out.
 Broadcast. Payload **MAY** be empty.
 
 A conformant orchestrator **MUST** emit exactly one
-`ovos.utterance.handled` per entry-topic Message (§9.1).
-Multiple emissions for one utterance are malformed; zero is
-malformed. A Message dropped at intake under OVOS-SESSION-1 §2.5
-still receives its single end marker: the orchestrator emits it
-directly from the entry Message, and no lifecycle trio is emitted
-for it.
+`ovos.utterance.handled` per entry-topic Message (§9.1) that
+**enters the lifecycle**. Multiple emissions for one utterance are
+malformed; zero is malformed for a Message that entered the
+lifecycle. A Message dropped under OVOS-SESSION-1 §2.5 for a
+malformed `session` carrier never enters the lifecycle at all: it
+receives no end marker, and `ovos.session.rejected` (OVOS-SESSION-1
+§2.5) is the only Message emitted for it.
 
 ### 9.6 `ovos.utterance.speak` — natural-language response
 
