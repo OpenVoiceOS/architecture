@@ -229,9 +229,17 @@ array, or boolean). There is no field set to interpret, no
 unusable, so the field-by-field rules cannot apply.
 
 A malformed carrier is dropped by the **first consumer that sees
-it** — the bus client, or the orchestrator itself when it is also the
-first consumer on an in-process bus — not carried forward for a later
-stage to reject. On a malformed carrier, that consumer:
+it**, not carried forward for a later stage to reject. On a messagebus
+with a websocket relay, the relay is the first consumer: it **MUST**
+validate the `session` carrier shape on ingress and drop the frame
+before fan-out, so exactly one `ovos.session.rejected` is emitted for
+it — not one per subscriber the relay would otherwise have echoed the
+frame to. Any other consumer that still receives a malformed carrier
+(an in-process bus with no relay, or a relay that predates this rule)
+**MUST** drop it and **MUST NOT** crash, and **MUST NOT** emit
+`ovos.session.rejected` unless it is itself the first consumer of that
+Message — so at most one rejection exists per dropped Message. On a
+malformed carrier, the consumer that drops it:
 
 - **MUST NOT** crash, and **MUST NOT** let the error tear down its
   transport. A malformed carrier is a **per-message** producer fault,
