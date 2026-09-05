@@ -330,6 +330,37 @@ defined by any spec** and should be removed or replaced:
   identity check in either direction, and no notion of a target
   distinct from a source.
 
+- **Legacy compatibility twins ride alongside the canonical
+  emission, marked for suppression on the receiving end**
+  (MSG-1 §2.1.1, §2.3). `ovos-bus-client` emits every
+  `MIGRATION_MAP` canonical topic a second time under its legacy
+  spelling, and every canonical `<skill_id>:<intent_name>`
+  dispatch a second time as `<skill_id>:<intent_name>.intent`. The
+  twin frame carries a private context marker —
+  `_intent_compat_twin` or `_namespace_compat_twin` — that a
+  receiving client uses to suppress the duplicate before dispatch;
+  MSG-1 §2.3 tolerates the unknown key. No spec claims these
+  markers: they are migration tooling, not part of the normative
+  context shape, and are removed at the next major of
+  `ovos-bus-client`.
+- **`ovos.intent.matched.intent_name` carries the full dispatch
+  string, not the bare intent name** (PIPELINE-1 §9.2). The
+  shipped orchestrator puts `<skill_id>:<intent_name>` in
+  `data.intent_name`; PIPELINE-1 §9.2 shows the bare intent name
+  alone. A consumer that needs the bare name derives it by
+  splitting on the first `:`. Aligned at the next major of
+  `ovos-core`.
+- **Orchestrator-side slot fill from context is an accepted
+  extension, not a divergence to retire** (CONTEXT-1 §7). CONTEXT-1
+  §7 places slot fill from `intent_context` on the engine, before
+  matching. The shipped orchestrator additionally fills any slot
+  the engine left unresolved from context after the match, merging
+  it into the dispatch `data`. The two fills draw from distinct
+  sources — engine slots and transformer/context slots — and both
+  are retained. `ovos.intent.matched.slots` reflects only the
+  engine's slots; the context-filled additions surface solely in
+  the dispatch payload.
+
 ### 5.5 New topics with no direct precedent
 
 - **`ovos.intent.matched`** (PIPELINE-1 §9.2). The
