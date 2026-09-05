@@ -133,6 +133,15 @@ Inside `match`:
    global-stop vocabulary (§3.2) and the empty-`active_handlers` case
    (step 1).
 
+**Candidate set.** The candidate set assembled at step 4 or step 5
+additionally includes, as its first member, the `skill_id` named by
+`session.response_mode` (OVOS-CONVERSE-1 §2.2), when that field is
+present — CONVERSE-1 §2.2 sets `response_mode` as session-resident
+state with no bus event and no `active_handlers` push, so its holder
+would otherwise be invisible to this cascade despite being the most
+recent interaction by construction. The candidate filter below
+applies to this entry exactly as to any `active_handlers` entry.
+
 **Candidate filter.** Before any recency comparison, an
 `active_handlers` entry MUST be skipped when:
 
@@ -222,7 +231,12 @@ selection made at step 4 or step 5 is final for that utterance.
 
 The orchestrator dispatches `<target_skill_id>:stop` per PIPELINE-1 §7,
 firing the handler-lifecycle trio (`ovos.intent.handler.start`,
-`.complete`, `.error`).
+`.complete`, `.error`). The stop handler completes like any dispatched
+handler (PIPELINE-1 §8): the orchestrator alone emits `.complete` on
+normal return or `.error` on exception, and that terminal event
+resolves the stop round. The stop handler does not emit either event
+itself. The PIPELINE-1 §8.3 timeout applies only if the handler fails
+to return within the deployment-defined bound.
 
 The stop handler MUST:
 
@@ -235,8 +249,8 @@ The stop handler MUST NOT interrupt activity belonging to a different
 `session_id`.
 
 `Match.updated_session` is committed before dispatch (PIPELINE-1 §4.2)
-and is not rolled back if the stop handler emits the `.error`
-lifecycle event.
+and is not rolled back if the orchestrator emits `.error` for the
+stop handler.
 
 ### 4.4 Self-pruning of `active_handlers`
 
