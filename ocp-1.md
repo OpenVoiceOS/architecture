@@ -224,7 +224,7 @@ than an offset.
 | `ovos.common_play.previous` | retreat the queue |
 | `ovos.common_play.seek` | move the position within now-playing |
 | `ovos.common_play.shuffle.set` / `.unset` / `.toggle` | set, clear, or flip the §3.3 shuffle mode |
-| `ovos.common_play.repeat.set` / `.unset` / `.toggle` | set, clear, or flip the §3.3 loop mode |
+| `ovos.common_play.repeat.set` / `.unset` / `.toggle` | set, clear, or flip the §3.3 loop mode; `.set` **MAY** carry a `mode` field, `"queue"` (default) or `"track"`, selecting the queue-repeat or repeat-track state of §4.5.2 — an absent `mode` means `"queue"` |
 
 Control requests are **idempotent with respect to absent media**: issuing
 `pause` with nothing playing is a no-op, not an error.
@@ -305,6 +305,15 @@ object mirroring the report axes plus a summary of now-playing:
 | `playlist_position` | number | zero-based index of now-playing in the queue |
 | `playlist_size` | number | queue length |
 | `title`, `artist`, `image` | string | now-playing summary; empty strings when nothing is loaded |
+| `next_track` | media entry (§4.5) or null | the entry the player would select next under its current queue, loop, and merge state, bounded to one entry; null when the player cannot know which entry is next |
+| `next_track_hint` | string or null | `"shuffle"` or `"external"` when `next_track` is null for those reasons; null otherwise |
+
+A consumer needs a bounded preview of what plays next, not the full queue;
+`next_track` gives it that without exposing `playlist_position` internals.
+`next_track` is null when shuffle draws its pick at play time rather than
+in advance, or when playback is delegated to a skill renderer (§4.3.1) whose
+queue the player does not own; `next_track_hint` names which of those two
+reasons applies.
 
 Every field is present in every answer, so a consumer can rely on the shape
 rather than on key presence; with nothing loaded, `media_state` reports
