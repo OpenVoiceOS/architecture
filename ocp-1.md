@@ -159,7 +159,11 @@ in the OVOS-MSG-1 envelope. Every message **MUST** carry `context.session`
 The `ovos.common_play.` prefix is **reserved** for the Virtual Media
 Player. Components other than the player and its pipeline **MUST NOT**
 emit playback-mutating messages under this prefix; they observe state
-(§4.4) and issue requests (§4.2, §4.3).
+(§4.4) and issue requests (§4.2, §4.3). Components other than the player
+and its pipeline **MAY** emit non-mutating advisory messages under the
+prefix — control requests into the player (e.g. duck, cork) and advisory
+registration hints (e.g. the §4.3.1 announce) — since the reservation
+binds authorship of playback state, which remains the player's alone.
 
 ### 4.2 Playback requests
 
@@ -487,6 +491,13 @@ satellites) **MUST** keep each session's now-playing, queue, and transport
 state isolated: a `pause` for session A **MUST NOT** affect session B.
 State reports (§4.4) **MUST** carry the originating session so consumers
 can demultiplex.
+
+Per-session isolation **MAY** be satisfied by deployment topology rather
+than by a single multiplexing daemon: one player process per session
+scope — for instance, each satellite embedding its own player — with the
+hub-side daemon serving only its local session is an equally conformant
+arrangement. A single daemon holding many concurrent sessions is one
+implementation of §5, not a requirement of it.
 
 ---
 
