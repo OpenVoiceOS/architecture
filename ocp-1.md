@@ -229,9 +229,23 @@ than an offset.
 | `ovos.common_play.seek` | move the position within now-playing |
 | `ovos.common_play.shuffle.set` / `.unset` / `.toggle` | set, clear, or flip the §3.3 shuffle mode |
 | `ovos.common_play.repeat.set` / `.unset` / `.toggle` | set, clear, or flip the §3.3 loop mode; `.set` **MAY** carry a `mode` field, `"queue"` (default) or `"track"`, selecting the queue-repeat or repeat-track state of §4.5.2 — an absent `mode` means `"queue"` |
+| `ovos.common_play.duck` | now-playing → lower output volume without leaving `PLAYING` |
+| `ovos.common_play.unduck` | restore the pre-duck volume; a no-op when not ducked |
+| `ovos.common_play.cork` | now-playing → `PAUSED`, remembering that the pause was cork-initiated |
+| `ovos.common_play.uncork` | resume playback only when the current pause was cork-initiated |
 
 Control requests are **idempotent with respect to absent media**: issuing
 `pause` with nothing playing is a no-op, not an error.
+
+`duck`, `unduck`, `cork`, and `uncork` are the §4.1 advisory control
+requests that platform services emit around speech input and output, such
+as lowering or pausing playback for the duration of a wake word or a
+spoken response. Whether a given service ducks or corks around that
+activity is the emitting service's own configuration, not player
+behaviour. A pause the user requested directly through `pause` carries no
+such memory, and `uncork` **MUST NOT** resume it. The player's legacy
+listener and TTS aliases are pre-spec compatibility surface and are not
+part of this table.
 
 #### 4.3.1 Delegated control of skill-rendered playback
 
