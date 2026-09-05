@@ -1393,10 +1393,10 @@ Broadcast. Payload **MAY** be empty.
 A conformant orchestrator **MUST** emit exactly one
 `ovos.utterance.handled` per entry-topic Message (§9.1).
 Multiple emissions for one utterance are malformed; zero is
-malformed. A Message rejected at intake under OVOS-SESSION-1 §2.5
-(a malformed `session` carrier) is not an entry-topic Message for
-this count: it never opened a lifecycle, and it owes no end
-marker.
+malformed. A Message dropped at intake under OVOS-SESSION-1 §2.5
+still receives its single end marker: the orchestrator emits it
+directly from the entry Message, and no lifecycle trio is emitted
+for it.
 
 ### 9.6 `ovos.utterance.speak` — natural-language response
 
