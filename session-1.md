@@ -228,15 +228,23 @@ array, or boolean). There is no field set to interpret, no
 `session_id` to key conversation state on — the carrier itself is
 unusable, so the field-by-field rules cannot apply.
 
-On a malformed carrier a consumer:
+A malformed carrier is dropped by the **first consumer that sees
+it** — the bus client, or the orchestrator itself when it is also the
+first consumer on an in-process bus — not carried forward for a later
+stage to reject. On a malformed carrier, that consumer:
 
 - **MUST NOT** crash, and **MUST NOT** let the error tear down its
   transport. A malformed carrier is a **per-message** producer fault,
   never a transport fault; a consumer that drops its bus connection
   over one bad message can be held offline indefinitely by a single
   misbehaving producer.
-- **SHOULD** reject (drop) the offending Message and **SHOULD** log the
-  violation.
+- **MUST** drop the offending Message: no handler runs, no lifecycle
+  trio starts, and no OVOS-PIPELINE-1 §9.5 end marker is emitted for
+  it — a dropped Message never entered the lifecycle §9.5 counts.
+- **MUST** emit exactly one `ovos.session.rejected` Message for the
+  dropped Message (defined below). This is the only signal the drop
+  produces.
+- **SHOULD** log the violation.
 - **MUST NOT** substitute the default session and process the Message
   as though the carrier were valid. Absence resolves to the default
   (§2.1); a malformed carrier does **not** — fabricating a session
@@ -248,13 +256,28 @@ An explicit `null` for the whole `session` value is **absence**, not a
 malformed carrier: it resolves to the default session per §2.1, the
 same as an omitted `session` key.
 
-The orchestrator **MUST** still emit `ovos.utterance.handled` for a
-Message dropped under this rule: OVOS-PIPELINE-1 §9.5 counts every
-entry-topic Message, dropped or not, and requires exactly one end
-marker per Message. The orchestrator derives the end marker from the
-dropped Message per OVOS-MSG-1 §4.1, so its `context` — including the
-malformed `session` carrier and the `utterance_id` — propagates
-unchanged; nothing about the session is fabricated to produce it.
+**`ovos.session.rejected`** — dropping consumer → broadcast. Static
+dotted topic per OVOS-MSG-1 §2.1.1.
+
+**Payload:**
+
+```json
+{
+  "msg_type": "ovos.utterance.handle",
+  "reason": "malformed_carrier"
+}
+```
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `msg_type` | string | yes | The `type` of the dropped Message. |
+| `reason` | string | yes | `"malformed_carrier"` — the only reason this version defines. |
+
+`context` carries the dropped Message's `utterance_id` when the
+dropped Message had one, and carries **no** `session` key: fabricating
+one would misrepresent a carrier this specification just declared
+unusable. Its absence resolves to the default session on receipt per
+§2.1, the same as any Message that omits `session`.
 
 ---
 
