@@ -756,33 +756,59 @@ in the manifest.
 
 ### 10.2 `ovos.intent.describe`
 
-Returns the full definition of one intent. Request payload:
+Returns stored registration payloads. Request payload:
 
 ```json
 { "skill_id": "music.skill", "intent_name": "play_music", "lang": "en-US", "method": "template", "session_id": "satellite-abc" }
 ```
 
-`method` is an **optional filter**: `"keyword"` or `"template"`. When
-omitted, the response returns every registered method for the triple.
+`skill_id` is **required**: it is what bounds the reply, so a
+describe query can never return more than one skill's registrations.
+A request without `skill_id` is an error.
 
-`session_id` is likewise an **optional filter**. When provided, only
-definitions registered under that `session_id` are returned. When
-omitted, definitions from every `session_id` are returned — the same
-`(skill_id, intent_name, lang, method)` may exist under `"default"`
-and under one or more sessions (§11.2), and each is a separate entry.
+`intent_name`, `lang`, `method`, and `session_id` are **optional
+filters**. Omitting `intent_name` returns every intent of the skill;
+omitting `lang` returns every language, each folded per the
+case-insensitive BCP-47 comparison of §3.2 (INTENT-2 §2); omitting
+`method` returns every registered method;
+omitting `session_id` returns definitions from every session: the
+same `(skill_id, intent_name, lang, method)` may exist under
+`"default"` and under one or more sessions (§11.2), and each is a
+separate entry.
+
+A single query naming `skill_id` alone therefore returns every
+registration of that skill, across every intent, language, method,
+and session:
+
+```json
+{ "skill_id": "music.skill" }
+```
+
+This is the shape a client uses to render "what can I ask this
+device" in one round trip per skill, instead of one request per
+intent per language.
 
 Response (`ovos.intent.describe.response`):
 
-- On success, `{ "ok": true, "definitions": [ { "method": "...", "session_id": "...", "definition": {...} }, ... ] }`
+- On success, `{ "ok": true, "definitions": [ { "skill_id": "...", "intent_name": "...", "lang": "...", "method": "...", "session_id": "...", "definition": {...} }, ... ] }`
   where each `definition` is the §5 or §6 payload as it was broadcast.
-  Each entry is self-identifying via its `method` and `session_id`
-  fields; consumers **MUST** key on those, not on array position. The
-  array carries one entry per registered `(session_id, method)`
-  combination that passes the filters. When more than one entry is
-  returned, ordering them by `session_id` with `"default"` first, then
-  by `method` in the order `keyword`, `template`, is **RECOMMENDED**
-  for stable output.
-- On unknown intent, `{ "ok": false, "error": "..." }`.
+  Each entry is self-identifying via its `skill_id`, `intent_name`,
+  `lang`, `method`, and `session_id` fields; consumers **MUST** key on
+  those, not on array position. The array carries one entry per
+  registered `(session_id, intent_name, lang, method)` combination
+  that passes the filters. When more than one entry is returned,
+  ordering them by `session_id` with `"default"` first, then by
+  `intent_name`, then by `lang`, then by `method` in the order
+  `keyword`, `template`, is **RECOMMENDED** for stable output. A
+  query that names one `intent_name` and one `lang` has a single
+  value at each of those positions, so its entries order by
+  `session_id` and then `method`.
+- On an unknown skill, or on filters that match nothing, `{ "ok": false, "error": "..." }`.
+
+The reply size is bounded by one skill's registrations, which is why
+`skill_id` stays required and why `ovos.intent.list` (§10.1) stays a
+listing without definitions: a client walks the skills from §10.1
+and asks §10.2 once per skill.
 
 The orchestrator **MAY** restrict access to introspection topics;
 authorization is out of scope.
