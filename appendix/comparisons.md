@@ -66,8 +66,9 @@ grammar.
 - **Concrete, testable completeness.** HA and Rhasspy ship
   systems where the hard parts — matching, number and range
   handling, slot typing — are solved concretely. The OVOS
-  specs deliberately defer some of these (slot typing to a
-  future normalization spec; matching to the engine). That
+  specs deliberately defer some of these (matching to the
+  engine; how a typed slot's value is computed to whatever
+  component derives it, INTENT-1 §5.6). That
   deferral is intellectually consistent but means the specs'
   value depends on the engines and tooling that fill the gaps.
 
