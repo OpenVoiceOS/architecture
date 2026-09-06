@@ -1088,7 +1088,7 @@ The dispatch Message's `data`:
 | `lang` | string | yes | The content language of the match, taken directly from `Match.lang`. A `Match` with no `lang` is malformed and never reaches dispatch (§4.1). |
 | `utterance` | string | yes | The candidate string that won the match. |
 | `slots` | object (string→string) | yes | The slot map (§4.3). MAY be empty. |
-| `typed_slots` | object | no | The typed-slot map (OVOS-INTENT-1 §5.6) as it stands on the entry Message after the typed-slots stage (§9.1, OVOS-TRANSFORM-1 §3.7), so a handler can look up a normalized value by the `surface` matching its slot value. The orchestrator carries it unchanged except that it drops any key naming an unregistered type (OVOS-TRANSFORM-1 §3.7); it computes nothing itself, and omits the key entirely when no map is present after the stage. |
+| `typed_slots` | object | no | The typed-slot map (OVOS-INTENT-1 §5.6) as it stands on the entry Message after the typed-slots stage (§9.1, OVOS-TRANSFORM-1 §3.7), so a handler can look up a normalized value by the `surface` matching its slot value. Every type it carries has at least one entry: the orchestrator carries the map unchanged except that it drops any key naming an unregistered type and any key whose list is empty (OVOS-TRANSFORM-1 §3.7); it computes nothing itself, and omits the field entirely when no map is present after the stage. |
 
 `skill_id` and `intent_name` are not repeated in the payload — they are the topic's `<skill_id>:<intent_name>` prefix and suffix. A handler that needs them splits the topic on `:`.
 

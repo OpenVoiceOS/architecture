@@ -540,8 +540,7 @@ a list of entries:
 {
   "date": [
     { "span": [17, 26], "surface": "tomorrow", "value": "2026-04-12T00:00:00+01:00" }
-  ],
-  "number": []
+  ]
 }
 ```
 
@@ -563,10 +562,18 @@ an utterance transformer that rewrites text discards the map
 
 Entries **MAY** overlap — the same words can read as more than one datum, and
 the map states every reading rather than choosing between them; an engine
-chooses. A type's list **MAY** be empty, meaning the type was computed and
-nothing of that kind was found. A type **absent** from the map was **not
-computed**, which is not the same claim and MUST NOT be read as "nothing
-found".
+chooses. The map carries only types for which at least one entry was found: a
+transformer that computes a type and finds nothing of that kind MUST omit
+the type rather than list it with an empty array, and an orchestrator that
+receives an empty list for a type MUST drop that type before carrying the
+map onward, at the same point it drops a key naming an unregistered type
+(OVOS-TRANSFORM-1 §3.7). A type absent from the map means only that no value
+of that type is available to the consumer; the absence carries no claim
+about why, whether the type was never computed, the session's language has
+no parser for it, or the utterance held nothing of that kind, and a consumer
+MUST NOT try to distinguish these causes from the map. Provenance of an
+absence is an implementation logging concern where a deployment wants one,
+never a payload concern.
 
 **How an engine may use it.** An engine **MAY** use the map to constrain where
 `{type:name}` matches — preferring or requiring a span the map lists for that
