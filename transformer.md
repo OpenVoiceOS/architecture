@@ -699,6 +699,9 @@ whether a second transformer's `date` entries replace, extend, or duplicate
 the first's.
 
 **Output.** The **typed-slots map** of OVOS-INTENT-1 §5.6, and nothing else.
+The map carries only types for which the transformer found at least one
+entry: a type it computes and finds nothing of is omitted, never listed with
+an empty array.
 
 **Permitted mutations.** None. A typed-slots transformer **MUST NOT** alter
 `utterances` — the spans it publishes index the text as it stands — and
@@ -720,14 +723,18 @@ surface and never needs to know (OVOS-INTENT-1 §5.6).
 type nothing declares is time spent on a value nothing will read. A
 transformer **SHOULD** therefore compute only the declared types it was
 given, and **MAY** compute every registered type where the deployment asks
-for that. A type it does not compute is absent from the map, which
-OVOS-INTENT-1 §5.6 distinguishes from a type computed and found empty.
+for that. A type it does not compute is absent from the map exactly as a
+type it computed and found nothing for: OVOS-INTENT-1 §5.6 gives a consumer
+no way, and no reason, to tell the two apart.
 
 **The type set is closed.** The valid keys are exactly the types registered in
 the OVOS-INTENT-1 §5.6 table. A transformer **MUST NOT** emit a key outside
 it, and an orchestrator **MUST** drop every such key from **any**
 `data.typed_slots` map it carries onward, whether the stage produced that map
-or it arrived on the entry Message from a producer; it **SHOULD** log each
+or it arrived on the entry Message from a producer; it **MUST** likewise drop
+any key whose list is empty, at the same point and for the same reason — an
+empty list carries no value, so keeping the key would only invite a consumer
+to branch on a difference the wire does not need. It **SHOULD** log each
 drop, and carries the remaining types normally. Adding a type is an amendment to
 that table, not something a deployment settles locally: a consumer reads
 `data.typed_slots` expecting the value shapes the table fixes, and a
@@ -1408,18 +1415,20 @@ covers.
 
 **An orchestrator that carries a `data.typed_slots` map** **MUST**
 drop from it every key naming a type not registered in
-OVOS-INTENT-1 §5.6, **SHOULD** log each drop, and **MUST** carry
-what remains through to dispatch as it stands after the stage
-(OVOS-PIPELINE-1 §7.1, which is that obligation's home for an
-orchestrator running no stage at all). A deployment that neither
-runs the stage nor receives a map emits no `data.typed_slots`,
-which every consumer treats as "not computed"
+OVOS-INTENT-1 §5.6 and every key whose list is empty, **SHOULD**
+log each drop, and **MUST** carry what remains through to dispatch
+as it stands after the stage (OVOS-PIPELINE-1 §7.1, which is that
+obligation's home for an orchestrator running no stage at all). A
+deployment that neither runs the stage nor receives a map emits no
+`data.typed_slots`, which a consumer reads exactly as it reads any
+other type absent from the map: no value of that type is available
 (OVOS-INTENT-1 §5.6).
 
 **A typed-slots transformer** **MUST**:
 
 - return only the typed-slots map of OVOS-INTENT-1 §5.6, keyed by
-  registered type names;
+  registered type names, omitting a type it found nothing for
+  rather than keying it to an empty list;
 - leave `utterances` and `Message.context` untouched (§3.7);
 - be re-entrant, and declare a `priority` (§4), by which the
   orchestrator selects it when several are loaded (§3.7).
