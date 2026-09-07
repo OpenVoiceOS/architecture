@@ -583,13 +583,16 @@ does not act on behaves exactly as the untyped `{name}` (§3.4).
 
 `Match.slots[name]` remains the **surface string** in every case
 (OVOS-PIPELINE-1 §4.3): the slot map's value type does not change, and a
-consumer that ignores typed slots sees what it always saw. A consumer that
-wants the normalized value looks it up **by surface**: for the slot's declared
-type, it takes the entry whose `surface` equals the slot value. A slot value
-that occurs more than once in the utterance matches more than one entry; the
-readings are then ambiguous, and a consumer **SHOULD** take the first. Spans
-exist for the engine, which knows which occurrence it matched; a consumer
-downstream of the match has only the string.
+consumer that ignores typed slots sees what it always saw. An engine that
+binds a typed placeholder **SHOULD** bind the entry whose span covers the
+text it matched, and **MAY** carry that span forward alongside the match. A
+consumer that wants the normalized value looks it up by surface: for the
+slot's declared type, it takes the entry whose `surface` equals the slot
+value. A slot value that occurs more than once in the utterance matches more
+than one entry, and the readings are then ambiguous. A consumer that holds
+the span the engine bound resolves by span — the entry whose span covers
+it — and falls back to the first entry by surface equality only when no
+span is available.
 
 How a value is computed — which parser, which locale rules, which
 normalization of ASR output — is **out of scope** here. This specification
