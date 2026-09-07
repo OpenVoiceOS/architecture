@@ -756,7 +756,7 @@ and policy never approved.
 
 The §5.5 layering — preference from any origin, enforcement from
 policy — is precisely what a layer-2 substrate (per OVOS-MSG-1
-§3.4 / §4.4) needs to express **granular per-peer permissions** in
+§3.4 / §4.2) needs to express **granular per-peer permissions** in
 a multi-tenant deployment, without inventing a separate
 authorization channel.
 

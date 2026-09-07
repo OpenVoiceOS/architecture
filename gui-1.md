@@ -138,8 +138,8 @@ individual applications. A template earns inclusion by **ubiquity** —
 it represents a display need reimplemented across voice applications
 generally, not a need specific to one. The set is closed against
 ad-hoc extension and **grows only by amendment of this
-specification** (a new version under the repository's versioning
-policy). An application **MUST NOT** invent template names; a render
+specification**, under the versioning policy this corpus states
+(VERSIONING.md). An application **MUST NOT** invent template names; a render
 backend **MUST NOT** rely on template names outside this section.
 
 ### 3.2 Template name form
@@ -256,22 +256,21 @@ criterion (§3.1).
 | `SYSTEM_map` | `latitude` (number, WGS-84, *req*), `longitude` (number, WGS-84, *req*), `zoom` (number, 1–20), `label` (string) | A geographic location; the backend chooses the map provider. |
 | `SYSTEM_face` | `sleeping` (boolean) | An avatar face. `sleeping` true is the resting/closed-eyes state, false the awake state. For backends that render a character rather than a screen layout. |
 
-#### Interactive companions — reserved for a future version
+#### Interactive companions — reserved names
 
-**Non-normative in this version.** Two round-trip template names are
-**reserved** but not defined: `SYSTEM_confirm` (a yes/no companion to
-a spoken question, `question` string) and `SYSTEM_select` (a choice
-companion to a spoken set of options, `prompt` string plus `items`
-array of `{label, value}`). Their display leg is straightforward, but
-their **reply leg** — the interaction event carrying the user's
-answer back to the originating application (§7.2) — has no specified
-topic or payload schema, and a template whose interaction reply is
-unspecified is unimplementable interoperably: every producer/adapter
-pair would invent its own return channel. The names are reserved so
-that no application-defined template claims them; a future version
-will specify the full round trip. Producers **MUST NOT** emit them in
-this version; the spoken path (§2.3) covers the interaction on its
-own.
+Two round-trip template names are **reserved** but not defined:
+`SYSTEM_confirm` (a yes/no companion to a spoken question, `question`
+string) and `SYSTEM_select` (a choice companion to a spoken set of
+options, `prompt` string plus `items` array of `{label, value}`).
+Their display leg is straightforward, but their **reply leg** — the
+interaction event carrying the user's answer back to the originating
+application (§7.2) — has no specified topic or payload schema, and a
+template whose interaction reply is unspecified is unimplementable
+interoperably: every producer/adapter pair would invent its own return
+channel. The names are reserved so that no application-defined
+template claims them; specifying the full round trip is left to an
+amendment of this specification. Producers **MUST NOT** emit them; the
+spoken path (§2.3) covers the interaction on its own.
 
 ### 3.5 Image delivery
 

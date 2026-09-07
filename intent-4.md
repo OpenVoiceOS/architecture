@@ -727,7 +727,7 @@ within one session scope.
 For a satellite's session-scoped registrations this makes the bridge,
 not the satellite alone, part of the recovery path: relaying the
 readiness announcement to the satellite and re-establishing the
-satellite's registrations is defined in OVOS-BRIDGE-1 §4.4.
+satellite's registrations is defined in OVOS-BRIDGE-1 §4.3.
 
 Two read-only topics:
 

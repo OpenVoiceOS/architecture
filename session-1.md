@@ -655,10 +655,12 @@ A consumer that needs the payload's content language reads
 
 ### 3.3 `site_id`
 
-`site_id` is an opaque group identifier. Its full normative
-definition — assignment rules, bridge behaviour, and consumer
-constraints — is owned by **OVOS-BRIDGE-1 §3.3**. This section is
-a registry pointer only; it states no rule of its own.
+`site_id` is an opaque group identifier expressing which devices are
+co-located at one physical place — a room or site — sharing the same
+`site_id` value. Its full normative definition — assignment rules,
+bridge behaviour, and consumer constraints — is owned by
+**OVOS-BRIDGE-1 §3.3**. This section is a registry pointer only; it
+states no rule of its own.
 
 Consumers of `site_id` within the orchestrator pipeline (audio
 routing, output-locality policy) **MAY** use it to scope decisions

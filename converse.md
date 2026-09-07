@@ -950,7 +950,7 @@ This specification deliberately does not:
 - define **escape phrases**, wake-word interactions, barge-in,
   or any signal originating below the utterance layer;
 - define the **wire shape of an interrupt signal** — owned
-  by OVOS-STOP-1 (§5.4);
+  by OVOS-STOP-1 (§5.3);
 - define **how session persists between utterances** — owned
   by OVOS-SESSION-2;
 - replace CONTEXT-1's declarative continuous-dialog surface —
