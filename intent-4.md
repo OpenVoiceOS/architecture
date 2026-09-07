@@ -434,7 +434,7 @@ Field reference:
 | `blacklist` | array of strings | no | Slot-free phrases (INTENT-2 §4.3) whose occurrence suppresses the match (INTENT-3 §5.5). |
 | `required_slots` | array of strings | no | Slot names the engine MUST extract for a match to be valid (INTENT-3 §5.3). |
 | `slot_types` | object, slot name → type name | no | The typed-slot declarations of the templates in `samples`, derived from their `{type:name}` placeholders (OVOS-INTENT-1 §3.4, §5.6). |
-| `slot_blacklist` | object, slot name → array of strings | no | Per-slot exclusion sets (INTENT-2 §4.3): a bound value equal, whole-value and after the engine's normal utterance normalization, to a listed string is not accepted for that slot; the slot is left unresolved rather than bound. |
+| `slot_blacklist` | object, slot name → array of strings | no | Per-slot exclusion sets. Membership and the resulting bind-or-leave-unresolved behavior are defined by INTENT-2 §4.3; this field carries that exclusion set for the named slot. |
 
 As in §5.2, an absent list-valued key (`blacklist`,
 `required_slots`) is equivalent to an empty list; an absent
