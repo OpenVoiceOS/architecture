@@ -117,14 +117,13 @@ a *recency stack with deduplication*, not an append-only log: a
 re-activation of an already-listed owner removes the prior entry
 and re-inserts at the head (§3.1).
 
-Deployments **SHOULD** bound the list length. The
-**default maximum is 64 entries**, which a deployer **MAY** raise,
-lower, or set to "unbounded". The cap is a tuning value, not an
-interoperability invariant — any bound (or none) is conformant.
-When the cap would be exceeded by an
-insertion, the orchestrator **MUST** drop the tail entry (the
-least-recent surviving owner) before inserting the new head, and
-**SHOULD** log the eviction.
+Deployments **SHOULD** bound the list length. The bound is
+deployment configuration, not an interoperability invariant: a
+consumer **MUST NOT** assume any particular bound, or that one is
+set at all. When the bound would be exceeded by an insertion, the
+orchestrator **MUST** drop the tail entry (the least-recent
+surviving owner) before inserting the new head, and **SHOULD** log
+the eviction.
 
 **Response-mode holder exemption.** The owner named by a present,
 non-expired `session.response_mode` (§2.2) **MUST NOT** be evicted
