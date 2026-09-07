@@ -148,11 +148,17 @@ audio and transcript languages differ.
 
 ### 5.2 Session assignment
 
-The audio input service **MUST** assign a session to every emission,
-placed in `context.session` (**OVOS-MSG-1 §4**).
+An audio input service that holds a session, either a named
+session it was handed or one it is configured with, **MUST**
+carry that session on every emission, placed in `context.session`
+(**OVOS-MSG-1 §4**).
 
-- **Local device** — SHOULD use `session_id: "default"`
-  (**OVOS-SESSION-2 §5**).
+An audio input service acting as the default-session client **MAY**
+omit the session carrier instead. The orchestrator then assigns
+the default session, as **OVOS-SESSION-2 §6.5** defines.
+
+- **Local device** — typically acts as the default-session client
+  and follows **OVOS-SESSION-2 §6.5**.
 - **Satellite** — session is assigned by the bridge at the hub
   boundary (**OVOS-BRIDGE-1 §3.4.2**); the bridge relays or
   NAT-translates the `session_id` as needed (**OVOS-BRIDGE-1
