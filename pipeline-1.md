@@ -1402,15 +1402,19 @@ this topic; a conformant producer emits to it.
 
 ### 9.1.1 The lifecycle identifier — `context.utterance_id`
 
-On receiving the entry Message the orchestrator stamps
-`context.utterance_id` — an opaque string naming this one
-**utterance lifecycle** — exactly once, at entry. Everything
-derived from the lifecycle — the transformer passes, the pipeline
-contest and its polls, the pongs, the dispatch, the terminal events
-of §9.5 — carries the same value, because OVOS-MSG-1 §5's
-derivations preserve `context` keys; no component ever copies it by
-hand. A component **MUST NOT** overwrite a `utterance_id` already
-present: regeneration downstream would detach every
+On receiving the entry Message the orchestrator **MUST** stamp
+`context.utterance_id` with a value of its own choosing — an opaque
+string naming this one **utterance lifecycle** — exactly once, at
+entry, regardless of any value already present on the entry Message:
+a `utterance_id` supplied by whatever produced the entry Message is
+not the lifecycle identifier and the orchestrator's stamp replaces
+it. Everything derived from the lifecycle after entry — the
+transformer passes, the pipeline contest and its polls, the pongs,
+the dispatch, the terminal events of §9.5 — carries the value the
+orchestrator stamped, because OVOS-MSG-1 §5's derivations preserve
+`context` keys; no component ever copies it by hand. A component
+downstream of entry **MUST NOT** overwrite the `utterance_id` the
+orchestrator stamped: regeneration downstream would detach every
 already-derived Message from its lifecycle.
 
 A component that opens a lifecycle without passing through the
