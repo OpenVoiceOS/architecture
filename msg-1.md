@@ -156,21 +156,43 @@ a `:` anywhere in `type` means a dispatch-shaped topic per the
 specification that defined that shape; no `:` means an ordinary
 dotted topic.
 
-**Identifiers appear in topics only in the dispatch shape.** The
-dispatch topic `<skill_id>:<intent_name>` is the single topic shape
-built from identifiers, and the single one a consumer parses: split
-on the one `:`, `skill_id` left, `intent_name` right. Neither
-identifier contains `:`; the dots a `skill_id` carries are inert,
-because nothing splits a dispatch topic on dots.
+**Identifiers appear in the dispatch shape, and in the enumerable
+dotted patterns below.** The dispatch topic
+`<skill_id>:<intent_name>` is the topic shape a consumer parses by
+splitting on the one `:`, `skill_id` left, `intent_name` right.
+Neither identifier contains `:`; the dots a `skill_id` carries are
+inert, because nothing splits a dispatch topic on dots. A dotted
+pattern embeds its identifier at a fixed position instead, as fixed
+by the specification that defines the pattern.
 
-Every dotted topic is a **static string** fixed by the
-specification that defines it. Nothing about a Message's target
+Every dotted topic is either a **static string** fixed by the
+specification that defines it, or an instance of one of the
+enumerable patterns below. Nothing about a Message's target
 travels in a dotted topic: addressing beyond the topic is
 **payload** (`data`), and the routing pair (§3.2–§3.3) is owned by
 the `reply` swap (§5.2) alone. A monitor, a bridge allowlist, or a
 conformance harness can therefore enumerate the complete topic
-surface of a deployment from the specifications — no runtime
-identifier ever mints a topic outside the dispatch shape.
+surface of a deployment from the specifications.
+
+**Enumerable runtime-shaped patterns.** A specification **MAY**
+define a dotted topic *pattern* that embeds a runtime
+identifier at a fixed position, provided the pattern and the
+identifier it embeds are both fixed in that specification. Two such
+patterns exist:
+
+- a per-component introspection topic embedding the identifier of
+  the component being queried, of the shape
+  `<namespace>.<component_id>.<verb>`;
+- a per-component scheduled event embedding the identifier of the
+  component that owns the schedule, of the shape
+  `<component_id>.<name>`.
+
+A consumer can still enumerate the complete topic surface of a
+deployment, because each pattern is itself fixed by a specification
+and the set of live identifiers is discoverable at runtime; no other
+mechanism mints a topic. A dotted topic that matches neither a static
+string fixed by a specification nor one of these enumerable patterns
+is not conformant.
 
 **Recommended identifier form.** When defining a new identifier
 intended for use as a topic component, prefer values that contain only
