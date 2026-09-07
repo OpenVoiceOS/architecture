@@ -179,9 +179,11 @@ equal `context.skill_id`.** This holds for
 plugin or orchestrator — **MUST NOT** index or act on one of these
 messages whose payload `skill_id` differs from `context.skill_id`,
 and **MUST** log the mismatch at WARN with both values and the
-rejecting topic. Without this check a skill could register or
-deregister another skill's intents; `ovos.skill.deregister` (§8.4)
-in particular would be a remote uninstall. The same rule governs
+rejecting topic. A registration or deregistration whose context carries
+no skill_id is treated exactly as a mismatch: the consumer MUST NOT
+act on it, and SHOULD log the topic. Without this check a skill could
+register or deregister another skill's intents; `ovos.skill.deregister`
+(§8.4) in particular would be a remote uninstall. The same rule governs
 fallback registration (OVOS-FALLBACK-1 §3.1).
 
 `ovos.intent.enable` and `ovos.intent.disable` are **control
