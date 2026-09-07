@@ -234,7 +234,7 @@ stop handler.
 
 ### 4.4 Self-pruning of `active_handlers`
 
-A handler that cannot be stopped SHOULD remove its own entry from
+A handler that cannot be stopped MAY remove its own entry from
 `session.active_handlers` by mutating the session it holds during its
 dispatch, before it completes — the handler boundary (OVOS-SESSION-2
 §2.6). The orchestrator syncs that mutation into the round's working
@@ -432,7 +432,10 @@ handler-lifecycle trio. No other topic in this table does.
 ### Skill — SHOULD:
 
 - subscribe to `ovos.stop.ping` and respond with a `reply`-derived
-  `ovos.stop.pong` carrying `can_handle` for the inbound `session_id` (§4.2);
+  `ovos.stop.pong` carrying `can_handle` for the inbound `session_id` (§4.2).
+
+### Skill — MAY:
+
 - remove its own entry from `session.active_handlers`, via an
   in-place handler-boundary mutation, when it cannot be stopped (§4.4).
 
