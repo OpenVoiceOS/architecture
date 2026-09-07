@@ -298,6 +298,29 @@ happen only at these boundaries:
   are unaffected by this and continue to carry the session as of
   the moment each is derived.
 
+**Correlating a mutation to its round.** A mutation made at any
+of the boundaries above belongs to the round whose
+`context.utterance_id` (MSG-1 §5.4's worked example, claimed by
+PIPELINE-1 §9.1.1) the mutating Message carries: the mutating
+Message and the round share that identifier because §9.1.1's
+preservation rule carries it, unaltered, through every Message
+derived within one lifecycle. This is the sole correlation rule;
+no other field of the mutating Message is relevant to which
+round it belongs to.
+
+A round can end without a terminating signal reaching the
+orchestrator — a dispatched handler that never completes, a
+lifecycle abandoned mid-flight. An orchestrator therefore
+**MUST NOT** keep the working session of an unterminated round
+indefinitely: it **MUST** bound the number of rounds, or the
+elapsed time, for which it retains such a working session, and
+**MUST** discard it once the bound is reached. A discarded
+working session is not a loss of state: the round's session
+remains whatever the client held before the round began, or
+whatever the default-session store held for `session_id ==
+"default"` (§2.3), and the client's or store's own copy is
+unaffected by the discard.
+
 **Session mutation discipline.** A handler SHOULD NOT mutate
 session fields unless the mutation is necessary for the
 handler's function or is explicitly prescribed by another
