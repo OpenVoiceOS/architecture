@@ -298,17 +298,22 @@ requirement.
 ### 5.3 Required slots
 
 A template intent MAY declare **required slots**: a list of slot names that the
-engine **MUST** extract for a match to be valid. If any required slot is
-absent from the match result, the engine **MUST** treat the intent as
-unmatched for that utterance — the intent does not fire. The engine **MAY**
-internally consider other templates of the same intent before concluding
-that the intent is unmatched.
+engine **MUST** extract for a match to be valid. The declaration is the
+intent's paired `.required` resource (OVOS-INTENT-2 §4.5), carried to the
+engine on the intent's registration (OVOS-INTENT-4 §6.1). An intent with no
+such declaration has no required slots.
+
+The engine **MUST NOT** report a match for a template intent while any of its
+required slots is unbound: the intent does not fire for that utterance. The
+engine **MAY** internally consider other templates of the same intent before
+concluding that the intent is unmatched.
 
 Required slots are an **optional** opt-in guarantee for the handler. When
 present, the handler MAY rely on those slots being populated; when absent,
 the handler must defend against missing slots per §7.1.
 
-A required slot MUST be declared by at least one template in the intent.
+A required slot MUST be declared by at least one template in the intent
+(OVOS-INTENT-2 §4.5).
 Declaring a required slot that no template mentions is malformed: the intent
 can never match, and a tool MUST reject the definition at registration time.
 

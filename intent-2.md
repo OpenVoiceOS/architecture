@@ -28,7 +28,7 @@ permitted:
 - **slot-bearing** — expansion *and* named slots;
 - **slot-free** — expansion only.
 
-These two formats are realized as **six resource roles**, identified by file
+These two formats are realized as **seven resource roles**, identified by file
 extension. The role tells a consumer how to use the file; the format tells a
 loader how to parse it.
 
@@ -39,6 +39,7 @@ loader how to parse it.
 | Entity | `.entity` | slot-free | Example values that can fill a named slot |
 | Vocabulary | `.voc` | slot-free | A named set of localized phrasings |
 | Blacklist | `.blacklist` | slot-free | Words that suppress an intent or must not fill a slot |
+| Required slots | `.required` | slot-free | Slots an intent's match must bind (§4.5) |
 | Prompt | `.prompt` | whole-file verbatim | A localized language-model prompt (§4.4) |
 
 The slot-bearing roles map onto the data path of a voice interaction:
@@ -50,10 +51,11 @@ The slot-bearing roles map onto the data path of a voice interaction:
 
 `.entity`, `.voc`, and `.blacklist` share the slot-free format; they are how a
 developer encodes a set of natural-language phrasings for the assistant to use, and
-differ only in *which component consumes them* (§4.3).
+differ only in *which component consumes them* (§4.3). `.required` uses that
+same format to name slots rather than phrasings (§4.5).
 
 This specification covers the **folder layout**, the **common parsing rules**,
-and the **two file formats** across their **six roles**. It does not cover
+and the **two file formats** across their **seven roles**. It does not cover
 intent scoring, matching, or skill runtime behaviour.
 
 ---
@@ -137,12 +139,12 @@ produce wording a user would not expect.
 
 ## 3. Common parsing rules
 
-This section applies to the five **line-oriented** roles — `.intent`,
-`.dialog`, `.entity`, `.voc`, and `.blacklist`. The `.prompt` role is read
-whole-file verbatim and does not use this reader; its own rule is defined at
-§4.4.
+This section applies to the six **line-oriented** roles — `.intent`,
+`.dialog`, `.entity`, `.voc`, `.blacklist`, and `.required`. The `.prompt` role
+is read whole-file verbatim and does not use this reader; its own rule is
+defined at §4.4.
 
-These five roles share one reader behaviour:
+These six roles share one reader behaviour:
 
 - the file is **UTF-8**; it SHOULD NOT begin with a byte-order mark, and a
   reader that encounters one MUST discard it;
@@ -160,9 +162,9 @@ below apply *after* this filtering.
 ## 4. File formats
 
 A file's **format** is determined by its role (§1): `.intent` and `.dialog` are
-**slot-bearing**; `.entity`, `.voc`, and `.blacklist` are **slot-free**. Every
-file is a list of templates, one per line, parsed per §3; a resource is
-identified by its `(role, base name)` pair (§2).
+**slot-bearing**; `.entity`, `.voc`, `.blacklist`, and `.required` are
+**slot-free**. Every file is a list of templates, one per line, parsed per §3;
+a resource is identified by its `(role, base name)` pair (§2).
 
 ### 4.1 `.intent` — intent training samples
 
@@ -385,6 +387,30 @@ is unchanged (whether or not it sits in a code block). A `{{tone}}` slot the
 caller passed no value for would likewise stay literal.
 
 
+### 4.5 `.required` — an intent's required slots
+
+**Format.** Slot-free: each line is a bare slot name, obeying the slot-name
+rule of OVOS-INTENT-1 §3.4 — lowercase ASCII letters, digits, and underscores,
+not beginning with a digit. A line carrying expansion metacharacters, a named
+slot, or whitespace is malformed.
+
+**Role.** Names the slots the intent's match must bind (OVOS-INTENT-3 §5.3).
+The file is paired by base name with exactly one `.intent`, as a `.blacklist`
+is (§4.3), and constrains that intent alone. Every name it lists MUST be
+declared by at least one template of the paired `.intent`; a name no template
+declares makes the intent unmatchable and the definition malformed.
+
+A `.required` file is optional. Without one the intent has no required slots
+and every slot is optional for its handler.
+
+**Loads as.** The set of slot names, one per line, carried on the intent's
+registration (OVOS-INTENT-4 §6.1).
+
+```
+# play_music.required   — play_music.intent matches only with {query} bound
+query
+```
+
 ---
 
 ## 5. Authoring a conformant loader
@@ -395,20 +421,20 @@ A loader for these resources, in any language, **MUST**:
 2. **Locate a file** — within the resolved language directory, searching its
    subdirectories recursively, find a file by its base name and extension,
    honouring the override precedence of §2.1.
-3. **Apply the common reader** — for the five line-oriented roles (§3): UTF-8,
+3. **Apply the common reader** — for the six line-oriented roles (§3): UTF-8,
    accept `LF`/`CRLF`, strip lines, skip blanks and `#`-comments. `.prompt` is
    exempt — it is read whole-file verbatim (§4.4) and does not pass through
    this reader.
 4. **Apply the per-format rule**:
-   - `.intent` and the slot-free roles (`.entity`, `.voc`, `.blacklist`) —
-     expand each line to its sample set at load time via an
+   - `.intent` and the slot-free roles (`.entity`, `.voc`, `.blacklist`,
+     `.required`) — expand each line to its sample set at load time via an
      OVOS-INTENT-1-conformant expander, leaving any named slots intact;
    - `.dialog` — retain each line as a phrase string; expand per-render (§4.2);
    - `.prompt` — read the whole file verbatim as a single string, applying
      only UTF-8 decoding and byte-order-mark discovery (§3); no line
      splitting, stripping, blank-skipping, or `#`-comment filtering is
      applied (§4.4).
-5. **Reject an empty file** — a resource file of one of the five
+5. **Reject an empty file** — a resource file of one of the six
    line-oriented roles that yields no templates after step 3 MUST be treated
    as malformed: every such file MUST contribute at least one template.
    (Each template must in turn expand to at least one non-empty sample, or it
@@ -426,7 +452,7 @@ specification.
 
 - *Sentence Template Grammar Specification* (OVOS-INTENT-1) — the template
   grammar, its two facets (expansion and named slots), expansion semantics, and
-  the slot fill modes. Five resource roles — `.intent`, `.dialog`,
-  `.entity`, `.voc`, `.blacklist` — are lists of templates written in this
-  grammar. The `.prompt` role (§4.4) is not a template file; it is verbatim
+  the slot fill modes. Six resource roles — `.intent`, `.dialog`,
+  `.entity`, `.voc`, `.blacklist`, `.required` — are lists of templates written
+  in this grammar. The `.prompt` role (§4.4) is not a template file; it is verbatim
   text with optional `{{name}}` double-brace substitution only.
