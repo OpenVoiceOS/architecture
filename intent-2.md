@@ -348,12 +348,14 @@ legitimately contain brace sequences the author never intended as slots, so
 substitution is conservative: it touches only the `{{name}}` occurrences whose
 names the caller explicitly provides.
 
-**Malformed file.** A `.prompt` file that is empty, or that contains only
-whitespace, is malformed — a loader MUST treat it the same as any other
-malformed resource (§5 step 5). Every other byte sequence, including a file
-consisting solely of `#` lines, is a valid prompt: `.prompt` has no comment
-handling (above), so such a file is not empty, it is a prompt whose content
-happens to look like comments.
+**Empty content.** A `.prompt` file whose content is empty, or consists
+only of whitespace, is well-formed: it means the intent carries no prompt for
+that language, overriding through the precedence of §2.1 whatever prompt it
+would otherwise inherit. A `.prompt` file is malformed only when its content
+violates a requirement this section states. Every byte sequence is valid
+plain text under the Format rule above, including one consisting solely of
+`#` lines or of whitespace, so no `.prompt` file is malformed on content
+grounds.
 
 **Loads as.** The single whole-file string, with substitution applied per the
 rules above.
@@ -412,8 +414,9 @@ A loader for these resources, in any language, **MUST**:
    line-oriented roles that yields no templates after step 3 MUST be treated
    as malformed: every such file MUST contribute at least one template.
    (Each template must in turn expand to at least one non-empty sample, or it
-   is itself malformed — OVOS-INTENT-1 §3.6.) A `.prompt` file is malformed
-   instead under the whitespace-only rule of §4.4.
+   is itself malformed — OVOS-INTENT-1 §3.6.) This step does not apply to
+   `.prompt`: an empty or whitespace-only `.prompt` file is well-formed and
+   means an empty override (§4.4).
 
 A loader **MAY** cache parsed results and **MAY** implement a language-fallback
 policy per §2.2, but **MUST NOT** change the meaning of the formats defined
