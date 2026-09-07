@@ -304,11 +304,9 @@ handler's function or is explicitly prescribed by another
 specification. Incidental mutations add state that clients and
 observers must track, increase the risk of session-state races
 in multi-component deployments, and make session evolution
-harder to reason about. When another spec prescribes a
-mutation (e.g. a handler removing itself from
-`session.active_handlers` per OVOS-STOP-1 §4.4), that
-prescription is the authority; this discipline rule does not
-override it.
+harder to reason about. When another specification prescribes a
+mutation, that prescription is the authority; this discipline
+rule does not override it.
 
 **Incidental bus events never mutate the working session.**
 Bus events emitted *outside* these boundaries — the

@@ -118,8 +118,9 @@ Inside `match`:
    from the `active_handlers` entries whose `skill_id` is a positive
    responder, apply the candidate filter and the recency rule below,
    and construct `updated_session` removing the selected `skill_id`
-   from `active_handlers` and clearing any `response_mode` entry it
-   owns. Return
+   and every declining candidate (§4.4) from `active_handlers`, and
+   clearing any `response_mode` entry the selected `skill_id` owns.
+   Return
    `Match(skill_id=<that_skill_id>, intent_name="stop", updated_session=...)`.
    Selection MUST be restricted to positive responders: an entry that
    did not answer the ping positively MUST NOT be selected at this
@@ -232,13 +233,22 @@ The stop handler MUST NOT interrupt activity belonging to a different
 and is not rolled back if the orchestrator emits `.error` for the
 stop handler.
 
-### 4.4 Self-pruning of `active_handlers`
+### 4.4 Pruning declining candidates from `active_handlers`
 
-A handler that cannot be stopped SHOULD remove its own entry from
-`session.active_handlers` by mutating the session it holds during its
-dispatch, before it completes — the handler boundary (OVOS-SESSION-2
-§2.6). The orchestrator syncs that mutation into the round's working
-session at handler completion, so that future ping rounds bypass it.
+A candidate in a poll round (§4.2) that is not a positive responder —
+one that answered `can_handle: false`, or whose pong was malformed,
+duplicate, late, or absent — has declined the stop for the inbound
+`session_id`. The stop plugin MUST remove every declining candidate's
+entry from `session.active_handlers`, together with the selected
+dispatch target's entry, and carry the result on the same
+`Match.updated_session` (§4.1, PIPELINE-1 §4.2), so that a later poll
+round does not re-query a handler that has already declined.
+
+A handler MUST NOT mutate `session.active_handlers`. PIPELINE-1 §7.1
+reserves the field's dispatch-time entry to the orchestrator, and any
+other change to it is a pipeline-boundary act performed through
+`Match.updated_session` (PIPELINE-1 §4.2), not a handler-boundary
+mutation.
 
 ---
 
@@ -325,7 +335,8 @@ cascade's recency input. It is distinct from `session.converse_handlers`
 A stop plugin MUST drain `active_handlers` via `Match.updated_session`
 (committed pre-dispatch per PIPELINE-1 §4.2):
 
-- `stop` Match — remove the dispatch target entry only;
+- `stop` Match — remove the dispatch target entry and every declining
+  candidate's entry (§4.4);
 - `global_stop` Match — empty `active_handlers` entirely and empty
   `converse_handlers` (OVOS-CONVERSE-1 §2.1) entirely.
 
@@ -432,9 +443,7 @@ handler-lifecycle trio. No other topic in this table does.
 ### Skill — SHOULD:
 
 - subscribe to `ovos.stop.ping` and respond with a `reply`-derived
-  `ovos.stop.pong` carrying `can_handle` for the inbound `session_id` (§4.2);
-- remove its own entry from `session.active_handlers`, via an
-  in-place handler-boundary mutation, when it cannot be stopped (§4.4).
+  `ovos.stop.pong` carrying `can_handle` for the inbound `session_id` (§4.2).
 
 ### Non-skill component performing user-visible activity — MUST:
 
