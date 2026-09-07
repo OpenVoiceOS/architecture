@@ -207,28 +207,21 @@ Inputs:
   language. A plugin is free to consider all candidates, only the
   first, or any subset; the orchestrator does not prescribe how
   candidates are weighted.
-- `lang` — the BCP-47 content-language tag. When the entry-topic
-  (§9.1) carried an authoritative `Message.data.lang`, the
-  orchestrator passes it through. When it did not, the
-  orchestrator **MUST** resolve the utterance language **once**
-  per utterance, from the per-utterance evidence fields of
-  OVOS-SESSION-1 §3.2 (user preference, lang-detect signals), and
-  pass the resolved tag to **every** plugin's `match` call for
-  that utterance. When no §3.2 evidence field is present, the
-  orchestrator **MUST** resolve to the **deployment default
-  language** — a single deployment-configured BCP-47 tag every
-  orchestrator has. Resolution therefore always terminates in a
-  tag: the `lang` argument is never absent and never empty, and a
-  plugin **MUST NOT** be called with an unresolved language.
-  A single resolution point keeps the match round
-  coherent: if each plugin re-derived language independently, the
-  same utterance could be matched in different languages at
-  different pipeline stages, and which language "wins" would be an
-  accident of ordering. A plugin **MAY** refine the received tag
-  (e.g. a multilingual matcher that detects a different content
-  language) but **MUST NOT** re-derive it independently from
-  session evidence, and **MUST** declare the language it actually
-  matched in via `Match.lang`.
+- `lang` — the BCP-47 content-language tag, resolved exactly once
+  per utterance by the precedence of OVOS-SESSION-1 §3.2.7. The
+  orchestrator passes the resolved tag to **every** plugin's
+  `match` call for that utterance; resolution always terminates in
+  a tag, so the `lang` argument is never absent and never empty,
+  and a plugin **MUST NOT** be called with an unresolved language.
+  A single resolution point keeps the match round coherent: if
+  each plugin re-derived language independently, the same
+  utterance could be matched in different languages at different
+  pipeline stages, and which language "wins" would be an accident
+  of ordering. A plugin **MAY** refine the received tag (e.g. a
+  multilingual matcher that detects a different content language)
+  but **MUST NOT** re-derive it independently from session
+  evidence, and **MUST** declare the language it actually matched
+  in via `Match.lang`.
 - `session` — the session carrier from `context.session` of the
   utterance Message (OVOS-MSG-1 §4, OVOS-SESSION-1).
 
