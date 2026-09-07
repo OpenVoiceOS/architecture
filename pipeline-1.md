@@ -146,6 +146,13 @@ Constraints on `pipeline_id` strings:
   and **SHOULD** log the rejection.
 - Unique within a deployment's loaded-plugin set.
 
+A deployment **MUST** refuse to load a second plugin declaring a
+`pipeline_id` already held by a loaded plugin, and **MUST** report
+that refusal in a way the deployer can observe. The first plugin
+loaded under the id **MUST** stay loaded and continue serving
+requests. A `session.pipeline` entry naming that id refers to the
+plugin that is loaded, never to the refused one.
+
 A plugin instance has **exactly one** `pipeline_id`. That
 identifier is the plugin's **actor identity**, and it lives in the
 same namespace as a `skill_id` — the two are indistinguishable by
