@@ -167,65 +167,45 @@ single `Match` naming a single target, and the orchestrator dispatches
 
 ### 4.2 Ping and pong shape
 
-**`ovos.stop.ping`** — broadcast. Payload MAY be empty. The stop
-plugin MUST derive the ping via `reply` from the inbound utterance
-Message (OVOS-MSG-1 §5.2), so that the ping carries the inbound
-`session_id` and the routing metadata of the utterance emitter.
+The stop cascade polls its candidates with a candidate poll
+(PIPELINE-1 §4.5), on the topic pair
 
-**`ovos.stop.pong`** — shared reply topic. A handler MUST emit a
-Message of type `ovos.stop.pong` derived via `reply` from the ping
-(OVOS-MSG-1 §5.2), so that the pong reaches the stop plugin
-regardless of where the skill is running (local or remote). `source`
-and `destination` are layer-2 metadata and do not affect the topic
-name.
+`ovos.stop.ping` → `ovos.stop.pong`
+
+with the ping, pong, correlation, validity, duplicate and window
+rules of that section, including the requirement that identity is
+the payload `skill_id` verified against the round's candidate set.
+What follows is what is specific to stop.
+
+**The candidate set** is the `active_handlers` pool the round
+queried (§4.1 step 3). The ping payload MAY be empty: the pool is
+plugin-side state, and nothing in the question is candidate-specific.
+
+**The pong payload** is the PIPELINE-1 §4.5 shape, with no field of
+this specification's own:
 
 ```json
 { "skill_id": "example.skill", "can_handle": true }
 ```
 
-| Field | Type | Required | Meaning |
-|-------|------|----------|---------|
-| `skill_id` | string | yes | The `skill_id` of the responding handler. |
-| `can_handle` | boolean | yes | Whether the handler has stoppable activity for the inbound `session_id`. |
-
-The boolean's field name is protocol-specific: this spec and
-OVOS-FALLBACK-1 use `can_handle`, OVOS-CONVERSE-1's poll uses
-`result`, and OVOS-COMMON-QUERY-1 uses `can_answer`. Each name is
-normative only within its own protocol.
-
-`can_handle: true` asserts that the handler has user-visible or
-session-affecting activity in progress for the inbound `session_id`
-**and** is prepared to cease it on receipt of `<skill_id>:stop`.
-
-A handler with no current activity for the inbound `session_id`
-**MUST NOT** respond `can_handle: true`. It MAY respond
+**What a claim means.** `can_handle: true` asserts that the handler
+has user-visible or session-affecting activity in progress for the
+inbound `session_id` **and** is prepared to cease it on receipt of
+`<skill_id>:stop`. A handler with no current activity for that
+`session_id` **MUST NOT** respond `can_handle: true`. It MAY respond
 `can_handle: false` or remain silent. A handler that does not
-subscribe to `ovos.stop.ping`, or does not respond within the timeout,
-is treated as `can_handle: false` for that ping round. If no handler
-declares stoppability, the cascade falls back to the most recently
-activated remaining `active_handlers` entry per §4.1 step 5 — it does
-not escalate to `global_stop`.
+subscribe to `ovos.stop.ping` is treated as `can_handle: false` for
+that round.
 
-**Malformed and duplicate pongs.** A pong is *valid* only when it
-carries a `skill_id` string and a `can_handle` boolean. The stop
-plugin MUST treat the responding handler as not stoppable for that
-ping round when:
+**The window.** RECOMMENDED default 0.5 s, deployer-configured, and
+it SHOULD NOT exceed 1 s.
 
-- `can_handle` is absent, or is present but not a JSON boolean —
-  a truthy non-boolean value MUST NOT be coerced to `true`;
-- `skill_id` is absent, or names a skill_id outside the
-  `active_handlers` pool this ping round queried (§4.1 step 3).
-  Identity is the payload `skill_id`, bound to the ping round by the
-  inbound `session_id` the ping carries, and verified against that
-  pool — never against a `skill_id` inferred from MSG-1 derivation
-  metadata, which carries no identity for the responding component
-  (OVOS-MSG-1 §5.2). OVOS-COMMON-QUERY-1 §7.1.1 binds a claim
-  response's payload identity to its own contest the same way.
-
-When a handler emits more than one pong in a ping round, the first
-valid pong wins and later pongs from the same `skill_id` MUST be
-ignored. Pongs arriving after the timeout MUST be ignored: the
-selection made at step 4 or step 5 is final for that utterance.
+**The ordering rule** is the recency rule of §4.1, applied to the
+positive responders. If no handler declares stoppability, the
+cascade falls back to the most recently activated remaining
+`active_handlers` entry per §4.1 step 5 — it does not escalate to
+`global_stop`. The selection made at step 4 or step 5 is final for
+that utterance.
 
 ### 4.3 Dispatch and stop handler obligations
 

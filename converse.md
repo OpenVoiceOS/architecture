@@ -398,125 +398,62 @@ When invoked, a converse plugin MUST proceed in this order:
 
 ### 4.2 The poll round-trip
 
-When the eligible set (`session.converse_handlers`, after the §3.2
-prune) is non-empty the plugin broadcasts **one** ping for the
-round:
+The converse plugin decides the round with a candidate poll
+(PIPELINE-1 §4.5), on the topic pair
 
-`ovos.converse.ping`
+`ovos.converse.ping` → `ovos.converse.pong`
 
-derived from the inbound utterance Message via `reply`
-(OVOS-MSG-1 §5.2), so that `context.session` and the routing keys
-propagate automatically and the ping reaches every candidate
-whether it runs locally or behind a satellite transport. The
-round-trip is **not** a PIPELINE-1 §7 dispatch — it does not use
-the `<skill_id>:<intent_name>` topic shape, it does not fire the
-handler-lifecycle trio, and it does not activate any candidate.
+with the ping, pong, correlation, validity and window rules of that
+section. What follows is what is specific to converse.
 
-Payload:
+**The candidate set** is `session.converse_handlers` after the §3.2
+prune. No candidate identity travels in the ping's payload or
+topic: the ping already carries the set in `context.session` by the
+reply derivation, so a skill decides whether it is a candidate by
+one membership test — its own `skill_id` against
+`context.session.converse_handlers`. Only a skill named there MAY
+answer, and a skill not named there MUST NOT pong. The reserved
+`<skill_id>:converse` and `<skill_id>:response` dispatches of §6.3
+are the only place a candidate's identity appears in a topic.
+
+**The ping payload:**
 
 | Key | Type | Required | Meaning |
 |-----|------|----------|---------|
 | `utterances` | array of string | yes | The candidate utterance list per PIPELINE-1 §4.1. |
 | `lang` | string | yes | The active language. |
 
-No candidate identity travels in the ping's payload or topic: the
-candidate set is `session.converse_handlers`, which the ping
-already carries in `context.session` by the `reply` derivation. A
-skill decides whether it is a candidate by one membership test —
-its own `skill_id` against `context.session.converse_handlers` —
-not by a topic addressed to it.
-
-**Who answers.** Only a skill named in the round's
-`session.converse_handlers` MAY answer. A skill not named there
-MUST NOT pong. Every named candidate SHOULD answer, in parallel,
-with `reply` of the ping — a claim or an explicit decline; declines
-are what let the window close early instead of waiting out the
-ceiling (§4.2 below).
-
-The candidate MUST emit a Message of type `ovos.converse.pong`
-derived via `reply` (OVOS-MSG-1 §5.2), so that routing metadata is
-preserved and the pong reaches the converse plugin regardless of
-whether the skill runs locally or remotely. `source` and
-`destination` are layer-2 metadata and do not affect the topic
-name. The response carries `data`:
+**The pong payload** is the PIPELINE-1 §4.5 shape — `skill_id` and
+`can_handle` — plus one converse field:
 
 | Key | Type | Required | Meaning |
 |-----|------|----------|---------|
-| `skill_id` | string | yes | The candidate answering — identity is payload, never topic. |
-| `result` | boolean | yes | `true` ⇒ the candidate claims the utterance; `false` ⇒ the candidate declines. |
-| `error_code` | string | no | Optional structured reason (see §4.4) when `result` is `false`. |
+| `error_code` | string | no | Optional structured reason (see §4.4) when `can_handle` is `false`. |
 
-The boolean's field name is protocol-specific: this spec's poll
-uses `result`, while the analogous polls of OVOS-FALLBACK-1 /
-OVOS-STOP-1 use `can_handle` and OVOS-COMMON-QUERY-1 uses
-`can_answer`. Each name is normative only within its own protocol.
+**What a claim means.** The poll is the handler's decision point.
+The candidate MUST inspect `data.utterances` and `data.lang` —
+including any NLU or intent-parsing it needs — and commit before
+replying. `can_handle: true` means the handler has decided it will
+handle the utterance and MUST do so fully when
+`<skill_id>:converse` is dispatched (§4.3). `can_handle: false`
+means the handler declines, and it MUST NOT perform any user-facing
+work (`ovos.utterance.speak`, set context, etc.) in response to the
+poll. A candidate that wants to be removed from
+`session.converse_handlers` SHOULD include `error_code: "done"` in
+a declining response (§4.4) — the poll response is the designated
+channel for self-deactivation requests.
 
-Both topics are **static strings** fixed by this specification, per
-OVOS-MSG-1 §2.1.1: neither carries a `skill_id` or any other
-identifier, so the same two strings serve every round for every
-deployment. Identifiers appear in topics only in the dispatch shape
-`<skill_id>:<intent_name>` (MSG-1 §2.1.1) — the reserved
-`<skill_id>:converse` / `<skill_id>:response` dispatches of §6.3
-remain that shape, unchanged; the poll is not a dispatch and carries
-no identifier in its topic at all.
+**The window.** The RECOMMENDED default is **0.5 seconds**, which a
+deployer MAY raise or lower.
 
-**Round correlation.** The round is the lifecycle: the plugin keys
-poll state by `session_id` from `context.session` and by
-`context.utterance_id` (OVOS-PIPELINE-1 §9.1.1), which the ping carries by
-`reply` derivation and the pong carries back the same way — no
-skill-side action, no field of this specification's own. A pong
-whose `utterance_id` does not equal the round's **MUST** be
-discarded: an answer that cannot prove which question it answers
-never decides a round.
-
-The poll is the **handler's decision point**. The candidate MUST
-inspect `data.utterances` and `data.lang` — including any NLU or
-intent-parsing it needs — and commit to a claim decision before
-replying. `result: true` means the handler has decided it will
-handle the utterance and MUST do so fully when `<skill_id>:converse`
-is dispatched (§4.3). `result: false` means the handler declines;
-it MUST NOT perform any user-facing work (`ovos.utterance.speak`,
-set context, etc.) in response to the poll. A candidate that wants
-to be removed from `session.converse_handlers` SHOULD include
-`error_code: "done"` in a declining response (§4.4) — the poll
-response is the designated channel for self-deactivation requests.
-
-A converse plugin collects pongs inside **one bounded window** per
-round — an unbounded wait would stall the utterance's serial
-critical path indefinitely. The **RECOMMENDED default window is
-`0.5` seconds**, which a deployer MAY raise or lower. A candidate
-silent at window close, or whose pong is malformed (missing or
-non-boolean `result`, mismatched `utterance_id`), is treated as
-`result: false`.
-
-**Stage collection ceiling.** The window above is the stage's
-*collection ceiling* regardless of how many candidates are polled —
-one broadcast, one window, not `n ×` a per-owner wait. A deployment
-**MUST** set any OVOS-PIPELINE-1 §4.4 match bound for this stage at
-or above that ceiling, or the poll is killed mid-collection on
-every utterance.
-
-The window **SHOULD** close early when a decision is already
-forced:
-
-- every candidate named by the round's `session.converse_handlers`
-  has answered — nothing more can arrive that the round would wait
-  for;
-- some already-answered candidate has claimed, and every candidate
-  still unanswered sits **below** it in `session.converse_handlers`
-  recency order (§4.1 step 3) — no later pong can outrank the claim
-  already held.
-
-**Malformed, foreign and late pongs.** A converse plugin **MUST**
-ignore a pong whose `skill_id` does not name a member of the
-round's `session.converse_handlers`, whose `utterance_id` does not
-match the round's, or that arrives after the window closes, and
-**MUST** treat a missing or non-boolean `result` as `result: false`.
-The first valid pong per candidate wins.
+**The ordering rule** is the recency order of
+`session.converse_handlers` (§4.1 step 3): the claimant nearest the
+head wins, and the window closes early once every candidate still
+unanswered sits below a claim already held.
 
 ### 4.3 The match for a converse claim
 
-When some owner replies `result: true`, the converse plugin
+When some owner replies `can_handle: true`, the converse plugin
 returns a `Match` (PIPELINE-1 §4.1) shaped as follows:
 
 - `skill_id` = the claiming owner;
@@ -539,7 +476,7 @@ the full handler-lifecycle trio and end-marker per §8.
 
 **Semantic contract.** By the time `:converse` is dispatched the
 handler has already committed — it inspected the utterance in the
-poll and returned `result: true`. The handler MUST handle it
+poll and returned `can_handle: true`. The handler MUST handle it
 fully; all user-facing work (`ovos.utterance.speak`, set context,
 etc.) happens here, not in the poll.
 
@@ -763,7 +700,7 @@ the field entirely, both via the stop plugin's
 
 The polled-owner-side
 reaction when an in-flight poll is interrupted is to emit
-`ovos.converse.pong` with `result: false` and
+`ovos.converse.pong` with `can_handle: false` and
 `error_code: "killed"` (§4.4) if still able to do so, or to fall back
 on the round's collection window closing with it silent. An interrupted owner MUST NOT be removed from
 `session.converse_handlers` as a side effect of the poll interrupt —
@@ -793,7 +730,7 @@ The session this snapshot describes is read from `context.session.session_id` of
 | Topic | Direction | Purpose | Shape |
 |-------|-----------|---------|-------|
 | `ovos.converse.ping` | converse plugin → all candidates | Broadcast poll for the round; candidacy is decided by `session.converse_handlers` membership, not by topic (§4.2). | Static dotted (non-dispatch). |
-| `ovos.converse.pong` | candidate → converse plugin | Candidate's poll reply `{skill_id, result, error_code?}` (§4.2). | Static dotted (non-dispatch). |
+| `ovos.converse.pong` | candidate → converse plugin | Candidate's poll reply `{skill_id, can_handle, error_code?}` (§4.2). | Static dotted (non-dispatch). |
 
 The poll round-trip is **not** a PIPELINE-1 §7 dispatch and
 does not fire the handler-lifecycle trio.
@@ -940,9 +877,9 @@ own `skill_id` appears in `context.session.converse_handlers` —
 answering when it does not is non-conformant. When named, it MUST
 inspect `data.utterances` / `data.lang`, commit to a claim decision,
 and reply on `ovos.converse.pong` via `.reply`
-(MSG-1 §5.2) with `result: true` or `false`. A handler replying
-`result: true` MUST handle the utterance fully when `:converse`
-is dispatched. Silence is treated as `result: false` /
+(MSG-1 §5.2) with `can_handle: true` or `false`. A handler replying
+`can_handle: true` MUST handle the utterance fully when `:converse`
+is dispatched. Silence is treated as `can_handle: false` /
 `error_code: "timeout"` — the handler remains in
 `converse_handlers` but will never win a claim.
 

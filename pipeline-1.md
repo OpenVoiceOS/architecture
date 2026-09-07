@@ -426,6 +426,97 @@ The orchestrator **SHOULD** surface match-phase duration as an
 observable metric so deployers can identify plugins that violate this
 discipline.
 
+### 4.5 The candidate poll
+
+Several matching strategies cannot decide from the utterance alone.
+The plugin must ask a set of candidates whether any of them claims
+the utterance, and decide from the answers. This section defines
+that exchange once. A specification that uses it names its own
+topics and its own candidate set, states what a claim means there,
+and gives the rule that orders the claimants. Everything below is
+common to all of them.
+
+**Ping.** The plugin broadcasts **one** Message per round, whatever
+the size of the candidate set — one question, one collection
+window, never a sum of per-candidate waits. The ping is derived
+from the inbound utterance Message through the reply derivation
+(OVOS-MSG-1 §5.2), so that `context.session`, the routing keys and
+the lifecycle identifier propagate with no plugin action, and the
+ping reaches a candidate whether it runs locally or behind a
+satellite transport. The ping topic is a static string fixed by the
+protocol that defines it (OVOS-MSG-1 §2.1.1) and names no
+candidate. A poll is not a §7 dispatch: it does not use the
+`<skill_id>:<intent_name>` topic shape, it does not fire the
+handler-lifecycle messages of §8, and it does not activate any
+candidate.
+
+**Pong.** A candidate answers on the protocol's static pong topic,
+with a Message derived from the ping through the same reply
+derivation, so that the answer reaches the plugin wherever the
+candidate runs. `source` and `destination` are layer-2 metadata and
+do not affect the topic name. The payload carries the answering
+candidate's identity and its claim:
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `skill_id` | string | yes | The candidate answering — identity is payload, never topic. |
+| `can_handle` | boolean | yes | `true` claims the utterance, `false` declines it. |
+
+A protocol MAY add fields of its own to either payload. Identity is
+the payload `skill_id`, verified against the round's candidate set
+— never a `skill_id` inferred from derivation metadata, which
+carries no identity for the responding component (OVOS-MSG-1 §5.2).
+
+**Round correlation.** The round is the lifecycle. The plugin keys
+poll state by `session_id` from `context.session` and by
+`context.utterance_id` (§9.1.1), which the ping carries by reply
+derivation and the pong carries back the same way, so a poll
+protocol adds no correlation field of its own. A pong whose
+`utterance_id` or `session_id` does not equal the round's **MUST**
+be discarded — an answer that cannot prove which question it
+answers never decides a round.
+
+**Validity, silence and duplicates.** A pong is valid only when it
+carries a `skill_id` string, a `can_handle` JSON boolean, and the
+round's correlation. A plugin **MUST** treat as `can_handle: false`
+both a candidate silent at window close and a pong whose
+`can_handle` is absent or is not a boolean. A truthy non-boolean
+value **MUST NOT** be coerced to `true`. A plugin **MUST** ignore a
+pong whose `skill_id` names no member of the round's candidate set,
+and any pong arriving after the window has closed. Where one
+candidate answers twice in a round, the first valid pong wins.
+
+A pong whose `skill_id` names a skill listed in the round's
+`session.blacklisted_skills` (§5.3) **MUST** be discarded before
+selection, exactly as a pong from outside the candidate set is.
+Where the protocol carries an intent identity on the pong, a pong
+naming an intent listed in `session.blacklisted_intents` (§5.4)
+**MUST** be discarded on the same terms.
+
+**The window.** A plugin **MUST** bound collection by one
+deployer-configurable window per round, and the protocol using this
+section states its own RECOMMENDED default. Without a bound, one
+unresponsive candidate stalls the utterance's serial critical path
+indefinitely. An explicit decline is what lets the window close
+early rather than waiting the bound out, so a candidate **SHOULD**
+answer even when it declines. The window **SHOULD** close early
+once the outcome is forced: every candidate has answered, or the
+best claim so far cannot be outranked by any candidate still
+unanswered under the protocol's ordering rule. A poll is a
+deliberate exception to the latency discipline of §4.4, and the
+bound together with the early close is what keeps it one.
+
+That window is the stage's **collection ceiling** whatever the
+candidate count, and a deployment **MUST** set the stage's §4.4
+match bound at or above it. A shorter bound kills the stage
+mid-collection on every utterance it handles.
+
+**Ordering.** Pongs arrive in whatever order candidates answer, and
+selection **MUST** follow the ordering rule of the protocol running
+the poll rather than arrival order. A fast claim from a low-ranked
+candidate never beats a slow claim from a higher-ranked one inside
+the window.
+
 ---
 
 ## 5. Session fields owned by this specification
