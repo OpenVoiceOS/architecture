@@ -616,6 +616,10 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 2
 
+- §9.7 (new) — `ovos.policy.denied`, a broadcast diagnostic the
+  orchestrator MAY emit when a candidate Match is dropped for a
+  `blacklisted_*` reason (§5.2–§5.4); payload `field` and `value`, session
+  in `context.session`; informative only.
 - §6.2 — the orchestrator treats a `Match` as declined when any slot
   listed in the intent's `required_slots` (OVOS-INTENT-3 §5.3) is absent,
   behind the engine's own enforcement during `match`.
@@ -653,6 +657,8 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 2
 
+- §4.1 — a gate that refuses a client-supplied session field MAY emit
+  `ovos.policy.denied` (OVOS-PIPELINE-1 §9.7).
 - §4.1 — the **gate invariant** made explicit: a bridge that
   injects policy fields (any `blacklisted_*` array, a restricted
   `pipeline`) MUST re-apply them on every inbound Message from the

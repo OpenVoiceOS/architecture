@@ -310,7 +310,9 @@ conformant: the client is authoritative for its own session object
 omits the injected fields on any subsequent Message — at which
 point a connect-time-only gate has silently granted the participant
 everything the policy was meant to deny. The bridge is a gate, not
-a handshake.
+a handshake. A gate that refuses a client-supplied field MAY emit
+`ovos.policy.denied` (**OVOS-PIPELINE-1 §9.7**) to make the refusal
+observable.
 
 #### 4.1.1 Access control (denylist model)
 

@@ -647,7 +647,9 @@ The contract is **two-tier**:
    listed, **MUST** treat the match as if the plugin had declined —
    continue iteration to the next plugin per §6.2. No bus event is
    emitted for backstop filtering; it is observable only as a
-   non-match. This check runs on every candidate `Match` from every
+   non-match, though the orchestrator MAY also emit
+   `ovos.policy.denied` (§9.7) to make it observable. This check runs
+   on every candidate `Match` from every
    plugin, so the denylist holds across the whole loaded-plugin set
    whatever any individual plugin does. The authorization model of
    §5.6 rests on this tier alone.
@@ -668,6 +670,10 @@ orchestrator's per-candidate check is the enforcement it **MUST**
 perform — with the comparison performed against the candidate
 `Match`'s dispatch identity
 `<Match.skill_id>:<Match.intent_name>`.
+
+As with §5.3, the orchestrator MAY also emit
+`ovos.policy.denied` (§9.7) to make a `blacklisted_intents` denial
+observable.
 
 The bare `intent_name` form is **not** accepted in this field.
 `intent_name` is only unique within an owner, so a bare entry would
@@ -1575,6 +1581,41 @@ intended delivery order; the output stage **SHOULD** preserve it.
 
 **Broadcast.** `ovos.utterance.speak` carries no `destination` — it is
 broadcast. Any output component subscribed to the topic may consume it.
+
+### 9.7 `ovos.policy.denied` — policy denial diagnostic
+
+Emitted by the component that denies something on policy grounds —
+the orchestrator when it drops a candidate `Match` for a
+`blacklisted_*` reason (§5.2, §5.3, §5.4), or a layer-2 gate
+(**OVOS-BRIDGE-1 §4.1**) when it refuses a session field a
+participant supplied. Broadcast. Consumers **MAY** ignore it — no
+lifecycle event this specification requires depends on its receipt.
+
+```json
+{
+  "field": "blacklisted_intents",
+  "value": "skill-lights.openvoiceos:turn_off"
+}
+```
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `field` | string | yes | The policy field responsible for the denial (`blacklisted_pipelines`, `blacklisted_skills`, `blacklisted_intents`, or the name of a `session.*` field a gate refused). |
+| `value` | string | yes | The specific candidate denied — a `pipeline_id`, a `skill_id`, a `<skill_id>:<intent_name>` pair, or the refused field's value, matching what `field` names. |
+
+The session the denial applied to travels in `context.session`,
+as on every Message of this section: the diagnostic is derived from
+the Message that was denied and carries its session, never a
+`session_id` in `data` (OVOS-INTENT-4 §11.1).
+
+This message is informative only. It does not delay, gate, or
+replace any other Message this specification requires; it exists so
+a deployer can observe a denial that would otherwise leave no trace
+on the bus. It is emitted for policy denials alone — a deployer's
+configuration overriding a plugin's verdict — and not for a plugin's
+own non-matches such as the §6.2 missing-slot case, which remain
+silent: a deployer can read policy from configuration, but only the
+bus can tell them the policy fired.
 
 ---
 
