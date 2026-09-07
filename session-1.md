@@ -425,10 +425,10 @@ declared by the session origin and stable; observation (`stt_lang`,
 stage that made it and may disagree with the preferences and with
 each other — disagreement is signal, not error.
 
-Their **meanings** are normative; how a consumer **consolidates**
-them into a single language for any given operation is not — that
-choice is stage-dependent and implementation-specific. §3.2.7
-suggests a default consolidation pattern as informative guidance.
+Their **meanings** are normative. §3.2.7 resolves the utterance
+language once, at intake, by a fixed precedence; a stage that needs
+a language for a narrower purpose of its own still chooses which
+signal serves that purpose, as §3.2.7 permits.
 
 #### 3.2.1 `lang`
 
@@ -471,8 +471,10 @@ Typical uses by consumers:
   will not understand.
 
 `secondary_langs` is a hint, not an authorization boundary: a
-consumer **MAY** ignore it. Per §3.2.7, no consolidation order is
-prescribed.
+consumer **MAY** ignore it. The utterance language itself is resolved
+once, at intake, by §3.2.7's precedence; a stage consulting
+`secondary_langs` for a narrower purpose of its own still chooses
+how, as §3.2.7 permits.
 
 #### 3.2.3 `output_lang`
 
@@ -481,11 +483,9 @@ prescribed.
 language. It is an output-side preference: a user who speaks German
 but always wants English replies sets `output_lang: "en-US"`.
 
-When `output_lang` is **omitted**, the assistant replies in whatever
-language naturally falls out of input-side signals (consumer's
-choice per §3.2.7 — typically `lang`, `stt_lang`, or the per-payload
-content language). This is the status quo: input language and output
-language are the same.
+When `output_lang` is **omitted**, the assistant replies in the
+utterance language resolved at intake by §3.2.7. This is the status
+quo: input language and output language are the same.
 
 When `output_lang` is **set**, a stage that renders text not yet
 produced (dialog selection, prompt selection, response composition,
