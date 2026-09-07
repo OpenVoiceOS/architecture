@@ -180,8 +180,9 @@ body, so a component can only schedule a fire into a context it
 reached the scheduler from.
 
 `context` is part of the record, so §5.1 persists it and replay
-restores it. A schedule created by a remote participant still fires
-into that participant's context after a scheduler restart.
+restores it. A stored context carries the requester's identity as the
+orchestrator saw it. A schedule created by a remote participant still
+fires into that participant's context after a scheduler restart.
 
 ---
 
@@ -463,6 +464,10 @@ request's `owner`. Where a deployment supplies the scheduler with an
 authenticated component identity for a request, by a mechanism
 outside this specification, the scheduler MUST refuse a request whose
 `owner` differs from that identity with the error `not_owner`. The
+identity of a requester that reached the scheduler across a bridge is
+the bridge-scoped identity that bridge assigns it (**BRIDGE-1
+§3.2**), so both sides of the comparison are orchestrator-side
+identities. The
 base bus carries no such identity: absent one, the scheduler MUST
 still scope every one of those operations to the `owner` field the
 request states, so that a component cannot

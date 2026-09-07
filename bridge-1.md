@@ -167,7 +167,8 @@ In all routing modes:
   `context.skill_id`, and internal `context.source` values that
   name components on the local bus; participant-facing fields
   such as `context.session` and `context.destination` SHOULD be
-  preserved.
+  preserved. The identity of a remote component is not internal
+  metadata. The identity rule below governs it.
 - A bridge MAY overwrite the `source` of outbound messages with a
   generic assistant ID ("topology hiding") when the identity of the
   emitting component is not meaningful to the external participant.
@@ -178,6 +179,23 @@ In all routing modes:
   topics the participant's pipeline plugins depend on. The same matching
   signals (`destination`, `session_id`, `site_id`) apply within
   this restricted set.
+
+**Component identity.** The orchestrator side of the boundary
+defines component identity. A remote component that acts on the bus
+in its own name — scheduling, registering a handler, owning state —
+**MUST** appear under a bridge-scoped identity. The bridge **MUST**
+rewrite the identity a remote component claims into that value
+rather than strip it, and **MUST NOT** let a remote component assert
+the identity of a component on the orchestrator side.
+
+The derivation **MUST** be deterministic: the same remote component
+yields the same identity after it reconnects. A bridge-scoped
+identity therefore outlives one connection, unlike the `session_id`
+bijection above. State an orchestrator-side component holds on
+behalf of a remote component stays attributable to it across a
+reconnection.
+
+---
 
 ### 3.3 `site_id` assignment
 
