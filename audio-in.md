@@ -140,6 +140,15 @@ language hint predict which language the transcription will assume:
 First present and non-empty value wins. If none is present use a
 deployment-configured default.
 
+The service evaluates this precedence over the signals it holds: the
+session carrier it received, when it received one, plus its own
+detection and configuration. A rung the service has no way to
+observe is skipped without reordering the rungs that remain.
+Evaluating the full precedence over every language signal a session
+may carry is the orchestrator's responsibility at utterance intake
+(**OVOS-SESSION-1 §3.2**). A language the service selects here is a
+hint the orchestrator **MAY** override.
+
 The service SHOULD write the selected language to `session.stt_lang`
 (**OVOS-SESSION-1 §3.2.4**) before STT invocation. `stt_lang`
 records the model's assumed input language and normally matches
