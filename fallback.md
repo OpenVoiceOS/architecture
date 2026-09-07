@@ -297,15 +297,9 @@ knowledge base, run a classifier, call an LLM, or apply any other
 internal logic. The reply carries only the decision.
 
 **The pong payload** is the PIPELINE-1 §4.5 shape — `skill_id` and
-`can_handle` — plus one fallback field:
-
-| Field | Type | Required | Meaning |
-|-------|------|----------|---------|
-| `utterance` | string | yes | Echo of the utterance evaluated — the first element of the ping's `utterances`. |
-
-The echo tells the skill *what* it judged, while the
-`utterance_id` of the PIPELINE-1 §4.5 correlation tells the plugin
-*which round* the judgment belongs to.
+`can_handle` — with no fallback-specific field. The `utterance_id`
+of the PIPELINE-1 §4.5 correlation tells the plugin which round the
+judgment belongs to.
 
 **What a claim means.** `can_handle: true` is the whole contest.
 Unlike OVOS-COMMON-QUERY-1, whose ping only filters plausible
