@@ -29,7 +29,7 @@ transformer plugins are loadable modules: swapped, replaced, and
 composed at deployment time with no changes to the ABI.
 
 **It is not an LLM wrapper.** A language model fits the voice OS
-model as a first-class plugin — and in multiple roles. As a
+model as a plugin — equal to other plugins — and can fill multiple roles. As a
 *pipeline plugin*, it implements `match(utterances, lang, session)
 → Match`, returning a match immediately and deferring generation to
 its handler (PIPELINE-1 §4.4). As an *utterance transformer*, it
@@ -160,6 +160,8 @@ validity, variant counts); and lets translators browse, edit,
 preview, and submit translations as pull requests. It is the
 OVOS counterpart to Home Assistant's managed `intents`
 repository.
+
+**Layer-2 reference implementation.** [JarbasHiveMind/architecture](https://github.com/JarbasHiveMind/architecture) provides formal specifications for a layer-2 system that builds on the layer-1 foundations defined here: a distributed voice-assistant mesh with hub and satellite topology, end-to-end authentication, and the BRIDGE-1 role for cross-network message relay. It demonstrates how to compose these specifications into a complete protocol layer above the bus.
 
 ### 1.5 Adoption beyond OVOS
 

@@ -44,6 +44,10 @@ language a deployment supports.
 > implementation bug, not a defect in the specification (see
 > *Authority* below).
 
+### Layer-2 systems
+
+This corpus defines layer-1 — the bus, the session carrier, the pipeline, and the intent stack that skills implement. Layer-2 concerns — authentication, transport binding, topology, gateway and satellite patterns — lie above this foundation. [JarbasHiveMind/architecture](https://github.com/JarbasHiveMind/architecture) specifies one worked example of a layer-2 system built on these base contracts.
+
 ---
 
 ## Goals
