@@ -157,6 +157,8 @@ participant disconnects, the bridge SHOULD emit any cleanup events
 `session_id` before dropping the bijection, so that orchestrator
 state keyed on the hub-side value is cleaned up correctly.
 
+The mapping is **total**: a bridge MUST map every inbound `session_id`, including the reserved value `"default"` (**OVOS-SESSION-1 §3.1**), to a bridge-side identifier. This applies unless a layer-2 grant outside this specification authorises the participant to act on the default session. Left unmapped, an inbound `"default"` reaches the orchestrator's own default-session store (**OVOS-SESSION-2 §5.1**) instead of a bridge-side identifier.
+
 In all routing modes:
 
 - On matching a Message by any routing signal, the bridge MUST
