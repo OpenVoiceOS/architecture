@@ -35,10 +35,10 @@ keeps these as aliases for one stable cycle.
 Legacy field mapping: `event` ↔ `event`; `time` ↔ `at` (epoch float ↔
 RFC 3339 instant); `repeat` ↔ `every.seconds`; `data` ↔ `data`. The
 legacy protocol has no `id` (the event name doubles as identity), no
-`owner` (the `<skill_id>:` prefix of the event name is the only
-namespace, and it is applied by the client, not checked by the
-service), no `local` recurrence, no `until`/`count`, no misfire
-policy, and no `ephemeral` flag.
+owning `skill_id` on the request (the `<skill_id>:` prefix of the event
+name is the only namespace, and it is applied by the client, not
+checked by the service), no `local` recurrence, no `until`/`count`, no
+misfire policy, and no `ephemeral` flag.
 
 ## Divergences from OVOS-SCHEDULER-1
 
@@ -52,7 +52,7 @@ policy, and no `ephemeral` flag.
 | §3.2 instants with offset | wire time is a bare epoch float; a naive datetime gets the configured zone in the client, then loses it |
 | §3.4.2 wall-clock recurrence | not available; skills compute the next occurrence themselves and re-schedule after each fire |
 | §3.4.1 anchored periods | after a missed period the next occurrence is re-anchored on the current time; the phase drifts |
-| §6.2 owner scoping | `remove_event` cancels any name from any caller; the client refuses to send a cancel unless it holds a local handler, so restored schedules cannot be cancelled |
+| §6.2 scoping by `skill_id` | `remove_event` cancels any name from any caller; the client refuses to send a cancel unless it holds a local handler, so restored schedules cannot be cancelled |
 | §7.1 clock steps | wall clock only; suspend, NTP steps and manual changes misfire or storm |
 | §7.2 unsynchronized clock | requests made while the clock reads before a fixed date are refused and dropped, not deferred |
 | §8 client library | workshop's `schedule_event`/`schedule_repeating_event` drop an explicitly passed `context` when no message is on the stack (operator precedence); `get_scheduled_event_status` reads a list-shaped response and raises a bare `Exception` on timeout; no `list` wrapper |

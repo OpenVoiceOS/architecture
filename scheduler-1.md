@@ -24,7 +24,7 @@ when, and only when, they appear in all capitals.
 
 This specification defines:
 
-- the **schedule record**: identity, owner, target event, timing,
+- the **schedule record**: identity, owning component, target event, timing,
   recurrence, payload, and policies;
 - the **bus protocol**: requests, responses, the fired event, and the
   notifications the scheduler emits on its own;
@@ -54,8 +54,8 @@ It does **not** define:
 | term | meaning |
 |---|---|
 | **scheduler** | the single service that keeps schedules and fires their events |
-| **owner** | the component (skill, plugin, service) that created a schedule, identified by its component id |
-| **schedule** | one record: an owner, a target event, a timing rule, a payload, and policies |
+| **owner** | the component (skill, plugin, service) that created a schedule, identified by its `skill_id` |
+| **schedule** | one record: an owning `skill_id`, a target event, a timing rule, a payload, and policies |
 | **occurrence** | one instant at which a schedule is due |
 | **fire** | emitting the target event for one occurrence |
 | **one-shot** | a schedule with exactly one occurrence |
@@ -73,8 +73,7 @@ It does **not** define:
 | field | type | required | meaning |
 |---|---|---|---|
 | `id` | string | yes | Owner-scoped identifier, chosen by the owner. Unique within the owner. Acts as the idempotency key (§5.2). |
-| `owner` | string | yes | Component id of the owner. |
-| `event` | string | yes | Message type emitted on each occurrence. MUST have the form `<owner>.<name>` (§6.1). |
+| `event` | string | yes | Message type emitted on each occurrence. MUST have the form `<skill_id>.<name>` (§6.1). |
 | `at` | instant | one of `at`, `in`, `every`, `local` | Absolute instant of a one-shot occurrence. |
 | `in` | object | " | Relative delay to a one-shot occurrence (§3.4.3). |
 | `every` | object | " | Fixed-period recurrence (§3.4.1). |
@@ -86,6 +85,11 @@ It does **not** define:
 | `grace_s` | number ≥ 0 | no | Seconds after the due instant during which a fire still counts as on time. Default 60. |
 | `ephemeral` | boolean | no | Default `false`. `true` schedules are never persisted (§5.3). |
 | `context` | object | no | Not sent by the owner: captured from the request message's own context (§3.5), never sent in the body. The scheduler stores it verbatim and replays it on every fire. |
+
+The owning component is not a field of the body. The scheduler MUST
+take the owning `skill_id` from the request message's
+`context["skill_id"]` (INTENT-4 §3.2), and MUST reject with
+`invalid_record` a request that carries none.
 
 Exactly one of `at`, `in`, `every`, `local` MUST be present. A record
 that has `until` or `count` together with `at` or `in` is invalid.
@@ -103,9 +107,10 @@ time line; it does not carry a time zone for recurrence evaluation
 
 ### 3.3 Identity
 
-A schedule is identified by the pair (`owner`, `id`). The scheduler
-MUST treat two requests with the same pair as the same schedule
-(§5.2). Two owners MAY use the same `id` without conflict.
+A schedule is identified by the pair (`skill_id`, `id`). The
+scheduler MUST treat two requests with the same pair as the same
+schedule (§5.2). Two components MAY use the same `id` without
+conflict.
 
 ### 3.4 Recurrence
 
@@ -179,6 +184,10 @@ MUST take it from the request message rather than from the request
 body, so a component can only schedule a fire into a context it
 reached the scheduler from.
 
+That context already carries the owning `skill_id` (INTENT-4 §3.1),
+so replay attributes a fire to the component that asked for it
+without any further field.
+
 `context` is part of the record, so §5.1 persists it and replay
 restores it. A schedule created by a remote participant still fires
 into that participant's context after a scheduler restart.
@@ -198,12 +207,12 @@ Each response's `error` MUST be one of:
 
 | code | meaning |
 |---|---|
-| `invalid_record` | A required field is missing, or the timing fields contradict one another. |
+| `invalid_record` | A required field is missing, the request carries no `context["skill_id"]`, or the timing fields contradict one another. |
 | `bad_instant` | An instant carries no offset, or cannot be parsed. |
 | `bad_recurrence` | A recurrence object is malformed or describes no occurrence. |
 | `bad_event` | The `event` violates the namespace rule of §6.1. |
 | `payload_too_large` | `data` exceeds the §3.1 cap. |
-| `not_owner` | The request's `owner` does not match the authenticated identity (§6.2). |
+| `skill_id_mismatch` | The request's `context["skill_id"]` does not reach the schedule it names (§6.2). |
 | `internal` | The scheduler could not persist or evaluate the request through no fault of the requester. The stored state is unchanged. |
 
 | topic | direction | purpose |
@@ -228,14 +237,14 @@ message-constant registry rather than repeating the literals.
 `ovos.scheduler.schedule` carries a complete schedule record (§3.1),
 minus the captured `context` (§3.5). The scheduler validates it,
 persists it (§5.1), and only then answers.
-The response carries `id`, `owner`, `next` (the next occurrence as an
-instant, or `null` when there is none), and `replaced` (`true` when a
-schedule with the same identity existed).
+The response carries `id`, `skill_id`, `next` (the next occurrence as
+an instant, or `null` when there is none), and `replaced` (`true` when
+a schedule with the same identity existed).
 
-`ovos.scheduler.cancel`, `ovos.scheduler.get` carry `id` and `owner`.
-`ovos.scheduler.list` carries `owner`. Cancelling a schedule that does not
-exist is not an error: the response carries `ok: true` and
-`existed: false`.
+`ovos.scheduler.cancel` and `ovos.scheduler.get` carry `id`.
+`ovos.scheduler.list` carries no field of its own. Cancelling a
+schedule that does not exist is not an error: the response carries
+`ok: true` and `existed: false`.
 
 `ovos.scheduler.get.response` carries `ok`, `record` (the record of §3.1 as
 stored), and `state`:
@@ -252,8 +261,8 @@ stored), and `state`:
 | `remaining` | integer or `null` | Occurrences left, when bounded. |
 
 `ovos.scheduler.list.response` carries `ok` and `schedules`, an array of
-the same `{record, state}` pairs. Under the pseudo-owner `*` (§6.2),
-`ovos.scheduler.list` returns the pairs of every owner.
+the same `{record, state}` pairs. For a component granted `*` (§6.2),
+`ovos.scheduler.list` returns the pairs of every component.
 
 There is no update request. An owner changes a schedule by sending
 `ovos.scheduler.schedule` again with the same identity and the new record;
@@ -272,7 +281,7 @@ record's `context` (§3.5), unchanged but for one added key,
   "session": { "session_id": "sat-7-kitchen" },
   "scheduler": {
     "id": "morning-brief",
-    "owner": "briefing",
+    "skill_id": "briefing",
     "due": "2031-03-29T07:30:00+01:00",
     "fired": "2031-03-29T07:30:00+01:00",
     "remaining": null
@@ -283,7 +292,7 @@ record's `context` (§3.5), unchanged but for one added key,
 | field | type | meaning |
 |---|---|---|
 | `id` | string | The schedule's `id`. |
-| `owner` | string | The schedule's `owner`. |
+| `skill_id` | string | The schedule's owning `skill_id`. |
 | `due` | instant | The occurrence's due instant. |
 | `fired` | instant | When the scheduler emitted the message. |
 | `remaining` | integer or `null` | Occurrences left after this one, when bounded. |
@@ -331,9 +340,9 @@ dropped. The record's `misfire` field (`late`, the default, or
 is **consumed**: it counts against `count` and is never retried.
 
 In every case the scheduler MUST emit `ovos.scheduler.missed` once per
-schedule that had at least one missed occurrence, with `id`, `owner`,
-`missed` (array of due instants, oldest first), `fired_late` (the
-instant fired under `late`, if any), and `next`.
+schedule that had at least one missed occurrence, with `id`,
+`skill_id`, `missed` (array of due instants, oldest first),
+`fired_late` (the instant fired under `late`, if any), and `next`.
 
 `next` is what distinguishes a series that lost occurrences (`next`
 set) from a one-shot that will never fire (`next` null).
@@ -433,8 +442,8 @@ reconciliation can tell them apart.
 
 ### 6.1 Namespacing
 
-The `event` of a schedule MUST have the form `<owner>.<name>`: the
-owner's component id, a dot, and a name the owner chooses. The
+The `event` of a schedule MUST have the form `<skill_id>.<name>`: the
+owning `skill_id`, a dot, and a name the owner chooses. The
 `<name>` part MUST NOT be empty and MUST NOT contain `:`. The
 scheduler MUST reject a schedule whose `event` is outside the owner's
 namespace with `bad_event`.
@@ -448,22 +457,24 @@ registered handler.
 
 ### 6.2 Authority
 
-`ovos.scheduler.schedule`, `ovos.scheduler.cancel`, `ovos.scheduler.get`, and
-`ovos.scheduler.list` act only on schedules whose `owner` equals the
-request's `owner`. Where a deployment supplies the scheduler with an
-authenticated component identity for a request, by a mechanism
-outside this specification, the scheduler MUST refuse a request whose
-`owner` differs from that identity with the error `not_owner`. The
-base bus carries no such identity: absent one, the scheduler MUST
-still scope every one of those operations to the `owner` field the
-request states, so that a component cannot
-reach or create under an owner it did not name; this is scoping, not
-authentication, and does not stop a component that deliberately
-states another component's owner id.
+`ovos.scheduler.schedule`, `ovos.scheduler.cancel`,
+`ovos.scheduler.get`, and `ovos.scheduler.list` act only on schedules
+whose `skill_id` equals the request's `context["skill_id"]`. A request
+that names a schedule outside that scope is refused with
+`skill_id_mismatch`.
 
-A privileged administrative component MAY be granted the pseudo-owner
-`*` for `ovos.scheduler.list` and `ovos.scheduler.cancel`. How that grant is
-made is a deployment matter and is out of scope.
+This is scoping, not authentication. The base bus does not attest that
+a component is the one its context names, so the rule does not stop a
+component that deliberately states another component's `skill_id`.
+Where a deployment supplies the scheduler with an authenticated
+component identity for a request, by a mechanism outside this
+specification, the scheduler MUST refuse a request whose
+`context["skill_id"]` differs from that identity with the same error.
+
+A privileged administrative component MAY be granted the pseudo value
+`*` for `ovos.scheduler.list` and `ovos.scheduler.cancel`, which
+places every schedule in its scope. How that grant is made is a
+deployment matter and is out of scope.
 
 ### 6.3 Owner lifecycle
 
@@ -580,8 +591,9 @@ by the `scheduler.id` context field.
 7. Anchor fixed-period recurrences on the schedule, measure `in`
    against a monotonic reference (§3.4.3), and evaluate wall-clock
    recurrences in their zone with the daylight-saving rules of §3.4.2.
-8. Enforce the `<owner>.<name>` shape of `event` and scope every
-   request, including `ovos.scheduler.schedule`, to its `owner` (§6).
+8. Enforce the `<skill_id>.<name>` shape of `event` and scope every
+   request, including `ovos.scheduler.schedule`, to the requesting
+   `context["skill_id"]` (§6).
 9. Never fire an occurrence at or before the persisted most recent
    fire (§7.1); defer, not drop, while the clock is unsynchronized,
    and replay on the transition to synchronized (§7.2).
@@ -612,6 +624,9 @@ by the `scheduler.id` context field.
 - **MSG-1** — [Bus Message](msg-1.md): the topic shapes `event` must
   stay clear of (§2.1.1) and the `response` derivation every answer in
   §4 is built with.
+- **INTENT-4** — [Intent and Entity Registration Bus Contract](intent-4.md):
+  `context["skill_id"]`, the attribution the scheduler scopes by (§3.1,
+  §3.2).
 - **SESSION-2** — [Session Lifecycle and State Ownership](session-2.md):
   how consumers absorb the context a fired event replays (§4.4).
 - the appendix, for the mapping of this specification to a concrete
