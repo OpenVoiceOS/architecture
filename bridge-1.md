@@ -149,13 +149,18 @@ MAY also rewrite `context.session.session_id` as messages cross the
 boundary — translating a participant-local session identifier into a
 hub-side identifier and vice versa. This enables a participant to
 use its own `session_id` namespace without coordinating with the
-hub. When performing `session_id` mapping, the bridge MUST maintain
-a stable bijection between the participant's value and the hub-side
-value for the lifetime of the participant's connection. When the
-participant disconnects, the bridge SHOULD emit any cleanup events
-(e.g. `ovos.skill.deregister` per §4.3) using the **hub-side**
-`session_id` before dropping the bijection, so that orchestrator
-state keyed on the hub-side value is cleaned up correctly.
+hub. When performing `session_id` mapping, the bridge MUST key the
+bijection by the participant, not by the connection: the same
+participant reconnecting MUST receive the same hub-side value it
+held before, so that orchestrator state keyed on that value —
+stored scheduler contexts, skill registrations (§4.3) — survives the
+reconnect. How a bridge recognises that a reconnecting participant
+is the same one it served before is a layer-2 concern outside this
+specification. When a participant is gone for good, the bridge
+SHOULD emit any cleanup events (e.g. `ovos.skill.deregister` per
+§4.3) using the **hub-side** `session_id` before dropping the
+bijection, so that orchestrator state keyed on the hub-side value is
+cleaned up correctly.
 
 In all routing modes:
 
@@ -529,12 +534,18 @@ the orchestrator reads from `context.session.session_id`, never from
 `skill_id` only. When the bridge uses `session_id` NAT (§3.2), the
 `session_id` it places in that context MUST be the hub-side value.
 
-**Reconnect.** When the satellite reconnects, its session-scoped
-registrations are gone. The satellite is responsible for
-re-emitting its registration messages; the bridge relays them as on
-initial connect. A bridge operating in managing mode (§3.4.2) MAY
-cache the satellite's registration set and re-emit it on reconnect
-on the satellite's behalf.
+**Reconnect.** When the bridge keys its `session_id` NAT bijection
+by participant (§3.2), a reconnecting satellite receives the same
+hub-side `session_id` it held before, and its session-scoped
+registrations survive the reconnect intact; the satellite need not
+re-emit them. A bridge that performs no `session_id` NAT, or that
+cannot recognise the reconnecting participant as the one it served
+before, has no such continuity: the satellite's registrations are
+gone, and the satellite is responsible for re-emitting its
+registration messages, which the bridge relays as on initial
+connect. A bridge operating in managing mode (§3.4.2) MAY cache the
+satellite's registration set and re-emit it on reconnect on the
+satellite's behalf.
 
 **Bridge emissions.** When the bridge itself emits bus messages
 (cleanup events, health signals) rather than relaying participant
