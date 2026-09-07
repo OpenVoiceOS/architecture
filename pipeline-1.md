@@ -721,9 +721,12 @@ applied during iteration against each `Match` a plugin returns
 (§5.3, §5.4). The two-tier shape — plugin-side filtering as an
 optimisation, orchestrator-side filtering as the enforcement —
 ensures policy holds regardless of what any plugin does. The
-orchestrator also re-imposes all three denylists onto any
-`updated_session` a plugin returns (§4.2), so a claiming plugin
-cannot relax policy for the stages after it.
+orchestrator also re-imposes every **per-component override
+field** (OVOS-SESSION-1 §3) onto any `updated_session` a plugin
+returns (§4.2), from the value the orchestrator held before the
+plugin ran, so a claiming plugin cannot relax or redirect policy
+for the stages after it. This class is deployment-owned in its
+entirety, not by naming individual members here.
 
 The intended separation of concerns is sharp:
 
