@@ -267,6 +267,13 @@ the word `start`). If any phrase from the set occurs in the user's utterance,
 that intent is suppressed — a **hard, score-independent rejection**, not a
 confidence penalty. A `.blacklist` does not affect any other intent.
 
+A base name MAY simultaneously name an `.intent` and an `.entity` (or a
+`{slot}` / vocabulary of that name); this is not a collision error. A
+`.blacklist` of that base name pairs with the `.intent`, per the role table
+above, and suppresses it as described. The entity has no `.blacklist` of its
+own in that case: excluding values from it requires a base name that does not
+also name an intent.
+
 A `.blacklist` paired by base name with an `.entity` (or with a `{slot}` /
 vocabulary of that name) instead defines a **slot-value exclusion**: its phrase
 set lists values that **MUST NOT** fill that slot. When a candidate value the
