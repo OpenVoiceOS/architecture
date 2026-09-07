@@ -1167,8 +1167,14 @@ selected during `match` and holds nothing afterwards.
 
 This specification fixes only the registry mechanism (reservation
 listing); the per-name semantics are owned by the reserving
-specification. Other specifications MAY reserve further names by
-adding rows to this table in a revision of this specification.
+specification. A specification in this family MAY reserve an
+intent_name of its own by stating the reservation in its own text
+with a cross-reference to this section. The table above lists the
+names reserved here, and this paragraph is the pointer under which
+any other specification reserves further names without revising
+this one. An orchestrator MUST treat every intent_name reserved by
+any specification it implements as reserved under this section,
+whichever specification's text carries the reservation.
 
 A plain skill (§7.0) subscribes to a reserved-name dispatch topic
 via framework convention rather than OVOS-INTENT-4 registration —
