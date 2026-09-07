@@ -137,87 +137,22 @@ cross-cutting concerns, see
 
 ### 1.3 Transformer self-identification
 
-This specification claims six `Message.context` keys, one per
-transformer type:
+A deployment **MUST** be able to determine, for a given Message,
+which transformers of each type touched it and in what order. The
+means for making that determination is the introspection surface
+of §6 — the set of loaded transformers per type, combined with the
+chain order of §4 and any per-session override of §5 — which names
+the candidates deterministically for any consumer that needs to
+attribute a Message to the transformers that acted on it.
 
-| Type (§2)   | Context key                  |
-|-------------|------------------------------|
-| audio       | `audio_transformer_ids`      |
-| utterance   | `utterance_transformer_ids`  |
-| metadata    | `metadata_transformer_ids`   |
-| intent      | `intent_transformer_ids`     |
-| dialog      | `dialog_transformer_ids`     |
-| tts         | `tts_transformer_ids`        |
-
-Each key, when present, holds an **ordered list of `transformer_id`
-strings** (§1.1) belonging to the corresponding type's registry.
-The list records the chain of transformers of that type that
-touched the Message, in order of touch. The **last element** is
-the current-attribution transformer; the full list records chain
-provenance. The plural key name signals the list shape; the
-singular `<type>_transformer_id` naming is **not** used by this
-specification.
-
-**Stamp rule.** On every Message a transformer places on the
-bus by **authorial action** — a fresh emission, or
-`Message.reply(...)` / `Message.response(...)` derivation it
-performs and emits (OVOS-MSG-1 §5) — and on every Message it
-**modifies in place** within its execution window before the
-Message proceeds, the transformer **MUST** ensure that its own
-`transformer_id` is the **last element** of the corresponding
-`<type>_transformer_ids` list.
-
-`Message.forward(...)` (OVOS-MSG-1 §5.1) preserves `context`
-unchanged and is propagation, not authorial assertion. A
-transformer that `.forward`s a Message it did not modify **MUST
-NOT** append its own `transformer_id` for that derivation — the
-inherited list rides through untouched. If the transformer
-modifies the Message in place and then `.forward`s the modified
-Message, the modify-in-place clause applies and the stamp
-obligation fires.
-
-Operationally, on every touch the transformer **appends** its
-own `transformer_id` to the list (creating the list if absent or
-empty). The append fires once per execution window. The six
-`<type>_transformer_ids` keys coexist on a single Message with
-each other and with the component-identity keys claimed by other
-specifications — `context["skill_id"]` (OVOS-INTENT-4 §3.1) and
-`context["pipeline_id"]` (OVOS-PIPELINE-1 §3.1), both **single
-strings**. Attribution consumers that need to pick a single
-emitter **SHOULD** take the identity most specific by lifecycle
-position among the keys present, reading the last element of the
-list-valued keys.
-
-`<type>_transformer_ids` is the transformer chain's
-**self-attribution**. It is distinct from any
-payload field that names a transformer as the **subject** of the
-Message — for example the `cancel_by` field of
-`ovos.utterance.cancelled` (§8.1, §8.2) names the transformer that
-signalled the cancellation, and the `loaded` / `priorities` /
-`order` fields of an `ovos.transformer.{type}.list` response (§6)
-name the transformers the response describes. None of those name
-the emitter.
-
-#### Orchestrator-side enforcement
-
-The orchestrator (or any component that loads transformers)
-**SHOULD** intercept / decorate the transformer's emit pathway and
-its return-value handling at load time so non-compliant
-transformer code cannot emit a Message or hand back a modified
-Message whose `<type>_transformer_ids` list does not end with the
-transformer's own id. The orchestrator's own bus emissions on
-behalf of a transformer — the `cancel_by` stamping of §8.1, for
-example — are made by the orchestrator from its own runtime
-knowledge of which transformer caused the event; those emissions
-carry the orchestrator's own attribution discipline, not the
-transformer's.
-
-A consumer that needs to attribute a transformer's action
-**MUST** read the corresponding `<type>_transformer_ids` list
-directly (typically the last element for current attribution, the
-full list for chain provenance); it **MUST NOT** infer the
-transformer from `source`,
-from `data` fields, or from the topic name.
+`transformer_id` (§1.1) is the identity a deployment resolves
+through that means. It is distinct from any payload field that
+names a transformer as the **subject** of a Message — for example
+the `cancel_by` field of `ovos.utterance.cancelled` (§8.1, §8.2)
+names the transformer that signalled the cancellation, and the
+`loaded` / `priorities` fields of an `ovos.transformer.{type}.list`
+response (§6) name the transformers a responding process has
+loaded. None of those name a Message's emitter.
 
 ---
 
@@ -1494,10 +1429,7 @@ for that (§3.7).
   IO (logging, telemetry, cross-session signals) — but **SHOULD
   NOT** make the transformer's output depend on bus responses
   fetched synchronously inside `transform`, as this serializes the
-  lifecycle on the bus's responsiveness. Every such bus emission
-  **MUST** ensure the appropriate `<type>_transformer_ids` list
-  in `Message.context` ends with the transformer's own id per
-  §1.3.
+  lifecycle on the bus's responsiveness.
 
 **An observer** that sees `Message.context` carrying `canceled:
 true` or `cancel_reason`:
