@@ -568,40 +568,76 @@ from both `stt_lang` (which records what STT decoded the audio as,
 which can fail when STT is fixed to a single language) and `lang`
 (which records the user's stable preference).
 
-#### 3.2.7 Consolidation (informative)
+#### 3.2.7 Resolving the utterance language
 
-A consumer that needs **one** language for a particular operation
-must consolidate the available signals into a single value. The
-**right priority order is stage-dependent**: different stages of the
-pipeline reasonably prioritize different signals. This specification
-does not bind a single ordering; it lists each signal's meaning
-(above) and leaves consolidation to the orchestrator and the consumer
-performing the operation.
+An utterance has **one** language. The signals above may disagree,
+and a deployment that let each stage pick its own winner would match
+the same words in one language and speak the answer in another.
 
-As **informative guidance** — not a normative rule — each pipeline
-stage naturally prioritizes different signals:
+The orchestrator therefore resolves the language for an utterance
+**once**, at intake, before any matching stage runs.
 
-- **STT configuration** — bias toward `request_lang` (the emitter's
-  hint about what language is coming) before falling back to `lang`.
+The orchestrator **MUST** resolve exactly one BCP-47 tag per
+utterance, by the following precedence. Explicit knowledge about
+this utterance outranks a per-utterance hint, and both outrank the
+session's standing preference:
+
+1. the authoritative content language of the entry payload, when
+   the producer knew it and stated it (`data.lang`, §3.2.8)
+2. `stt_lang` (§3.2.4) — the language the transcription stage
+   assumed for the audio
+3. `detected_lang` (§3.2.6) — a detector's classification of this
+   utterance
+4. `request_lang` (§3.2.5) — the emitter's hint for this utterance
+5. `lang` (§3.2.1) — the participant's standing input-side
+   preference
+6. the deployment default language, a single configured tag every
+   deployment has
+
+The first rung that is present, non-empty, and among the
+deployment's enabled languages wins. A rung whose value is present
+but not enabled in the deployment is skipped in favour of the next
+rung; it is not an error and it does not abort resolution.
+
+Resolution always terminates in a tag, so no matching stage is ever
+invoked without a language.
+
+The resolved tag **MUST** travel with the utterance so that every
+downstream consumer reads the same value, and the orchestrator
+**MUST NOT** match one utterance under more than one language —
+neither by retrying a failed match in a second language nor by
+letting two stages resolve independently.
+
+A consumer **MAY** refine the resolved tag for its own internal
+purposes, and **MUST NOT** re-derive it as the language of the
+round. **OVOS-PIPELINE-1 §4** and **§9.1** bind the same obligation
+on the matching path: the resolved tag is passed to every plugin's
+`match` call for that utterance.
+
+Resolution reads the signals; it **MUST NOT** mutate them. A
+consumer **MUST NOT** assume any one signal is present and **MUST
+NOT** assume one signal equals another.
+
+Beyond intake resolution, a stage that needs a language for its own
+narrower purpose — configuring transcription, constraining a
+detector, choosing a rendering voice — still chooses which signal
+serves that purpose. As informative guidance:
+
+- **Transcription configuration** — the input service selects the
+  assumed language by its own precedence
+  (**OVOS-AUDIO-IN-1 §5.1**) and records the result in `stt_lang`,
+  which is why `stt_lang` outranks the hints it was derived from.
 - **Language detection** — produce `detected_lang` from the audio or
-  transcript; use `lang` + `secondary_langs` to constrain the
+  transcript, using `lang` + `secondary_langs` to constrain the
   candidate set.
-- **Intent matching and dialog selection** — prefer `stt_lang` or
-  `detected_lang` (the language the utterance was actually in), then
-  `lang`.
 - **Response rendering (dialog, prompt)** — prefer `output_lang`
-  when set; fall back to `lang`.
+  when set; fall back to the resolved utterance language.
 - **TTS voice selection** — key on the per-payload `data.lang` of
   the text being spoken (§3.2.8); ignore `request_lang` entirely.
 
 `data.lang` takes absolute priority for any operation whose purpose
 is to act on a specific payload's content — it records the language
 already present in the payload, which the operation must match.
-
-A consumer **MAY** choose any consolidation order that suits its
-stage and need. A consumer **MUST NOT** assume any one signal is
-present, **MUST NOT** assume one signal equals another, and **MUST
-NOT** mutate any signal as a side effect of consolidating.
 
 #### 3.2.8 `data.lang` (per-payload, not session-scoped)
 
