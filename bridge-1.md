@@ -161,13 +161,12 @@ In all routing modes:
 
 - On matching a Message by any routing signal, the bridge MUST
   relay it to the corresponding external participant.
-- The bridge SHOULD strip or translate internal routing metadata
-  that is irrelevant to the external protocol before relaying.
-  Internal metadata includes `context.pipeline_id`,
-  `context.skill_id`, and internal `context.source` values that
-  name components on the local bus; participant-facing fields
-  such as `context.session` and `context.destination` SHOULD be
-  preserved.
+- The bridge MUST relay `Message.context` unchanged in both
+  directions, with exactly one exception: the `session_id`
+  translation defined earlier in this section. What a bridge does
+  to fit its own external transport is a layer-2 concern outside
+  this specification and MUST NOT alter the Message as seen by a
+  conformant peer on either side.
 - A bridge MAY overwrite the `source` of outbound messages with a
   generic assistant ID ("topology hiding") when the identity of the
   emitting component is not meaningful to the external participant.
