@@ -608,17 +608,15 @@ capabilities: each persona plugin is a self-contained agent with its
 own identity, capabilities, and tags; a routing skill or UI selects
 among them by setting `session.persona_id`.
 
-**Identity namespace:** `persona_id` values SHOULD be unique within
-a deployment. When two plugins both claim the same `persona_id`, the
-first one in pipeline order claims every utterance for that identity;
-the second never matches. Deployments SHOULD avoid this.
-
-A collision is not detected anywhere at runtime: no component holds a
-deployment-wide view of loaded identities, and the orchestrator does
-not read `ovos.persona.list` responses. A deployment that wants the
-collision surfaced builds it into its own tooling — comparing the
-`ovos.persona.list` responses of all loaded plugins (§8.7) at
-provisioning time is the practical place to do it.
+**Identity namespace:** `persona_id` values MUST be unique within a
+deployment. The persona registry MUST refuse a second registration
+of a `persona_id` already registered — whether declared by a plugin
+at load time or requested via `ovos.persona.register` — and MUST
+report the refusal in a way the requester or deployer can observe.
+The persona already registered under that id MUST stay registered
+and keeps claiming every utterance for that identity. A
+`session.persona_id` naming that id refers to the persona that is
+registered.
 
 **Capability-based routing.** A skill or UI that wants to select among
 multiple loaded personas SHOULD query `ovos.persona.list`, collect the
