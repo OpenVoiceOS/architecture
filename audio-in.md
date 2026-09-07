@@ -222,10 +222,11 @@ No payload. The session is identified by `context.session.session_id`
 of this Message.
 
 On receipt the audio input service enters sleep mode and suspends
-capture until it is awoken (§6.4). Sleep entry is **unacknowledged
-by design**: no confirmation Message is emitted on entering sleep.
-The only sleep-related emission is `ovos.listener.awoken` on the
-sleep→awake transition (§6.4).
+capture until it is awoken (§6.4). The audio input service **MUST**
+acknowledge the request via the `response` derivation (OVOS-MSG-1
+§5.3) — on `ovos.listener.sleep.response` — once sleep mode has been
+entered. The reply carries no payload; it exists so a controller can
+confirm sleep took effect rather than assuming it from silence.
 
 **Sleep is device-scoped.** Although the `ovos.listener.sleep`
 request rides a session like every Message, sleep mode is a
@@ -240,13 +241,23 @@ device-scope effect — capture suspended or resumed for every
 session — is identical no matter which session's identifier the
 Message carries.
 
-No topic in this specification lets a component query current
-listener state (awake, asleep, capturing) on demand. This is a
-**deliberate omission**: sleep and record signals (§6.1–§6.4) are
-edge-triggered notifications, not a queryable state store. A
-deployment that needs to synchronize to current state on connect
-(e.g. a bridge attaching mid-session) derives it from the last-seen
-lifecycle signal rather than polling for one.
+**Sleep state is queryable.** A component MAY query current sleep
+state by emitting:
+
+`ovos.listener.sleep.query`
+
+Request payload: none.
+
+The audio input service **MUST** reply via the `response` derivation
+(OVOS-MSG-1 §5.3) — on `ovos.listener.sleep.query.response` — with:
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `asleep` | bool | yes | `true` if the device is currently in sleep mode, `false` otherwise. |
+
+This query is the only queryable listener state this specification
+defines; capture activity (§6.1, §6.2) remains an edge-triggered
+notification, not a queryable state store.
 
 ### 6.4 Wake request and awoken
 
@@ -313,6 +324,9 @@ word (push-to-talk, `ovos.mic.listen`) emit no wake-word signal.
 | `ovos.listener.record.ended` | audio-input → broadcast | Voice-command capture ended (§6.2). |
 | `ovos.listener.sleep` | controller → audio-input | Enter device-wide sleep mode and suspend capture (§6.3). |
 | `ovos.listener.wake` | controller → audio-input | Leave sleep mode and resume capture (§6.4). |
+| `ovos.listener.sleep.response` | audio-input → controller | Sleep mode entered (§6.3). |
+| `ovos.listener.sleep.query` | any component → audio-input | Query current sleep state (§6.3). |
+| `ovos.listener.sleep.query.response` | audio-input → requester | Current sleep state (§6.3). |
 | `ovos.listener.awoken` | audio-input → broadcast | Left sleep mode (§6.4). |
 | `ovos.mic.listen` | any component → audio-input | Re-open the user input channel; consumed here, defined in OVOS-AUDIO-1 §4.4. |
 | `ovos.stt.failed` | audio-input → broadcast | Capture yielded no usable transcription; terminal, no lifecycle follows (§5). |
@@ -341,6 +355,9 @@ word (push-to-talk, `ovos.mic.listen`) emit no wake-word signal.
   sessions while asleep (§6.3);
 - leave sleep mode on `ovos.listener.wake`, treating a request received
   while awake as a no-op (§6.4);
+- reply to `ovos.listener.sleep` once sleep mode has been entered,
+  and reply to `ovos.listener.sleep.query` with current sleep state
+  (§6.3);
 - emit `ovos.listener.awoken` on the sleep→awake transition (§6.4).
 
 ### An audio input service **SHOULD**:
