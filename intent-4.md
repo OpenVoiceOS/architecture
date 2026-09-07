@@ -671,9 +671,20 @@ announcement (§10), for every intent it currently holds disabled. A
 disabling party that does not track its own suppressions cannot
 recover them; the manifest is not durable state.
 
-Enable and disable are session-scoped like every other message here
-(§11.3): they affect only registrations under the `session_id` read
-from `context.session.session_id`.
+Enable and disable are scoped to the session the message carries
+(§11.1): the effect of `ovos.intent.disable` and `ovos.intent.enable`
+is bound to the `session_id` read from `context.session.session_id`,
+and a consuming plugin **MUST NOT** alter matching for any session
+other than those the change reaches through §11.2. Which sessions it
+reaches follows the scope of the registration it targets. A disable
+under the `"default"` session acts on the `"default"` registration,
+which every session inherits (§11.2), so it is **device-wide**: every
+session that matches through the inherited entry stops matching it. A
+disable under a specific `session_id` acts on that session's view only
+— it suppresses the intent for that session, whether the entry it
+targets is the session's own or the inherited `"default"` one, and no
+other session is affected. Enabling an intent **re-arms** exactly what
+a prior disable on the same session suppressed.
 
 ---
 
