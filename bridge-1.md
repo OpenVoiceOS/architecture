@@ -143,6 +143,8 @@ Group-level routing (e.g. "all satellites in this household receive
 broadcast `ovos.stop`") is distinguished by `site_id`, not by
 enumerating individual `session_id` or `destination` values.
 
+**Named-session output delivery.** A bridge that owns a named session MUST deliver that session's output requests to the participant holding that session. This covers the TTS speech and queued-sound requests scoped to **OVOS-AUDIO-1 §4.1**. How the audio payload is carried across the external channel remains a layer-2 concern outside this specification.
+
 **Identity mapping (NAT).** Just as a bridge MAY rewrite
 `context.source` on outbound messages ("topology hiding", §3.1), it
 MAY also rewrite `context.session.session_id` as messages cross the
