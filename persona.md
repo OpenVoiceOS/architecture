@@ -788,23 +788,24 @@ at different pipeline positions are conformant.
 | `ovos.persona.list.response` | persona → any component | Supported-identity listing (§8.7) |
 | `ovos.persona.register` | any component → persona | Runtime persona registration (§9) |
 | `ovos.persona.deregister` | any component → persona | Runtime persona deregistration (§9) |
-| `ovos.persona.activated` | persona → broadcast | A persona has become active for a session (best-effort) |
-| `ovos.persona.dismissed` | persona → broadcast | A persona has been dismissed from a session (best-effort) |
+| `ovos.persona.activated` | transitioning component → broadcast | A persona has become active for a session |
+| `ovos.persona.dismissed` | transitioning component → broadcast | A persona has been dismissed from a session |
 
 `ovos.persona.activated` payload: `{ "persona_id": "...", "session_id": "..." }`.
 `ovos.persona.dismissed` payload: `{ "persona_id": "...", "session_id": "..." }`.
 
-**Emission scope.** A persona plugin **MAY** emit these on the
-transitions it performs itself — a self-summon or self-release
-matched under §7.1 route 1. It has no visibility into the others: an
-external summon or dismiss (§5, §6) changes `persona_id` outside the
-plugin, and the plugin learns of it only when the next utterance
-arrives, if one ever does. Those transitions produce **no** event.
-The signals are therefore partial by construction, advisory, and
-best-effort; consumers **MUST NOT** rely on them for correctness or
-treat their absence as evidence that no transition occurred. Session
-state is authoritative — a consumer that needs every transition reads
-`persona_id` from the session instead.
+**Emission scope.** `ovos.persona.activated` and `ovos.persona.dismissed`
+**MUST** fire for every activation and every dismissal of a session's
+`persona_id`, whatever caused it — a self-summon or self-release
+matched under §7.1 route 1, an external summon or an external dismiss
+placed by a client, a pipeline plugin, or the orchestrator (§5, §6),
+or the stop dispatch clearing `persona_id` (§6). The component that
+performs the transition emits the event: the persona plugin when it
+sets or clears `persona_id` itself via `Match.updated_session` or the
+stop-dispatch confirmation path, and the component performing an
+external summon or dismiss otherwise. Consumers **MAY** rely on
+`ovos.persona.activated` and `ovos.persona.dismissed` as the complete
+record of a session's persona transitions.
 
 The two reply topics are named differently on purpose:
 `ovos.persona.answer` is the persona's own vocabulary for what it
