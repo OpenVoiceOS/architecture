@@ -281,13 +281,18 @@ vocabulary of that name) instead defines a **slot-value exclusion**: its phrase
 set lists values that **MUST NOT** fill that slot. When a candidate value the
 utterance would bind to the slot occurs (same whole-word-sequence rule) in the
 exclusion set, the engine **MUST NOT** bind it — the slot is left unresolved, as
-though the utterance had not supplied it. The canonical use is preventing
-anaphoric pronouns from filling a referential slot: a `person.blacklist` of
-`he`, `she`, `they` leaves `{person}` unresolved for *"how tall is he"* so a
-later stage — OVOS-CONTEXT-1 §7 context fill, or a re-prompt — supplies the
-value. Pronoun sets are language-specific, so this keeps them in per-language
-`locale/<lang>/` resources rather than engine code; a `.blacklist` MAY reference
-a shared `.voc` inline via the `<name>` token (§4.3).
+though the utterance had not supplied it. The exclusion is a property of the
+slot, not of the matcher that scored the intent: any component writing a value
+for that slot into the slot map (OVOS-PIPELINE-1 §4.3), under the language the
+blacklist is registered for, **MUST** apply it — including an intent transformer
+(OVOS-TRANSFORM-1 §3.4) that re-extracts the slot from the raw utterance after
+the match. The canonical use is preventing anaphoric pronouns from filling a
+referential slot: a `person.blacklist` of `he`, `she`, `they` leaves `{person}`
+unresolved for *"how tall is he"* so a later stage — OVOS-CONTEXT-1 §7 context
+fill, or a re-prompt — supplies the value. Pronoun sets are language-specific,
+so this keeps them in per-language `locale/<lang>/` resources rather than engine
+code; a `.blacklist` MAY reference a shared `.voc` inline via the `<name>` token
+(§4.3).
 
 ```
 # weekday.entity        — values for the {weekday} slot
