@@ -601,6 +601,10 @@ deployment's enabled languages wins. A rung whose value is present
 but not enabled in the deployment is skipped in favour of the next
 rung; it is not an error and it does not abort resolution.
 
+The deployment's enabled languages are deployment configuration: a
+fixed set a component is provisioned with, not a value it learns or
+negotiates over the bus.
+
 Resolution always terminates in a tag, so no matching stage is ever
 invoked without a language.
 
