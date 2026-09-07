@@ -452,6 +452,11 @@ typed slots **MUST** ignore it and read the templates by the degrade rule of
 OVOS-INTENT-1 §3.4; this is the §6.3 unknown-field tolerance applied to a
 named field. An absent `slot_types` is equivalent to an empty object.
 
+A producer derives `required_slots` from the intent's paired `.required`
+resource (INTENT-2 §4.5). Every name it carries **MUST** be a slot declared by
+a template in `samples`. A name no template declares malforms the registration
+(§6.3).
+
 ### 6.2 Slot sets
 
 Templates in `samples` **MAY** declare **different sets of named slots**;
