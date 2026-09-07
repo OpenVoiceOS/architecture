@@ -400,6 +400,17 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §3.4, §6 — the per-component override class, as the wire-weight
+  rule (§3.4 items 2 and 3) and the producer **SHOULD NOT** (§6)
+  enumerate it, now names the six `blacklisted_*_transformers` lists
+  the §3 field table already claims for OVOS-TRANSFORM-1 §5.2. The
+  class had fifteen members and the enumerations listed nine. Through
+  OVOS-PIPELINE-1 §5.5, which defers to this class, the orchestrator
+  MUST now re-impose the six lists onto an `updated_session` a plugin
+  returns. ovos-core at dev `f3d08e9b` (3.7.0a1) does not yet:
+  `_DEPLOYMENT_OWNED_SESSION_FIELDS` holds the nine fields and not
+  the six lists. No wire change: an omitted field already resolves to
+  the deployment default.
 - The `context.session` carrier wire shape: the `session_id` and `lang`
   core fields, the language field family (§3.2), the §2.1 field-registry
   mechanism by which other specifications claim OPTIONAL session fields,

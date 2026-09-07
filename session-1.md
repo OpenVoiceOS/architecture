@@ -702,9 +702,10 @@ canonical cases:
    rather than emit the reserved string.
 2. **A per-component override field whose value matches the
    deployment default.** Producers **SHOULD NOT** populate
-   `pipeline`, the six `*_transformers` lists,
-   `blacklisted_skills`, `blacklisted_intents`,
-   `blacklisted_pipelines`, or `site_id` with a value the consumer
+   `pipeline`, the six `*_transformers` lists, the six
+   `blacklisted_*_transformers` lists, `blacklisted_skills`,
+   `blacklisted_intents`, `blacklisted_pipelines`, or `site_id` with
+   a value the consumer
    would compute as the deployment default anyway. Set them only
    when the session genuinely diverges from the default.
 3. **An empty array on a list-valued override field.** For every
@@ -713,8 +714,10 @@ canonical cases:
    wire-equivalent to omission: both resolve to the
    deployment default at consumption (§2.1). A producer
    **SHOULD** omit the field rather than emit `[]`. This includes
-   the three denylists (`blacklisted_*`), the six
-   `*_transformers` chains, and the `pipeline` ordering.
+   the nine `blacklisted_*` denylists (`blacklisted_skills`,
+   `blacklisted_intents`, `blacklisted_pipelines` and the six
+   `blacklisted_*_transformers` lists), the six `*_transformers`
+   chains, and the `pipeline` ordering.
 
 The rule is **SHOULD**, not **MUST**: a producer that emits a
 redundant default-valued field is non-optimal but conformant. A
@@ -916,12 +919,13 @@ A producer **MUST NOT**:
 A producer **SHOULD NOT**:
 
 - populate a per-component override field (§3 — `pipeline`,
-  the six `*_transformers`, `blacklisted_skills`,
-  `blacklisted_intents`, `blacklisted_pipelines`, `site_id`) with a
-  value that matches the deployment default merely as a form of
-  explicit confirmation. Omit the field and let the orchestrator's
-  default apply (§2.1, §3.4). Producers that cannot determine the
-  deployment default are non-optimal but conformant.
+  the six `*_transformers`, the six `blacklisted_*_transformers`,
+  `blacklisted_skills`, `blacklisted_intents`,
+  `blacklisted_pipelines`, `site_id`) with a value that matches the
+  deployment default merely as a form of explicit confirmation. Omit
+  the field and let the orchestrator's default apply (§2.1, §3.4).
+  Producers that cannot determine the deployment default are
+  non-optimal but conformant.
 
 ### A **consumer** of session-carrying Messages **MUST**:
 
