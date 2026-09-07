@@ -82,7 +82,7 @@ It does **not** define:
 | `data` | object | no | JSON object delivered as the fired event's `data`. Default `{}`. At most 16384 bytes when serialized as compact UTF-8 JSON, measured on `data`. |
 | `until` | instant | no | Recurring only. No occurrence after this instant. |
 | `count` | integer ≥ 1 | no | Recurring only. Maximum number of occurrences. |
-| `misfire` | string | no | `late` (default), `skip`, or `all` (§4.3). |
+| `misfire` | string | no | `late` (default) or `skip` (§4.3). |
 | `grace_s` | number ≥ 0 | no | Seconds after the due instant during which a fire still counts as on time. Default 60. |
 | `ephemeral` | boolean | no | Default `false`. `true` schedules are never persisted (§5.3). |
 | `context` | object | no | Not sent by the owner: captured from the request message's own context (§3.5), never sent in the body. The scheduler stores it verbatim and replays it on every fire. |
@@ -320,29 +320,20 @@ once.
 
 An occurrence is a misfire when the scheduler does not fire it by
 `due + grace_s`, whether it was running or not: downtime and clock
-steps change nothing, grace is measured from the due instant. The
-record's `misfire` field decides what happens:
+steps change nothing, grace is measured from the due instant.
 
-| value | behaviour |
-|---|---|
-| `late` | Fire the most recent missed occurrence immediately, once, with `due` set to its original due instant. Earlier missed occurrences of the same schedule are dropped. |
-| `skip` | Do not fire missed occurrences. |
-| `all` | Fire every missed occurrence, oldest first, each with its own `due`. |
-
-The scheduler MAY pace `all` firings across evaluation ticks. The order stays oldest first and the bound of §4.3 still applies.
-
-An occurrence dropped under `late` or `skip` is **consumed**: it
-counts against `count` and is never retried. `all` fires missed
-occurrences only up to the remaining `count`, and never past `until`.
-The `remaining` of a late fire reflects the consumption of every
-occurrence up to and including the one being fired.
+A missed one-shot schedule fires at most once, if at all. For a
+recurring schedule, missed occurrences are either skipped, or the
+most recent one fires once, with `due` set to its original due
+instant and every earlier missed occurrence of the same schedule
+dropped. The record's `misfire` field (`late`, the default, or
+`skip`) selects between the two. An occurrence dropped either way
+is **consumed**: it counts against `count` and is never retried.
 
 In every case the scheduler MUST emit `ovos.scheduler.missed` once per
 schedule that had at least one missed occurrence, with `id`, `owner`,
 `missed` (array of due instants, oldest first), `fired_late` (the
-instants that were fired under `late` or `all`), and `next`. Each of
-`missed` and `fired_late` carries at most 100 entries; when either is
-capped the message also carries `truncated: true`.
+instant fired under `late`, if any), and `next`.
 
 `next` is what distinguishes a series that lost occurrences (`next`
 set) from a one-shot that will never fire (`next` null).
@@ -585,7 +576,7 @@ by the `scheduler.id` context field.
    it survives a restart, and fire with that context plus the added
    `scheduler` object and no other change (§3.5, §4.2, §5.1).
 6. Emit `ovos.scheduler.missed` for every schedule with missed occurrences,
-   respecting the consumption rules and the 100-entry caps (§4.3).
+   respecting the consumption rules of §4.3.
 7. Anchor fixed-period recurrences on the schedule, measure `in`
    against a monotonic reference (§3.4.3), and evaluate wall-clock
    recurrences in their zone with the daylight-saving rules of §3.4.2.
