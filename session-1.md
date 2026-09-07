@@ -702,7 +702,7 @@ canonical cases:
    rather than emit the reserved string.
 2. **A per-component override field whose value matches the
    deployment default.** Producers **SHOULD NOT** populate
-   `pipeline`, the six `*_transformers` lists,
+   `pipeline`, the six `*_transformers` lists, the six `blacklisted_*_transformers` lists,
    `blacklisted_skills`, `blacklisted_intents`,
    `blacklisted_pipelines`, or `site_id` with a value the consumer
    would compute as the deployment default anyway. Set them only
@@ -885,7 +885,7 @@ A producer **MUST NOT**:
 A producer **SHOULD NOT**:
 
 - populate a per-component override field (§3 — `pipeline`,
-  the six `*_transformers`, `blacklisted_skills`,
+  the six `*_transformers`, the six `blacklisted_*_transformers`, `blacklisted_skills`,
   `blacklisted_intents`, `blacklisted_pipelines`, `site_id`) with a
   value that matches the deployment default merely as a form of
   explicit confirmation. Omit the field and let the orchestrator's
