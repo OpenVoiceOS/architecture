@@ -263,19 +263,27 @@ earlier stage removed.
 
 ### 6.1 The willingness contest
 
-When the effective pool is non-empty the plugin broadcasts **one**
-ping for the round:
+The fallback plugin decides the round with a candidate poll
+(PIPELINE-1 §4.5), on the topic pair
 
-`ovos.fallback.ping`
+`ovos.fallback.ping` → `ovos.fallback.pong`
 
-derived from the inbound utterance Message via `reply`
-(**OVOS-MSG-1 §5.2**). Every fallback skill the ping concerns
-evaluates **in parallel** and answers with `reply` of the ping —
-claim or explicit decline (see **Who answers** below). One Message
-asks the whole pool; the round's latency is one collection window,
-not a sum of per-skill waits.
+with the ping, pong, correlation, validity and window rules of that
+section. What follows is what is specific to fallback.
 
-Payload:
+**The candidate set** is the effective pool of §5. Neither the
+ping's topic nor its payload names it: pool membership is derived
+plugin-side from the registry, the stage's priority range and the
+denylists, and no session field carries the result. A skill
+therefore decides by the one test available to it — its own
+registration against the ping's `context.session` — and a skill
+whose registration is scoped to a different `session_id`, or whose
+`skill_id` appears in `session.blacklisted_skills`, **SHOULD NOT**
+pong. Selection does not depend on that restraint being honoured,
+because the plugin **MUST** ignore a pong whose `skill_id` does not
+name a member of the effective pool.
+
+**The ping payload:**
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
@@ -283,111 +291,40 @@ Payload:
 | `lang` | string | yes | The resolved BCP-47 language tag. |
 
 The skill uses these to run its own evaluation logic and decide
-whether it can produce a meaningful response. This is the point
-at which the fallback skill parses the utterance — it may query a
+whether it can produce a meaningful response. This is the point at
+which the fallback skill parses the utterance — it may query a
 knowledge base, run a classifier, call an LLM, or apply any other
 internal logic. The reply carries only the decision.
 
-**Who answers.** Neither the ping's topic nor its payload names the
-round's pool: pool membership is derived plugin-side from the
-registry, the stage's priority range and the denylists (§5), and no
-session field carries the result. A skill therefore decides by the
-one test available to it — its own registration against the ping's
-`context.session` — and a skill whose registration is scoped to a
-different `session_id`, or whose `skill_id` appears in
-`session.blacklisted_skills`, **SHOULD NOT** pong. Every other
-registered fallback skill SHOULD answer, in parallel. Selection does
-not depend on that restraint being honoured: the plugin **MUST**
-ignore a pong whose `skill_id` does not name a member of the
-effective pool.
-
-Each skill replies with:
-
-`ovos.fallback.pong`
-
-derived from the ping through the reply derivation (**OVOS-MSG-1
-§5.2**), so that the pong reaches the plugin wherever the skill
-runs. A skill **SHOULD** answer even when declining
-(`can_handle: false`): explicit declines are what let the window
-close early instead of waiting out the ceiling.
+**The pong payload** is the PIPELINE-1 §4.5 shape — `skill_id` and
+`can_handle` — plus one fallback field:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `skill_id` | string | yes | The responding skill's identity. |
-| `can_handle` | bool | yes | Whether this skill is willing to handle the current utterance. |
 | `utterance` | string | yes | Echo of the utterance evaluated — the first element of the ping's `utterances`. |
 
-**Round correlation.** The round is the lifecycle: the plugin keys
-poll state by `session_id` from `context.session` and by
-`context.utterance_id` (OVOS-PIPELINE-1 §9.1.1), which the ping carries by
-`reply` derivation and the pong carries back the same way — no
-skill-side action, no field of this specification's own. A pong
-whose `utterance_id` does not equal the round's **MUST** be
-discarded: an answer that cannot prove which question it answers
-never decides a round. This is the same correlation rule every poll
-protocol uses (OVOS-COMMON-QUERY-1 §6.4).
+The echo tells the skill *what* it judged, while the
+`utterance_id` of the PIPELINE-1 §4.5 correlation tells the plugin
+*which round* the judgment belongs to.
 
-The `utterance` field remains REQUIRED as the evaluated candidate —
-it tells the skill *what* it judged (the first element of
-`utterances`, §6.1), while `utterance_id` tells the plugin *which
-round* the judgment belongs to.
+**What a claim means.** `can_handle: true` is the whole contest.
+Unlike OVOS-COMMON-QUERY-1, whose ping only filters plausible
+answerers before a separate answer round, the fallback pong is the
+claim itself, and there is no second round in which a slow
+evaluator can catch up. A skill that cannot answer the ping in time
+is not delayed, it is skipped.
 
-The boolean's field name is protocol-specific: this spec and
-OVOS-STOP-1 use `can_handle`, OVOS-CONVERSE-1's poll uses `result`,
-and OVOS-COMMON-QUERY-1 uses `can_answer`. Each name is normative
-only within its own protocol.
-
-The plugin collects pongs inside **one bounded window** per round.
-Without a bound, one unresponsive skill stalls the entire fallback
-stage — and with it the utterance — forever. A skill silent at
-window close, or whose pong is malformed (missing or non-boolean
-`can_handle`, mismatched `utterance_id`), **MUST** be treated as
-`can_handle: false`; this is uniform with the silence rules of
-OVOS-CONVERSE-1 (§4.2 there) and OVOS-STOP-1 (§4.2 there).
-
-The window **SHOULD** close early when a decision is already
-forced, and selection order makes two early closes safe:
-
-- every skill in the effective pool has answered — nothing more can
-  arrive that the round would wait for;
-- the **highest-priority** skill still unanswered ranks below the
-  best claimant so far — no later pong can outrank the claim
-  already held.
-
-**The poll is the decision.** Unlike OVOS-COMMON-QUERY-1, whose
-ping only filters plausible answerers before a separate answer
-round, the fallback ping is the whole contest: the pong is the
-claim, and there is no second round in which a slow evaluator can
-catch up. A skill that cannot answer the ping in time is not
-delayed, it is skipped. This follows OVOS-CONVERSE-1 §4.2, where
-the poll is likewise the decision point.
-
-**Ceiling calibration.** The **RECOMMENDED default ceiling is
-0.5 s**, matching OVOS-CONVERSE-1 §4.2 and OVOS-STOP-1 §4.1. That
+**The window.** The RECOMMENDED default ceiling is **0.5 s**. That
 default suits a local evaluation — a lookup, a classifier, a
 vocabulary test. It is not a budget for a model-backed skill, and a
-deployment running one **MUST** raise that stage's ceiling above the
-stage's real evaluation latency. Left at the default, such a skill
-is silently a non-responder.
+deployment running one **MUST** raise that stage's ceiling above
+the stage's real evaluation latency. Left at the default, such a
+skill is silently a non-responder.
 
-**Stage collection ceiling.** The broadcast form costs one window
-whatever the pool size. That window is the stage's *collection
-ceiling*, and a deployment **MUST** set the OVOS-PIPELINE-1 §4.4
-match bound for this stage at or above it. A shorter bound kills the
-stage mid-poll on every utterance, silently.
-
-**Selection is pool-ordered, never arrival-ordered.** Pongs arrive
-in whatever order skills answer; the plugin selects the first
-willing skill in **pool order** (§6.2). A fast low-priority claim
-never beats a slow high-priority one inside the window.
-
-**Bus-exchange exception.** The willingness contest is a documented
-exception to PIPELINE-1 §4.4's low-latency guidance, justified
-because fallback stage(s) are positioned after all other
-intent-matching stages (§8): no further stages are blocked during
-the window, and the early-close rules (§6.1) end it as soon as the
-outcome is decided. OVOS-CONVERSE-1 §4.2's contest is the same
-pattern.
+**The ordering rule** is pool order (§6.2): the first willing skill
+in pool order wins, and the window closes early once the
+highest-priority skill still unanswered ranks below the best
+claimant so far.
 
 ### 6.2 Selection
 
