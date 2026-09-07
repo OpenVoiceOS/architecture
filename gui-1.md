@@ -162,6 +162,17 @@ degradation applies). The reserved prefix names the discriminator; it
 does not guarantee every `SYSTEM_`-prefixed name is currently defined
 or renderable.
 
+A conforming GUI service **MUST** emit an observable diagnostic
+naming a `SYSTEM_`-prefixed page name it dispatches that names
+neither a template in §3.4's catalogue nor a name reserved by §3.4,
+so that a deployment in which no installed adapter recognises the
+template is still diagnosable rather than silently rendering
+nothing. This specification defines no wire topic for the diagnostic;
+absent one, the GUI service **MUST** log it. The GUI service **MUST**
+continue processing the remaining entries of the namespace's
+`page_names` (§4.2) after emitting the diagnostic; an unrecognised
+entry **MUST NOT** halt dispatch of the rest of the namespace.
+
 ### 3.3 Session-data typing rules
 
 Each template below lists its session-data keys. Unless stated
