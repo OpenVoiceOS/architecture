@@ -298,6 +298,15 @@ happen only at these boundaries:
   are unaffected by this and continue to carry the session as of
   the moment each is derived.
 
+**Correlating a mutation to its round.** A mutation made at any of
+the boundaries above belongs to the round whose
+`context.utterance_id` (OVOS-MSG-1 §5.4, claimed by OVOS-PIPELINE-1
+§9.1.1) the mutating Message carries: the mutating Message and the
+round share that identifier because §9.1.1's preservation rule
+carries it, unaltered, through every Message derived within one
+lifecycle. This is the sole correlation rule; no other field of the
+mutating Message is relevant to which round it belongs to.
+
 **Session mutation discipline.** A handler SHOULD NOT mutate
 session fields unless the mutation is necessary for the
 handler's function or is explicitly prescribed by another
