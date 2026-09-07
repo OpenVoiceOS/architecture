@@ -966,18 +966,22 @@ consecutive-exception threshold. A dropped plugin behaves as if
 absent; recovery is a deployment concern. The threshold and scope
 (per-session or process-wide) are deployer-configurable.
 
-**Orchestrator backstop for `required_slots`.** After a plugin
-returns a `Match`, the orchestrator **MUST** verify that the match's
-slot map contains every slot listed in the intent's `required_slots`
-(INTENT-3 §5.3). The orchestrator obtains this information from the
-same registration data the plugin consumed — in-process, this is
-available from the plugin's compiled state or from the orchestrator's
-own manifest (INTENT-4 §10). If any required slot is absent, the
-orchestrator **MUST** treat the match as if the plugin had declined
-and continue iteration to the next plugin. This check operates
-after the `blacklisted_skills` / `blacklisted_intents` backstop
-(§5.3, §5.4) and uses the same observable semantics: no bus event
-is emitted; it is observable only as a non-match.
+**Orchestrator backstop for `required_slots`.** The backstop applies
+only to a `Match` whose intent carries an OVOS-INTENT-4 registration
+row: after a plugin returns such a `Match`, the orchestrator **MUST**
+verify that the match's slot map contains every slot listed in the
+registered intent's `required_slots` (INTENT-3 §5.3). The orchestrator
+obtains this information from the same registration data the plugin
+consumed — in-process, this is available from the plugin's compiled
+state or from the orchestrator's own manifest (INTENT-4 §10). If any
+required slot is absent, the orchestrator **MUST** treat the match as
+if the plugin had declined and continue iteration to the next plugin.
+A `Match` whose intent has no registration row — a plugin-owned intent
+or a reserved-name intent — carries no `required_slots` for the
+orchestrator to check and **MUST** pass this backstop unchanged. This
+check operates after the `blacklisted_skills` / `blacklisted_intents`
+backstop (§5.3, §5.4) and uses the same observable semantics: no bus
+event is emitted; it is observable only as a non-match.
 
 Neither backstop consults `data.typed_slots`. Typed slots are an engine-side
 refinement (OVOS-INTENT-1 §5.6): the orchestrator checks that a required slot
