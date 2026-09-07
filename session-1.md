@@ -775,18 +775,25 @@ For the avoidance of doubt:
 ### 4.1 Default materialization
 
 The derivations of OVOS-MSG-1 §5.1–§5.3 permit an implementation to
-**materialize** a default session on a derived Message when the source
+**materialize** a session on a derived Message when the source
 Message had no `session`; this specification narrows that permission
-for the field set §3 claims.
+for the field set §3 claims, for every session other than the
+default session.
 
-A materialized default **MUST** set `session_id: "default"`. A
-materialized default **MUST NOT** populate any field whose
-deployment default is a deployment-configured or "no behaviour"
-value — those fields carry meaning only when explicitly set by the
-session origin, and materializing them would falsely declare a
-divergence from deployment defaults that the origin never requested.
-Fields whose default is a fixed normative value (`session_id:
-"default"`) MUST be set. Fields outside the §3 closed set remain
+A component deriving a Message for a named session other than the
+default session **MUST NOT** synthesize that session's fields it did
+not receive. A materialized session other than default **MUST** set
+`session_id` to the session's identifier and **MUST NOT** populate
+any other field whose deployment default is a deployment-configured
+or "no behaviour" value — those fields carry meaning only when
+explicitly set by the session origin, and materializing them would
+falsely declare a divergence from deployment defaults that the
+origin never requested.
+
+A Message with no `session` carrier takes the orchestrator's
+persistent default session, as OVOS-SESSION-2 §5.1 defines; that
+derivation is governed by OVOS-SESSION-2 §5.1, not by the
+materialization rule above. Fields outside the §3 closed set remain
 governed by OVOS-MSG-1 §4.1 and §5.1–§5.3 alone.
 
 ---
