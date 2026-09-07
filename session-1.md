@@ -228,18 +228,21 @@ array, or boolean). There is no field set to interpret, no
 `session_id` to key conversation state on — the carrier itself is
 unusable, so the field-by-field rules cannot apply.
 
-A malformed carrier is dropped by the **first consumer that sees
-it**, not carried forward for a later stage to reject. On a messagebus
-with a websocket relay, the relay is the first consumer: it **MUST**
+A malformed carrier is not carried forward for a later stage to
+reject: every consumer that parses `context` and finds the `session`
+carrier malformed **MUST** drop the Message itself, rather than
+passing it on in the hope that some other consumer will reject it.
+Each dropping consumer **MAY** emit `ovos.session.rejected` for the
+Message it dropped; a deployment **MAY** therefore see more than one
+`ovos.session.rejected` for the same dropped Message, one per consumer
+that independently rejected it.
+
+Where the deployment includes a message relay, the relay **MUST**
 validate the `session` carrier shape on ingress and drop the frame
-before fan-out, so exactly one `ovos.session.rejected` is emitted for
-it — not one per subscriber the relay would otherwise have echoed the
-frame to. Any other consumer that still receives a malformed carrier
-(an in-process bus with no relay, or a relay that predates this rule)
-**MUST** drop it and **MUST NOT** crash, and **MUST NOT** emit
-`ovos.session.rejected` unless it is itself the first consumer of that
-Message — so at most one rejection exists per dropped Message. On a
-malformed carrier, the consumer that drops it:
+before fan-out, so that no consumer behind the relay ever sees the
+malformed carrier and the fan-out produces exactly one
+`ovos.session.rejected` for it. On a malformed carrier, the consumer
+that drops it:
 
 - **MUST NOT** crash, and **MUST NOT** let the error tear down its
   transport. A malformed carrier is a **per-message** producer fault,
@@ -249,9 +252,8 @@ malformed carrier, the consumer that drops it:
 - **MUST** drop the offending Message: no handler runs, no lifecycle
   trio starts, and no OVOS-PIPELINE-1 §9.5 end marker is emitted for
   it — a dropped Message never entered the lifecycle §9.5 counts.
-- **MUST** emit exactly one `ovos.session.rejected` Message for the
-  dropped Message (defined below). This is the only signal the drop
-  produces.
+- **MAY** emit an `ovos.session.rejected` Message for the dropped
+  Message (defined below). This is the only signal the drop produces.
 - **SHOULD** log the violation.
 - **MUST NOT** substitute the default session and process the Message
   as though the carrier were valid. Absence resolves to the default
@@ -906,11 +908,16 @@ A producer **SHOULD NOT**:
   transport, and **MUST NOT** substitute the default session for it
   (§2.5).
 
+A consumer **MUST**:
+
+- drop (reject) a Message carrying a malformed `session` carrier
+  (§2.5).
+
 A consumer **SHOULD**:
 
 - log unknown session fields for diagnostic purposes;
-- drop (reject) a Message carrying a malformed `session` carrier and
-  log the violation (§2.5).
+- log the violation when it drops a Message for a malformed `session`
+  carrier.
 
 ### A specification that **claims a new session field** **MUST**:
 
