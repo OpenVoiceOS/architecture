@@ -425,6 +425,25 @@ loaded engine accepts an intent's method, that intent cannot be triggered. A
 skill author **SHOULD** therefore choose the method per the engines the target
 assistant is expected to run.
 
+Within this otherwise open space, a template intent (§5) carries one minimum
+matching guarantee. Take an utterance normalized as OVOS-INTENT-1 §2 requires,
+and a sample sentence in that intent's expanded sample set (OVOS-INTENT-1 §4).
+If the utterance's literal words equal the sample's literal words exactly and
+in order, the engine **MUST** report that intent as the match — unless an
+earlier, stronger-claiming stage of the pipeline has already claimed the
+utterance, or the intent's `.blacklist` (OVOS-INTENT-2 §4.3) suppresses it —
+and **MUST** bind each named slot in the sample to the words the utterance
+carries at that slot's position. A required slot the matching template does
+not declare (§5.3) is exempt from this guarantee: the intent then remains
+unmatched, exactly as §5.3 already provides. A keyword intent carries no such
+guarantee of its own — its match obligations are the constraint roles of §4.2.
+
+Beyond exact-sample equality this guarantee says nothing: how an engine treats
+an utterance that is not an exact sample, how fuzzily it matches, what
+confidence it reports, and how it ranks one satisfiable intent against
+another remain engine-defined, and this specification makes no claim that two
+conformant engines behave alike there.
+
 **Which engines are loaded is a deployment matter (non-normative).** This
 specification defines the shape and contract of an intent and its engine
 interface; it does not govern how an installation is assembled. Which intent
