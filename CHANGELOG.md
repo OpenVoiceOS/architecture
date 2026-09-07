@@ -387,6 +387,17 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §3.2, §3.3 — `ovos.utterance.handled` is emitted once per
+  lifecycle, not once per utterance: a round that opens a nested
+  lifecycle (OVOS-PIPELINE-1 §6.5) produces an inner and an outer
+  marker for the same `session_id`, and nothing ranks one above the
+  other. A client that adopts at the marker **MUST** apply that
+  adoption to every marker for its session and **MUST NOT** discard a
+  second one as a duplicate. The rule is order-independent: a client
+  **MUST NOT** take the arrival order of two markers as their emission
+  order (§3.2), and whichever it holds when the round is over is a
+  conformant snapshot. No producer obligation changes, and no wire
+  change: the marker was already emitted per lifecycle.
 - The state-ownership model (stateless bus, stateless orchestrator for
   named sessions, orchestrator-owned default session), the mutation
   boundaries, convergence without push topics (§2.7), client-side
