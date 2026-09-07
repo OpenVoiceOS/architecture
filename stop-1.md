@@ -134,13 +134,22 @@ Inside `match`:
    (step 1).
 
 **Candidate set.** The candidate set assembled at step 4 or step 5
-additionally includes, as its first member, the `skill_id` named by
-`session.response_mode` (OVOS-CONVERSE-1 §2.2), when that field is
-present — CONVERSE-1 §2.2 sets `response_mode` as session-resident
-state with no bus event and no `active_handlers` push, so its holder
-would otherwise be invisible to this cascade despite being the most
-recent interaction by construction. The candidate filter below
-applies to this entry exactly as to any `active_handlers` entry.
+includes the `skill_id` named by `session.response_mode`
+(OVOS-CONVERSE-1 §2.2), when that field is present — CONVERSE-1 §2.2
+sets `response_mode` as session-resident state with no bus event and
+no `active_handlers` push, so its holder would otherwise be invisible
+to this cascade. The candidate filter below applies to this entry
+exactly as to any `active_handlers` entry.
+
+`session.response_mode` carries no `activated_at` and therefore
+cannot be placed by the recency rule below, which orders only
+`active_handlers` entries. Its holder MUST instead be selected by a
+fixed rule ahead of recency: if the `response_mode` entry survives
+the candidate filter, it MUST be selected as the target and the
+recency rule below is not consulted; only when `response_mode` is
+absent, filtered out, or its holder does not survive selection at
+step 4 does the recency rule choose among the remaining
+`active_handlers` entries.
 
 **Candidate filter.** Before any recency comparison, an
 `active_handlers` entry MUST be skipped when:
