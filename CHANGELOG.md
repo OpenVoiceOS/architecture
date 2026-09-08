@@ -7,6 +7,33 @@ status quo, `2` once it is not backwards compatible. Entries are grouped under
 the spec's current class. Every pull request that alters normative content adds
 an entry here.
 
+## OVOS-INSTALL-1 — Plugin Installation Bus Contract
+
+### 1
+
+- New. Specifies the plugin-installation bus surface: the
+  `ovos.pip.install` and `ovos.pip.uninstall` topics, the optional
+  `data.service_name` that addresses one service, and the service-name
+  form (§2). ovos-audio, ovos-dinkum-listener, ovos-gui and PHAL already
+  speak the two topics. None speaks `data.service_name`: every shipped
+  installer acts on every request it receives, so the §2.2 addressing
+  check is new work in `ovos_utils.skill_installer.ServiceInstaller` and
+  in ovos-core's `SkillsStore`.
+- §2.1 — the target travels in the payload, not the topic, per OVOS-MSG-1
+  §2.1.1.
+- §2.2 — an absent `service_name` reaches every installer; a present one
+  is acted on by that service alone, and every other installer ignores
+  the request in silence rather than declining.
+- §4.1 — the reply topic does not vary with `service_name`.
+- §4.2 — the `error` vocabulary, and which values describe the request or
+  one configuration rather than one environment.
+- §5 — the enablement gate, and the duty to answer rather than refuse
+  silently.
+- §6 — an unaddressed request is answered once per installer, an
+  addressed one exactly once, or not at all when that service is absent.
+- §8 — the pre-spec `ovos.pip.install.<service_name>` topics are
+  catalogued, kept for one stable cycle, and removed at the next major.
+
 ## OVOS-AUDIO-1 — Audio Output Service
 
 ### 2
