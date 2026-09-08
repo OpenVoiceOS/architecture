@@ -181,8 +181,13 @@ otherwise:
 - string-typed keys carry plain text;
 - numeric keys carry finite JSON numbers (OVOS-MSG-1 §6);
 - an **omitted** optional key means "the render backend supplies its
-  own default or omits the element"; a producer **MUST NOT** emit a
-  key as JSON `null` to mean "absent" — it omits the key instead;
+  own default or omits the element";
+- an explicit JSON `null` on a key in `gui.value.set` **removes** that
+  key from the namespace's cumulative session data (§4.2). A producer
+  that wants a previously set key gone sends it as `null`; a producer
+  that has never set a key omits it. The two are not interchangeable
+  on the reserved keys of §4.1: `__idle` is omitted when unset, never
+  sent as `null`;
 - an image-bearing key (`image`, `icon`) carries **either** an
   `http(s)` URL **or** a `data:` URI. A producer **MUST NOT** place a
   local filesystem path on the wire; a render backend **MUST NOT** be
@@ -193,7 +198,8 @@ template events persist until the namespace is cleared (§4.3). A
 render backend **MUST** treat the session-data map delivered with an
 event as the authoritative current state for that namespace and
 **MUST NOT** assume a key absent from one event has been deleted
-unless the namespace was cleared. Cumulative state, like the namespace
+unless the namespace was cleared or the key was removed by an
+explicit `null` (§4.2). Cumulative state, like the namespace
 stack itself, is scoped per `session_id` (§4.3, §5.1) — accumulation
 in one session's namespace has no effect on the same namespace name in
 another session.
@@ -358,9 +364,11 @@ is the flat content map plus `__from`.
 ```
 
 On receipt, the GUI service merges the content keys into the named
-namespace's cumulative session data (§3.3) and forwards the merged,
+namespace's cumulative session data (§3.3): a non-`null` value sets
+the key, and a `null` value **removes** the key, so a later state
+query (§6.7) does not return it. The service forwards the merged,
 reserved-key-stripped map to every adapter as a session update
-(§6.3).
+(§6.3); the delivered map no longer contains the removed key.
 
 #### `gui.page.show` — request a template
 
@@ -724,7 +732,8 @@ conformant way to emit or consume these templates.
   bare filesystem path (§3.5);
 - carry the `session_id` of the interaction in the Message context so
   routing (§5) works;
-- omit absent optional keys rather than emit them as `null` (§3.3);
+- omit optional keys it never set, and send an explicit `null` only
+  to remove a key it set earlier (§3.3, §4.2);
 - function with no display attached and never block on a GUI event
   (§2.3).
 
@@ -743,6 +752,8 @@ conformant way to emit or consume these templates.
   only `SYSTEM_*` page names as templates (§3.2, §4.2);
 - strip reserved `__`-prefixed keys from session data before
   delivering it to adapters (§4.1);
+- remove a session-data key whose `gui.value.set` value is `null`
+  rather than store the `null` (§3.3, §4.2);
 - route by `session_id` alone, defaulting an absent/empty session to
   `"default"` (§5.1), and maintain an independent namespace stack per
   `session_id` (§4.3);
