@@ -110,13 +110,20 @@ A skill that wishes to receive fallback dispatches emits:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `skill_id` | string | yes | The skill's identity. MUST equal `context.skill_id` of this Message. |
+| `skill_id` | string | yes | The **target** — the skill whose fallback handler is registered. |
 | `priority` | integer | yes | Default ordering hint. Lower values sort earlier when no session preference overrides. |
 
 The plugin adds the skill to its registry. Re-registration with
-the same `skill_id` replaces the prior entry. The plugin MUST NOT
-index a registration where the payload `skill_id` differs from
-`context.skill_id`.
+the same `skill_id` replaces the prior entry.
+
+Registration acts on the payload `skill_id`. `context.skill_id`
+names the **source** that emitted the message and is provenance
+only: the plugin **MUST** index under the payload value, **MUST
+NOT** substitute `context.skill_id` for it, and **MUST NOT** treat
+a difference between the two, or the absence of a context
+`skill_id`, as grounds for rejection. The plugin **SHOULD** log
+source and target at DEBUG when they differ. This is the identity
+rule of OVOS-INTENT-4 §3.2, applied to fallback registration.
 
 ### 3.2 Deregister
 
@@ -124,7 +131,7 @@ index a registration where the payload `skill_id` differs from
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
-| `skill_id` | string | yes | The skill's identity. MUST equal `context.skill_id` of this Message. |
+| `skill_id` | string | yes | The **target** — the skill whose fallback handler is removed. |
 
 Removes the skill from the registry. Unknown `skill_id` is a no-op.
 
@@ -136,11 +143,15 @@ arriving under the default session removes the `"default"`-scoped
 entry only; it does not remove entries registered under a specific
 `session_id`.
 
-The plugin **MUST NOT** honour a deregistration whose payload
-`skill_id` differs from `context.skill_id`: without this check any
-skill can evict any other skill from the registry. A mismatch is
-malformed — log at WARN with both identifiers and the topic, and do
-not act on it.
+Deregistration acts on the payload `skill_id`, on the same terms
+as registration (§3.1). Which sources may evict which targets is a
+deployment hardening decision, not one this specification settles:
+unguarded, the topic evicts any skill's handler. A plugin **MAY**
+enforce a deployment policy that blocks a deregistration whose
+source and target differ, dropping the message and logging the
+refusal at WARN with both identifiers and the topic. The policy's
+shape is deployment-defined and out of scope; absent one, the
+deregistration is honoured as specified above.
 
 ### 3.3 Priority guidance
 
@@ -471,9 +482,10 @@ identically regardless of how many stages are present.
   priorities per §3.4;
 - subscribe to `ovos.fallback.register` and
   `ovos.fallback.deregister` (§3);
-- reject any registration where payload `skill_id` ≠
-  `context.skill_id` (§3.1), and any deregistration with the same
-  mismatch (§3.2);
+- key registration and deregistration by the payload `skill_id`,
+  whether or not it matches `context.skill_id`, and never reject
+  either for a mismatch or for an absent context `skill_id`
+  (§3.1, §3.2);
 - key registration and deregistration by
   `context.session.session_id`, never by a `session_id` in
   `Message.data` (§3.2, §3.4);

@@ -313,22 +313,22 @@ defined by any spec** and should be removed or replaced:
   shipped behaviour to change; what the ruling forecloses is the
   alternative shape, in which the stop plugin would have had to
   know that persona exists.
-- **Enable and disable are cross-skill control messages**
-  (INTENT-4 §3.2, §8.5). The payload-identity check — payload
-  `skill_id` **MUST** equal `context.skill_id`, or the message
-  is rejected — is scoped to registration and deregistration,
-  where a mismatch would be a remote uninstall. `ovos.intent.enable`
-  and `ovos.intent.disable` are exempt: the payload names the
-  **target**, `context.skill_id` names the **source**, and the two
-  legitimately differ, because an admin UI or a conflict-resolving
-  skill suppressing another skill's intent is the point of the
-  surface. An orchestrator **MAY** block cross-skill control as
-  deployment hardening; the policy's shape is deployment-defined.
-  Cross-*session* control needs no field of its own — the message
-  affects the scope of whichever session its `context` declares.
-  Current `mycroft.skill.enable_intent` / `disable_intent` carry no
-  identity check in either direction, and no notion of a target
-  distinct from a source.
+- **Every message of §§5–8 acts on the payload `skill_id`**
+  (INTENT-4 §3.2, §8.5). The payload names the **target** — the
+  skill whose registration is created, removed, suppressed or
+  re-armed — and `context.skill_id` names the **source**, which is
+  provenance a consumer logs but never substitutes in and never
+  rejects on. Registration, deregistration, enable and disable all
+  read the same way, so an admin UI, a provisioning tool or a
+  conflict-resolving skill acts on another skill's registrations
+  without being that skill. Unguarded, `ovos.skill.deregister` is a
+  remote uninstall, so an orchestrator **MAY** block cross-skill
+  messages as deployment hardening; the policy's shape is
+  deployment-defined. Cross-*session* control needs no field of its
+  own — the message affects the scope of whichever session its
+  `context` declares. Current `mycroft.skill.enable_intent` /
+  `disable_intent` carry no identity check in either direction, and
+  no notion of a target distinct from a source.
 
 - **Legacy compatibility twins ride alongside the canonical
   emission, marked for suppression on the receiving end**

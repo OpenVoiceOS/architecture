@@ -171,38 +171,39 @@ the other-method registration for the same triple is untouched.
 Replacement is also per-language: other languages of the same
 `(skill_id, intent_name)` are unaffected.
 
-**For registration and deregistration, the payload `skill_id` MUST
-equal `context.skill_id`.** This holds for
-`ovos.intent.register.keyword`, `ovos.intent.register.template`,
-`ovos.entity.register`, `ovos.intent.deregister`,
-`ovos.entity.deregister`, and `ovos.skill.deregister`. A consumer —
-plugin or orchestrator — **MUST NOT** index or act on one of these
-messages whose payload `skill_id` differs from `context.skill_id`,
-and **MUST** log the mismatch at WARN with both values and the
-rejecting topic. Without this check a skill could register or
-deregister another skill's intents; `ovos.skill.deregister` (§8.4)
-in particular would be a remote uninstall. The same rule governs
-fallback registration (OVOS-FALLBACK-1 §3.1).
-
-`ovos.intent.enable` and `ovos.intent.disable` are **control
-messages, not ownership claims**, and are exempt from the identity
-check: the payload `skill_id` names the **target** — the skill whose
-intent is being suppressed or re-armed — while `context.skill_id`
-names the **source** requesting it, and the two **MAY** differ.
-Cross-skill control is the point of the bus-level surface (§8.5): an
-admin UI, a conflict-resolving skill, or an A/B harness suppresses
-another skill's intent without owning it. A consumer **SHOULD** log
+**Every message of §§5–8 acts on the payload `skill_id`.** The
+payload `skill_id` names the **target** — the skill whose
+registration is created, removed, suppressed or re-armed.
+`context.skill_id` names the **source** that emitted the message
+(§3.1) and is provenance only. A consumer — plugin or orchestrator
+— **MUST** act on the payload value, **MUST NOT** substitute
+`context.skill_id` for it, and **MUST NOT** treat a difference
+between the two as grounds for rejection. A consumer **SHOULD** log
 source and target at DEBUG when they differ.
 
-Cross-skill control is, deployment-wide, an unsolved trust problem;
-which sources may modify which targets is a hardening decision, not
-something this specification can settle. An orchestrator **MAY**
-therefore enforce a deployment policy that blocks cross-skill
-control messages (source ≠ target) — dropping the message and
-logging the refusal at WARN with both identities and the topic.
-The policy's shape (allowlist, config flag, anything else) is
-deployment-defined and out of scope; absent one, cross-skill
-control is honoured as specified above.
+Source and target coincide whenever a skill registers its own
+intents, which is what §12 requires of a skill. They differ
+legitimately: an administrative script, a provisioning tool, or a
+conflict-resolving skill registers, retracts, suppresses or re-arms
+on another skill's behalf without being that skill. Enable and
+disable (§8.5) are the same shape as the rest, not an exception to
+it.
+
+Because the payload carries the identity that acts, a message of
+§§5–8 is complete without `context.skill_id`, and a consumer
+**MUST NOT** treat its absence as malformed. A source that is not
+a skill has no `skill_id` of its own to declare; §3.1 binds
+skills, not every emitter.
+
+Which sources may act on which targets is, deployment-wide, an
+unsolved trust problem — a hardening decision this specification
+cannot settle. Unguarded, `ovos.skill.deregister` (§8.4) is a remote
+uninstall. An orchestrator **MAY** therefore enforce a deployment
+policy that blocks cross-skill messages (source ≠ target) —
+dropping the message and logging the refusal at WARN with both
+identities and the topic. The policy's shape (allowlist, config
+flag, anything else) is deployment-defined and out of scope; absent
+one, cross-skill action is honoured as specified above.
 
 The target **session** needs no field of its own: a control message
 affects the scope of the `session_id` its `context` carries, like
@@ -628,13 +629,12 @@ without modifying skill code. Both topics share the same payload as
 { "skill_id": "music.skill", "intent_name": "play_music", "lang": "en-US" }
 ```
 
-Here `skill_id` is the **target** of the operation, not the sender:
-unlike registration (§3.2), enable/disable are legitimately
-cross-skill, and `context.skill_id` — the source — **MAY** name a
-different skill. The target session is the `context` session, as
-for every message here (§3.2, §11.3): a controller reaches another
-session's scope by declaring that session on the message, not
-through any payload field.
+Here `skill_id` is the **target** of the operation, not the sender,
+as in every message of §§5–8 (§3.2): `context.skill_id` — the
+source — **MAY** name a different skill. The target session is the
+`context` session, as for every message here (§3.2, §11.3): a
+controller reaches another session's scope by declaring that
+session on the message, not through any payload field.
 
 If `lang` is omitted, every language for that `(skill_id, intent_name)`
 is affected. Like deregistration, enable/disable target the triple and
@@ -965,9 +965,9 @@ protocol is needed; the existing destination-based routing
 - include the identity fields of §3.2 in every registration's `data`;
 - set `Message.context["skill_id"]` to its own `skill_id` on every
   Message it emits, per §3.1;
-- set the payload `skill_id` equal to `context.skill_id` on every
-  message of §§5–8, including deregistration, enable, and disable
-  (§3.2) — a skill **MUST NOT** name another skill in these payloads;
+- name itself in the payload `skill_id` of every message of §§5–8 it
+  emits for its own registrations, including deregistration, enable,
+  and disable (§3.2);
 - conform every registration's payload to §5 (keyword), §6 (template),
   or §7 (entity), respectively;
 - emit `ovos.intent.deregister` / `ovos.entity.deregister` /
@@ -1014,12 +1014,9 @@ entity entry within an otherwise valid registration is skipped and
 logged, never grounds for rejecting the registration (§§5.3, 6.3,
 7.2). Matching behaviour beyond that is OVOS-PIPELINE-1's concern.
 
-A plugin **MUST NOT** index or act on any registration or
-deregistration message (§§5–7, §§8.2–8.4) whose payload `skill_id`
-differs from `context.skill_id`, and **MUST** log the mismatch at
-WARN (§3.2). `ovos.intent.enable` / `ovos.intent.disable` are
-exempt: their payload `skill_id` is the target, not the sender
-(§3.2, §8.5).
+A plugin **MUST** act on the payload `skill_id` of every message of
+§§5–8, never on `context.skill_id`, and **MUST NOT** reject a
+message because the two differ (§3.2).
 
 ### The **orchestrator** **MUST**:
 
@@ -1044,14 +1041,13 @@ exempt: their payload `skill_id` is the target, not the sender
 - index every non-reserved registration verbatim, without validating
   the payload — manifest presence records that the broadcast was
   observed, not that any plugin will match it (§2);
-- ignore any message of §§5–8 whose payload `skill_id` differs from
-  `context.skill_id`, logging the mismatch at WARN (§3.2);
+- key every manifest entry by the payload `skill_id`, whether or not
+  it matches `context.skill_id` (§3.2);
 - on receiving `ovos.skill.deregister`, remove all manifest entries
   for the `(session_id, skill_id)` pair, with `session_id` read from
   `context.session.session_id` (§8.4, §11.1, §11.3);
 - **NOT** validate, reject, route, or gate any registration message
-  beyond the reserved-`intent_name` exclusion and the
-  payload-vs-context `skill_id` check, both of §3.2. The
+  beyond the reserved-`intent_name` exclusion of §3.2. The
   orchestrator is a passive listener for the manifest, not a
   routing party.
 
@@ -1087,5 +1083,5 @@ handler lifecycle, utterance lifecycle — live in OVOS-PIPELINE-1.
   registration, relay of the readiness announcement, and disconnect
   cleanup for session-scoped registrations (§4.4).
 - *Fallback Specification* (OVOS-FALLBACK-1) — the same
-  payload-`skill_id`-equals-`context.skill_id` identity rule applied
-  to fallback registration (§3.1).
+  payload-acts, context-is-provenance identity rule applied to
+  fallback registration (§3.1).
