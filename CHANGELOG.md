@@ -355,6 +355,19 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   only when no valid item remains. Whole-registration rejection is
   reserved for reserved `intent_name`, missing top-level keys, and
   missing/empty `samples`.
+- §3.2 — registration acts on the payload `skill_id`. The payload names
+  the target of every message of §§5–8; `context.skill_id` names the
+  source and is provenance only, which a consumer logs at DEBUG when the
+  two differ but never substitutes for the payload and never rejects on.
+  A message of §§5–8 is complete without `context.skill_id` and its
+  absence is not malformed, so a source that is not a skill — an
+  administrative script, a provisioning tool — registers or retracts on a
+  skill's behalf. Enable and disable stop being an exemption and become
+  the same shape as the rest. The deployment policy that MAY block
+  cross-skill messages now covers all of §§5–8, naming
+  `ovos.skill.deregister` as the remote-uninstall risk it guards. §12
+  producer, plugin and orchestrator obligations follow, and the appendix
+  divergence entry is restated to match.
 
 ## OVOS-AUDIO-IN-1 — Audio Input Service
 
@@ -536,6 +549,16 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   OVOS-PIPELINE-1 §5.3, session registry → OVOS-SESSION-1 §2.2,
   `ovos.intent.unmatched` → PIPELINE-1 §9.3) and OVOS-SESSION-1 cited by
   its canonical title.
+- §3.1, §3.2 — fallback registration and deregistration act on the
+  payload `skill_id`, matching OVOS-INTENT-4 §3.2. The payload names the
+  target, `context.skill_id` names the source and is provenance a plugin
+  logs at DEBUG but never substitutes in, rejects on, or requires. The
+  identity check that demanded the two be equal is replaced by a
+  deployment policy a plugin MAY enforce against cross-skill
+  deregistration, the same treatment INTENT-4 §3.2 gives
+  `ovos.skill.deregister`. The change is text-only on the wire: the
+  producer emits registrations with no context at all and the consumer
+  already reads the payload.
 ## OVOS-CONVERSE-1 — Active Handlers and Interactive Response
 
 ### 2
