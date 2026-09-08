@@ -150,7 +150,10 @@ may carry is the orchestrator's responsibility at utterance intake
 hint the orchestrator **MAY** override.
 
 The service SHOULD write the selected language to `session.stt_lang`
-(**OVOS-SESSION-1 §3.2.4**) before STT invocation. `stt_lang`
+(**OVOS-SESSION-1 §3.2.4**) before STT invocation. The service is the
+lifecycle source (§5.2): this write composes the entry Message, and is
+not an in-place mutation of a carried session, so neither OVOS-MSG-1
+§4.1 nor the OVOS-SESSION-2 §2.6 boundaries apply to it. `stt_lang`
 records the model's assumed input language and normally matches
 `data.lang`; they diverge in speech-translation models where the
 audio and transcript languages differ.
