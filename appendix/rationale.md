@@ -37,6 +37,36 @@ the normative sections.
   spoke; the normalized value travels beside the utterance
   as a hint, computed before matching by whichever component
   the deployment gives that job to.
+- **Union slot sets and a `.required` list, not aliases or
+  per-template slots** (INTENT-1 §5.5, INTENT-2 §4.5, INTENT-3
+  §5.1, §5.3, INTENT-4 §6.1, PIPELINE-1 §6.2). Templates of one
+  intent MAY declare different slot sets, the engine extracts the
+  slots of the template that matched, and a paired `.required`
+  resource names the slots a match must bind, carried on the
+  registration and backstopped by the orchestrator. Three
+  alternatives were rejected. An alias mechanism (`same_as`) links
+  intents instead of letting one intent carry several phrasings,
+  adds canonical-plus-alias registrations, dispatch rewriting and
+  circular-alias rules, and leaves the slot schema of an alias
+  either a forced superset or unstable; the keyword-and-template
+  mix it was meant to serve is already covered by registering both
+  methods under one `(skill_id, intent_name)` (INTENT-4 §3.2).
+  Per-template `required_slots` annotations turn the flat samples
+  array into a structured object on the wire for a case one list
+  per intent covers; an author who needs per-template granularity
+  splits the intent, which is the one thing the relaxation makes
+  cheap. Placing required slots only in the registration payload,
+  with no resource file, was rejected because the list is authored
+  next to the templates it constrains: a `.required` file pairs
+  by base name like `.blacklist`, and it carries technical slot
+  identifiers, never localized text, so it is a resource role
+  rather than a translated one. The orchestrator backstop is a
+  MUST rather than a MAY because the orchestrator and the plugins
+  are co-located and consume the same broadcasts, so a
+  registration the orchestrator missed the plugin missed too, and
+  because the denylist backstop it sits beside is already a MUST.
+  `.dialog` keeps strict slot consistency: caller-supplied fill
+  has no matched template to take a slot set from.
 - **`.blacklist` vs `excluded`** (INTENT-3 §4.2, §5.4). The
   template grammar is purely generative — it cannot express
   "not this". Template intents therefore need a separate
