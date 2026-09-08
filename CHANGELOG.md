@@ -4,8 +4,10 @@ Each entry records a change to a specification in this repository. Each
 specification carries a `Version` field equal to its V0/V1/V2 compatibility
 class (VERSIONING.md): `1` for a formalization compatible with the pre-spec
 status quo, `2` once it is not backwards compatible. Entries are grouped under
-the spec's current class. Every pull request that alters normative content adds
-an entry here.
+the spec's current class. Every pull request that alters normative content —
+a MUST, SHOULD or MAY, or a wire surface — adds an entry here; editorial
+changes do not. No spec carries a revision counter: these entries are the
+revision record.
 
 ## OVOS-AUDIO-1 — Audio Output Service
 
