@@ -272,9 +272,10 @@ an exhaustive list of accepted sentences.
 **The `#` character has no meaning inside a template (non-normative).** A
 leading `#` marks a comment line in a resource file, and the file reader
 removes such lines before templates are parsed (OVOS-INTENT-1). Beyond
-that, this document defines no role for `#`, and none should be assumed. One legacy engine historically treated an inline
-`#` as a wildcard for a single digit character; templates must not rely on
-that behavior. A value that varies belongs in a `{slot}`, and interpreting the
+that, this document defines no role for `#`, and none should be assumed. An
+inline `#` is not a wildcard for a single digit character; templates must
+not rely on that behavior. A value that varies belongs in a `{slot}`, and
+interpreting the
 value it captures — for example, a number that speech recognition may deliver
 as digits or as words — is the consumer's concern, not template syntax.
 

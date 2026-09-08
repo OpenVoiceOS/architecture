@@ -243,9 +243,8 @@ as lowering or pausing playback for the duration of a wake word or a
 spoken response. Whether a given service ducks or corks around that
 activity is the emitting service's own configuration, not player
 behaviour. A pause the user requested directly through `pause` carries no
-such memory, and `uncork` **MUST NOT** resume it. The player's legacy
-listener and TTS aliases are pre-spec compatibility surface and are not
-part of this table.
+such memory, and `uncork` **MUST NOT** resume it. Listener and TTS aliases
+the player may also expose are not part of this table.
 
 #### 4.3.1 Delegated control of skill-rendered playback
 
