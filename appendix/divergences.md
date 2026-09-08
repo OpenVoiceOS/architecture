@@ -313,6 +313,16 @@ defined by any spec** and should be removed or replaced:
   shipped behaviour to change; what the ruling forecloses is the
   alternative shape, in which the stop plugin would have had to
   know that persona exists.
+- **Handler activity and response state are two session fields**
+  (SESSION-1 §3, PIPELINE-1 §7.1, CONVERSE-1 §2.2). `active_handlers`
+  (`{skill_id, activated_at}` objects) and `response_mode`
+  (`{skill_id, expires_at}`) are the registered fields. The
+  pre-spec `Session` carried `active_skills`, a list of
+  `(skill_id, timestamp)` pairs, and `utterance_states`, a map of
+  `skill_id` to `"intent"` or `"response"`; both are legacy views of
+  the registered fields and neither is a session field of this
+  corpus. `ovos-bus-client` exposes `utterance_states` as a deprecated
+  view of `response_mode`.
 - **Every message of §§5–8 acts on the payload `skill_id`**
   (INTENT-4 §3.2, §8.5). The payload names the **target** — the
   skill whose registration is created, removed, suppressed or
@@ -522,6 +532,7 @@ a number of predecessor names. The mapping:
 | `ovos.utterance.cancelled` | **unchanged** — kept as the cancellation signal. |
 | `ovos.utterance.handled` | **unchanged** — kept as the universal end-marker. |
 | `<skill_id>:<intent_name>` | **unchanged** — dispatch topic; a plugin-bundled handler has `skill_id == pipeline_id`. |
+| `speak` | `ovos.utterance.speak` | Natural-language output exit point (PIPELINE-1 §9.6); `utterance`, `expect_response` and `meta` carry over, `lang` is present only when authoritatively known. |
 | `mycroft.skill.handler.start` / `.complete` / `.error` | renamed to `ovos.intent.handler.start` / `.complete` / `.error` |
 | `ovos.session.update_default` | **retire** — subscribe to `ovos.utterance.handled` (PIPELINE-1 §9.5) to read updated default-session state; or adopt the session of any assistant-emitted Message on the default session (SESSION-2 §2.7). See §5.2.1 and §5.5. |
 | `ovos.session.sync` (incl. the bare-sync connect bootstrap) | **retire** — no spec defines a session push topic; session mutates at the SESSION-2 §2.6 boundaries and converges by adoption (SESSION-2 §2.7, §3.2). See §5.5. |
