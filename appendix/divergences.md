@@ -563,6 +563,7 @@ responder's identity in `data.skill_id` and the round identified by
 | `recognizer_loop:record_begin` | `ovos.listener.record.started` | Capture start. `:` segment separator and implementation-role prefix dropped; no payload. |
 | `recognizer_loop:record_end` | `ovos.listener.record.ended` | Capture end; pairs with the start signal. |
 | `recognizer_loop:sleep` | `ovos.listener.sleep` | Controller-to-listener sleep request. |
+| `recognizer_loop:wake_up` | `ovos.listener.wake` | Leave sleep mode (AUDIO-IN-1 §6.4); no payload, device-scoped. |
 | `mycroft.awoken` | `ovos.listener.awoken` | Sleep→awake transition; moved into the `ovos.listener.*` namespace. |
 
 ### 5.8 Bus bridge (BRIDGE-1)

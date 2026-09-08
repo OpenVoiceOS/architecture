@@ -360,6 +360,10 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 2
 
+- §6.4 — `ovos.listener.wake`, the controller's request to leave sleep
+  mode; device-scoped like `ovos.listener.sleep`, a no-op while awake,
+  followed by `ovos.listener.awoken` on the transition. Successor of the
+  pre-spec `recognizer_loop:wake_up`.
 - §6.5 (new) — `ovos.listener.wakeword`: the wake-word detection
   signal (`wake_word`, optional `lang`), preceding
   `ovos.listener.record.started`; the observable event behind a
