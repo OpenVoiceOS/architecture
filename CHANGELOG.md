@@ -329,6 +329,9 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   `converse`); withdrawn by `ovos.skill.deregister`. §10.3 (new) —
   `ovos.skills.list` / `.list.response`, loaded skills with capabilities
   and intent counts, optional `session_id` filter. §12 updated.
+- §8.5 — enable/disable scope stated: a disable under `"default"` acts on
+  the inherited `"default"` registration and is device-wide; a disable
+  under a specific `session_id` affects that session's view only.
 - Bus contract for declaring intents and entities, the wire companion to
   OVOS-INTENT-3. Registration topics (`ovos.intent.register.keyword` /
   `.template`, `ovos.entity.register`), deregistration / enable / disable,
