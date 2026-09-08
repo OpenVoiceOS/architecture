@@ -248,9 +248,28 @@ deployment that needs to synchronize to current state on connect
 (e.g. a bridge attaching mid-session) derives it from the last-seen
 lifecycle signal rather than polling for one.
 
-### 6.4 Awoken
+### 6.4 Wake request and awoken
 
-When the audio input service leaves sleep mode, it **MUST** emit:
+A controller ends sleep mode by emitting:
+
+`ovos.listener.wake`
+
+Payload:
+
+No payload. The session is identified by `context.session.session_id`
+of this Message, and it is informational only, as for
+`ovos.listener.sleep` (§6.3): waking is device-scoped, and capture
+resumes for every session.
+
+On receipt the audio input service leaves sleep mode and resumes
+capture. A wake request received while the service is already awake
+is a no-op and emits nothing. A wake word detected while asleep
+(§6.5) MAY also end sleep mode; whether it does is a deployment
+setting, and this topic is the sanctioned way for a component that
+put the listener to sleep to wake it again.
+
+When the audio input service leaves sleep mode, by this request or
+otherwise, it **MUST** emit:
 
 `ovos.listener.awoken`
 
@@ -293,6 +312,7 @@ word (push-to-talk, `ovos.mic.listen`) emit no wake-word signal.
 | `ovos.listener.record.started` | audio-input → broadcast | Voice-command capture began (§6.1). |
 | `ovos.listener.record.ended` | audio-input → broadcast | Voice-command capture ended (§6.2). |
 | `ovos.listener.sleep` | controller → audio-input | Enter device-wide sleep mode and suspend capture (§6.3). |
+| `ovos.listener.wake` | controller → audio-input | Leave sleep mode and resume capture (§6.4). |
 | `ovos.listener.awoken` | audio-input → broadcast | Left sleep mode (§6.4). |
 | `ovos.mic.listen` | any component → audio-input | Re-open the user input channel; consumed here, defined in OVOS-AUDIO-1 §4.4. |
 | `ovos.stt.failed` | audio-input → broadcast | Capture yielded no usable transcription; terminal, no lifecycle follows (§5). |
@@ -319,6 +339,8 @@ word (push-to-talk, `ovos.mic.listen`) emit no wake-word signal.
   `ovos.listener.record.ended` when it ends (§6.1, §6.2);
 - treat sleep mode as device-scoped — suspend capture for all
   sessions while asleep (§6.3);
+- leave sleep mode on `ovos.listener.wake`, treating a request received
+  while awake as a no-op (§6.4);
 - emit `ovos.listener.awoken` on the sleep→awake transition (§6.4).
 
 ### An audio input service **SHOULD**:
