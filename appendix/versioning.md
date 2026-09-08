@@ -22,9 +22,10 @@ V2. The classification is part of the spec header. Rules of thumb:
 - A single spec MAY contain V1 sections and V2 sections only if the V2 parts
   are explicitly gated (configuration flag) and the ungated behavior is V1.
 
-Within a class, editorial revisions bump the spec's own revision number in
-its header; compatibility class changes (V1 → V2) are a new spec version, not
-a revision.
+Within a class, a spec has no revision counter of its own: the CHANGELOG
+entry a normative pull request adds is the revision record, and editorial
+changes leave no entry. A compatibility class change (V1 → V2) is a new spec
+version, not a revision.
 
 ### 9.1 The 1.0 definition
 

@@ -59,7 +59,7 @@ The specs exist to make three things possible:
   contract instead of reverse-engineering each other's code.
 - **Stability.** Implementation churn no longer drifts the contract.
   Each spec is a versioned document; behaviour changes go through
-  a pull request with a version bump.
+  a pull request that records them in the CHANGELOG.
 - **Portability.** The specs are written implementation-agnostically
   so any voice-assistant project can adopt the same formats, grammar,
   and bus contracts, independent of any one codebase.
@@ -168,16 +168,19 @@ Specifications are **versioned documents, not living wikis**. Any
 change to a spec — however small — **MUST** be submitted as a pull
 request, never committed directly.
 
+A change is **normative** when it adds, removes or changes a MUST, SHOULD
+or MAY, or a wire surface (a topic, a payload field, a session field);
+a change that only clarifies, corrects a citation or rewords is editorial.
 Each PR that alters normative content **MUST**:
 
 - add a corresponding entry to [CHANGELOG.md](CHANGELOG.md);
 - set the spec's `Version` field to its compatibility class — the field is a
   class, not a per-revision counter (VERSIONING.md).
 
-PRs that touch only the non-normative material —
+Editorial PRs, and PRs that touch only the non-normative material —
 [APPENDIX.md](APPENDIX.md) and [appendix/](appendix/) files,
-[GLOSSARY.md](GLOSSARY.md), this README, examples — do not
-require a version bump.
+[GLOSSARY.md](GLOSSARY.md), this README, examples — add no CHANGELOG
+entry and change no `Version` field.
 
 For the reference implementation, ecosystem tooling, and who this
 corpus is produced for, see
