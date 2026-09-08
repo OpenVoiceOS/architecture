@@ -202,6 +202,11 @@ available to all sessions, because every session inherits the
 under a specific `session_id` extend the pool for that session
 only.
 
+The registry is not served on the bus. Which skills are loaded and
+which of them declare the `fallback` capability is answered by
+`ovos.skills.list` (**OVOS-INTENT-4 §10.3**); the priorities and stage
+ranges this plugin holds are its own.
+
 ## 4. Session fields
 
 This specification claims one optional session field per

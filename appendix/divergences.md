@@ -510,6 +510,8 @@ a number of predecessor names. The mapping:
 | `detach_intent` | `ovos.intent.deregister` | Identity now expressed as the structured triple, not the munged `skill_id:intent_name` string. |
 | `detach_skill` | `ovos.skill.deregister` | |
 | `mycroft.skill.enable_intent` / `mycroft.skill.disable_intent` | `ovos.intent.enable` / `ovos.intent.disable` | First-class topics under v1, with the prefix dropped. |
+| `mycroft.skills.loaded` | `ovos.skill.loaded` | Session-keyed, carries `capabilities` instead of a filesystem `path` and display `name`. `mycroft.skills.loading_failure` has no successor: a skill that did not load announces nothing. |
+| `skillmanager.list` / `mycroft.skills.list` | `ovos.skills.list` / `.list.response` | A `response` derivation with a `skills` array instead of a map keyed by skill id; entries carry `session_id`, `capabilities` and an intent count instead of `active`. |
 
 #### Utterance-lifecycle topics (PIPELINE-1)
 
@@ -536,6 +538,7 @@ responder's identity in `data.skill_id` and the round identified by
 | `skill.stop.pong` | `ovos.stop.pong` | Already a shared reply topic; renamed for symmetry with the ping. |
 | `<skill_id>.converse.ping` | `ovos.converse.ping` | Candidacy moves from the topic to a `session.converse_handlers` membership self-check (CONVERSE-1 §4.2). |
 | `skill.converse.pong` | `ovos.converse.pong` | Shared reply topic renamed; payload gains `skill_id`, `result`, and an optional `error_code`. |
+| `ovos.skills.fallback.register` / `.deregister` | `ovos.fallback.register` / `.deregister` | Same payload (`skill_id`, `priority`); renamed into the `ovos.fallback.*` root. Shipped `ovos-workshop` emits and `ovos-core` consumes the predecessor spelling; no compat twin bridges the pair, so a producer on one spelling and a consumer on the other never meet. |
 | `ovos.skills.fallback.ping` | `ovos.fallback.ping` | Already a broadcast; renamed into the `ovos.fallback.*` root. Declines become explicit so the window can close early. |
 | `ovos.skills.fallback.pong` | `ovos.fallback.pong` | As above. Note the in-flight `<skill_id>.fallback.ping` / `.pong` work (§5.4) moves *away* from this shape. |
 | `ovos.common_query.ping` / `.pong` | **unchanged** | Already static broadcast topics with identity in the payload. |

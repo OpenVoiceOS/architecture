@@ -240,8 +240,11 @@ malformed-payload rules of §5.3 / §6.3 (log at WARN, do not index).
 ## 4. Topics
 
 Topics defined by this specification are lowercase, dot-separated,
-and namespaced under `ovos.intent.`, `ovos.entity.`, and
-`ovos.skill.`. All registration topics are **broadcast** — any
+and namespaced under `ovos.intent.`, `ovos.entity.`, `ovos.skill.`
+and `ovos.skills.`. The singular `ovos.skill.` names a message about
+**one** skill — `ovos.skill.loaded` announces one, `ovos.skill.deregister`
+withdraws one — and the plural `ovos.skills.` names a query over the
+skills **as a group**, which is `ovos.skills.list`. All registration topics are **broadcast** — any
 component (typically pipeline plugins) may subscribe. The orchestrator
 also subscribes to all of them passively, to maintain the
 introspection index of §10.
@@ -256,8 +259,10 @@ introspection index of §10.
 | `ovos.entity.register` | skill → bus (broadcast) | Register an `.entity` value-set hint (INTENT-3 §5.2). | §7 |
 | `ovos.entity.deregister` | skill → bus (broadcast) | Remove one entity. | §8 |
 | `ovos.skill.deregister` | skill → bus (broadcast) | Remove all intents and entities for one `skill_id`. | §8 |
+| `ovos.skill.loaded` | skill → bus (broadcast) | Announce that a skill is loaded and which capabilities it exposes. | §8.6 |
 | `ovos.intent.list` | observer → orchestrator | Query registered intents (introspection; served by the orchestrator). | §10 |
 | `ovos.intent.describe` | observer → orchestrator | Query one registered intent (introspection; served by the orchestrator). | §10 |
+| `ovos.skills.list` | observer → orchestrator | Query loaded skills and their capabilities (introspection; served by the orchestrator). | §10.3 |
 
 Match notification, dispatch, and handler-lifecycle topics live in
 OVOS-PIPELINE-1 §§7–9, not here.
@@ -672,6 +677,48 @@ from `context.session.session_id`.
 
 ---
 
+### 8.6 `ovos.skill.loaded`
+
+A skill announces itself once it is able to receive dispatches:
+
+```json
+{ "skill_id": "music.skill", "capabilities": ["converse", "fallback"] }
+```
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `skill_id` | string | yes | The skill (INTENT-3 §3). |
+| `capabilities` | array of string | no | The roles the skill takes part in beyond intent dispatch (below). Absent or empty means intents only. |
+
+The announcement is broadcast and session-keyed like every message
+here (§11.1): the `session_id` read from `context.session.session_id`
+is the scope the skill is loaded under. Re-announcement replaces the
+prior entry for the same `(session_id, skill_id)`, so a skill
+**SHOULD** re-emit it with its registrations on the readiness
+announcement (§10). `ovos.skill.deregister` (§8.4) is the matching
+unload: it removes the announcement together with the skill's
+registrations, so a skill is **loaded** in a scope while an
+announcement stands there that no deregistration has withdrawn.
+
+A capability names a role another specification defines for a
+skill; declaring it says the skill answers on that role's bus
+surface. This specification registers:
+
+| Capability | Meaning | Defined by |
+|------------|---------|------------|
+| `fallback` | Registers as a fallback handler and answers the willingness poll. | OVOS-FALLBACK-1 §3.1, §6.1 |
+| `common_query` | Answers the wants-to-answer poll and the full-answer request. | OVOS-COMMON-QUERY-1 §11 |
+| `converse` | Accepts converse dispatch while an active handler. | OVOS-CONVERSE-1 §4 |
+
+Other specifications **MAY** register further names by adding rows
+here. A consumer **MUST** ignore a name it does not know. A
+capability is a declaration, not a registration: `fallback` says a
+FALLBACK-1 registration is coming, it does not replace one.
+
+The announcement replaces the pre-spec load notice whose payload
+carried a filesystem path; a listing derived from it reports what a
+skill can do, never where it lives.
+
 ## 9. The handler reference is not on the bus
 
 Per INTENT-3 §6.1, the **handler reference** — the code object that
@@ -729,7 +776,7 @@ not the satellite alone, part of the recovery path: relaying the
 readiness announcement to the satellite and re-establishing the
 satellite's registrations is defined in OVOS-BRIDGE-1 §4.4.
 
-Two read-only topics:
+Three read-only topics:
 
 ### 10.1 `ovos.intent.list`
 
@@ -827,6 +874,56 @@ The reply size is bounded by one skill's registrations, which is why
 `skill_id` stays required and why `ovos.intent.list` (§10.1) stays a
 listing without definitions: a client walks the skills from §10.1
 and asks §10.2 once per skill.
+
+### 10.3 `ovos.skills.list`
+
+Lists loaded skills and their capabilities. Request payload:
+
+```json
+{ "session_id": "satellite-abc" }
+```
+
+`session_id` is an **optional filter**. When present the response
+carries the skills loaded in the effective scope of that session:
+those announced under `"default"` plus those announced under that
+`session_id` (§11.2). When absent the response carries every
+announced skill under every session. The filter names the session
+asked about; the request's own `context.session` does not scope the
+answer, so a controller can ask about a scope it does not hold.
+
+Response (`ovos.skills.list.response`), via the `response`
+derivation (OVOS-MSG-1 §5.3):
+
+```json
+{
+  "ok": true,
+  "skills": [
+    {
+      "skill_id": "music.skill",
+      "session_id": "default",
+      "capabilities": ["converse"],
+      "intents": 12
+    }
+  ]
+}
+```
+
+Each entry carries the `skill_id`, the `session_id` it was announced
+under (§8.6), the `capabilities` it declared, and `intents`, the
+number of registrations the manifest holds for it in that scope
+(§10.1), which is `0` for a skill that announced and registered
+nothing. An empty deployment answers `"skills": []`, never silence.
+Ordering by `session_id` with `"default"` first, then by `skill_id`,
+is **RECOMMENDED**.
+
+This listing is the one place the bus reports which skills are
+loaded. A fallback handler has no identifier of its own the way an
+intent has `(skill_id, intent_name)`, and a common-query or converse
+participant registers nothing at all, so what can be reported
+truthfully is the skill and the roles it declared. A client that
+wants the registered intents of a skill it found here walks §10.1
+and §10.2; the fallback registry itself (priorities, stage ranges)
+belongs to the fallback pipeline plugin and is not served here.
 
 The orchestrator **MAY** restrict access to introspection topics;
 authorization is out of scope.
@@ -970,6 +1067,8 @@ protocol is needed; the existing destination-based routing
   and disable (§3.2);
 - conform every registration's payload to §5 (keyword), §6 (template),
   or §7 (entity), respectively;
+- emit `ovos.skill.loaded` once it can receive dispatches, naming
+  every capability it takes part in (§8.6);
 - emit `ovos.intent.deregister` / `ovos.entity.deregister` /
   `ovos.skill.deregister` to retract its registrations, paired with
   the local release of the handler (§9, INTENT-3 §6.1);
@@ -1043,6 +1142,9 @@ message because the two differ (§3.2).
   observed, not that any plugin will match it (§2);
 - key every manifest entry by the payload `skill_id`, whether or not
   it matches `context.skill_id` (§3.2);
+- index every `ovos.skill.loaded` announcement by
+  `(session_id, skill_id)` and answer `ovos.skills.list` from that index
+  and the manifest (§8.6, §10.3);
 - on receiving `ovos.skill.deregister`, remove all manifest entries
   for the `(session_id, skill_id)` pair, with `session_id` read from
   `context.session.session_id` (§8.4, §11.1, §11.3);

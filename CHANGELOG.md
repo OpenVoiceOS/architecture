@@ -297,6 +297,11 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 2
 
+- §8.6 (new) — `ovos.skill.loaded`, the session-keyed load announcement
+  with a registered `capabilities` vocabulary (`fallback`, `common_query`,
+  `converse`); withdrawn by `ovos.skill.deregister`. §10.3 (new) —
+  `ovos.skills.list` / `.list.response`, loaded skills with capabilities
+  and intent counts, optional `session_id` filter. §12 updated.
 - Bus contract for declaring intents and entities, the wire companion to
   OVOS-INTENT-3. Registration topics (`ovos.intent.register.keyword` /
   `.template`, `ovos.entity.register`), deregistration / enable / disable,
@@ -523,6 +528,8 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 2
 
+- §3.4 — the registry is not served on the bus; loaded fallback skills
+  are listed by OVOS-INTENT-4 §10.3.
 - The fallback pipeline plugin: the final stage(s) that handle utterances
   no earlier stage claimed by querying registered fallback skills in
   priority order and dispatching to the first willing one. Skill
