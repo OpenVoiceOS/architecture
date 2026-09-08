@@ -109,6 +109,7 @@ The **Version** column carries the specification's compatibility class
 | OVOS-SESSION-1 | [Session](session-1.md) | 1 | Draft |
 | OVOS-SESSION-2 | [Session Lifecycle and State Ownership](session-2.md) | 1 | Draft |
 | OVOS-BRIDGE-1 | [Bus Bridge and Opaque Relay](bridge-1.md) | 2 | Draft |
+| OVOS-INSTALL-1 | [Plugin Installation Bus Contract](install-1.md) | 1 | Draft |
 
 ### Orchestrator stack — what processes utterances
 
