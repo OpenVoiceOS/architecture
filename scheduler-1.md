@@ -88,7 +88,7 @@ It does **not** define:
 
 The owning component is not a field of the body. The scheduler MUST
 take the owning `skill_id` from the request message's
-`context["skill_id"]` (INTENT-4 §3.2), and MUST reject with
+`context["skill_id"]` (INTENT-4 §3.1), and MUST reject with
 `invalid_record` a request that carries none.
 
 Exactly one of `at`, `in`, `every`, `local` MUST be present. A record
