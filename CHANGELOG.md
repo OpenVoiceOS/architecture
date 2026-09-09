@@ -326,6 +326,10 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 2
 
+- §3.2 — a message of §§5–8 whose payload omits a required identity
+  field is malformed: a consumer **MUST NOT** index or act on it,
+  **MUST NOT** derive the value from context, topic or another field,
+  and **MUST** log the rejection at WARN naming the missing field.
 - §8.6 (new) — `ovos.skill.loaded`, the session-keyed load announcement
   with a registered `capabilities` vocabulary (`fallback`, `common_query`,
   `converse`); withdrawn by `ovos.skill.deregister`. §10.3 (new) —
