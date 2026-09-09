@@ -326,6 +326,16 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 2
 
+- §8.4 — the cross-skill deregistration (source ≠ target) is carried
+  only by a transport that delivers `ovos.skill.deregister` on its own;
+  a producer **MUST NOT** emit it through a client that mirrors the
+  topic onto `detach_skill`, whose predecessor handlers act on the
+  source. Self-deregistration is unaffected. A malformed emission
+  (payload without `skill_id`) has no target, so spec handlers remove
+  nothing. The mirrored predecessor acts on it as a
+  self-deregistration. The mirror
+  runs both ways, so emitting `detach_skill` directly does not avoid
+  it. Divergence row for `detach_skill` records both shapes.
 - §8.6 (new) — `ovos.skill.loaded`, the session-keyed load announcement
   with a registered `capabilities` vocabulary (`fallback`, `common_query`,
   `converse`); withdrawn by `ovos.skill.deregister`. §10.3 (new) —
