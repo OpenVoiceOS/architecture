@@ -569,6 +569,13 @@ responder's identity in `data.skill_id` and the round identified by
 | `add_context` / `remove_context` | Removed, not replaced by a topic — CONTEXT-1 §5.0 writes `session.intent_context` in place on the carried/replied session. See §5.5 "Removed mechanisms". |
 | `mycroft.skill.set_cross_context` / `remove_cross_context` | Same removal; a shared-scope (bare-key) entry under CONTEXT-1 §3. |
 | `<skill_id>.activate` | Activity-tracking emit currently in `ovos-core`; not part of any spec here. |
+| `<skill_id>.deactivate` | Companion of the activity-tracking emit above; not part of any spec here. |
+| `<skill_id>.get_response.waiting` / `.get_response.killed` / `<skill_id>.converse.get_response` | Skill-side get_response lifecycle emitted by `ovos-workshop` and `ovos-core`. Embeds the skill identifier at a position no MSG-1 §2.1.1 pattern fixes; no spec defines a successor. Until one does, a pre-spec surface kept as shipped. |
+| `<skill_id>.public_api` | Skill public-API discovery emitted by `ovos-workshop`. Same status: identifier-bearing dotted topic no spec defines. |
+| `<skill_id>.game_cmd` | Game-command dispatch in `ovos-workshop` game skills. Same status. |
+| `ovos.common_play.<skill_id>.play` / `.pause` / `.resume` / `.stop` / `.next` / `.previous`, `ovos.common_play.query.<skill_id>` | OCP per-skill transport controls and query addressing. Identifier in the middle of a dotted topic; the OCP successor specification (ovos-media) owns the replacement, expected as static topics with `skill_id` in the payload. |
+| `ovos.skills.fallback.<skill_id>` / `.start` / `.request` / `.response` / `.killed` | Per-skill fallback dispatch and lifecycle. FALLBACK-1 §6.3 replaces the dispatch with `<skill_id>:fallback`; the lifecycle signals have no successor yet. |
+| `ovos.persona.tools.<toolbox_id>.call` | Emitted by the persona stack; defined by no specification. Identifier-bearing dotted topic outside every MSG-1 §2.1.1 pattern. |
 
 #### Listening-lifecycle topics (AUDIO-IN-1)
 
