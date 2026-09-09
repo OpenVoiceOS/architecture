@@ -522,7 +522,9 @@ Field reference:
 
 | Field | Type | Required | Meaning |
 |-------|------|----------|---------|
+| `skill_id` | string | yes | The skill (§3.2). |
 | `entity_name` | string | yes | Unique within the skill. By convention matches the slot name a template intent references. |
+| `lang` | string | yes | BCP-47 (§3.2). The entity identity is `(skill_id, entity_name, lang)`; replacement is per language, and a value set registered under one language leaves the other languages of the same `(skill_id, entity_name)` untouched. |
 | `samples` | array of strings | yes | Slot-free value-set entries (INTENT-1 §5.4). |
 
 ### 7.2 Malformed payloads
