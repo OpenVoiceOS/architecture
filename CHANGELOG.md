@@ -9,6 +9,24 @@ a MUST, SHOULD or MAY, or a wire surface — adds an entry here; editorial
 changes do not. No spec carries a revision counter: these entries are the
 revision record.
 
+## OVOS-TOOLS-1 — Agent Tools Bus Contract
+
+### 1
+
+- New. Specifies the agent tools bus surface: the toolbox topics
+  `ovos.persona.tools.discover` and `ovos.persona.tools.call` with
+  `data.toolbox_id` addressing (§4), the tool service topics
+  `ovos.tools.list`, `ovos.tools.get`, `ovos.tools.invoke` and
+  `ovos.tools.reload` (§5), and the tool definition shape (§3).
+  ovos-plugin-manager's `ToolBox` speaks the discover topic and a
+  per-toolbox call topic; ovos-PHAL-plugin-tools speaks the four tool
+  service topics. Two things are new work. The static call topic with
+  the toolbox in the payload, per OVOS-MSG-1 §2.1.1, lands in
+  `ToolBox.bind`, which keeps the per-toolbox topic one stable cycle
+  (§6). The §5 rule that a tool service answers an error when two
+  toolboxes own one tool name lands in ovos-PHAL-plugin-tools, whose
+  registry maps a name to the last toolbox loaded and silently picks it.
+
 ## OVOS-INSTALL-1 — Plugin Installation Bus Contract
 
 ### 1
