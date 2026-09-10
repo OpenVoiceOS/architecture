@@ -556,6 +556,14 @@ responder's identity in `data.skill_id` and the round identified by
 | `question:query` | `ovos.common_query.request` | Static topic; the skill being asked is named in `data.skill_id`. See §5.2. |
 | `question:query.response` | `ovos.common_query.response` | Answer correlated by `utterance_id`, not by the `phrase` string. |
 
+#### Agent tools topics (TOOLS-1)
+
+| Predecessor topic | v1 replacement | Notes |
+|--------------|---------------|-------|
+| `ovos.persona.tools.<toolbox_id>.call` | `ovos.persona.tools.call` | Identifier moves from the topic to `data.toolbox_id` (TOOLS-1 §4.2); payloads unchanged. Shipped `ovos-plugin-manager` `ToolBox.bind` subscribes to the predecessor; kept one stable cycle. |
+| `ovos.persona.tools.discover` | **unchanged** | Already a static broadcast answered per toolbox with `data.toolbox_id` (TOOLS-1 §4.1). |
+| `ovos.tools.list` / `.get` / `.invoke` / `.reload` | **unchanged** | Already static topics with the tool in the payload; TOOLS-1 §5 fixes their payloads. |
+
 #### Listening-failure topic (AUDIO-IN-1)
 
 | Predecessor topic | v2 replacement | Notes |
