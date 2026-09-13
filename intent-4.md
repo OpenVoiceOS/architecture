@@ -607,6 +607,32 @@ SHOULD emit `ovos.skill.deregister` carrying the satellite's session
 in `context` for every skill the satellite registered when the
 satellite disconnects (OVOS-BRIDGE-1 §3).
 
+The payload `skill_id` is the target and `context.skill_id` the
+source (§3.2), so a source may deregister a skill other than itself.
+That **cross-skill form** is carried only by a transport that
+delivers `ovos.skill.deregister` on its own. A client that mirrors
+the topic onto its predecessor `detach_skill` (appendix, divergences)
+hands the mirrored copy to every consumer whose predecessor handler
+resolves the skill from `context`, and the source's own
+registrations are removed together with the target's. A producer
+**MUST NOT** emit a cross-skill deregistration through a client that
+mirrors registration topics onto their predecessors. A skill
+deregistering itself is unaffected, because source and target
+coincide. The same transport property reaches a **malformed**
+emission: a Message whose payload omits `skill_id`, a required
+field of the §3.2 table, has no target, so a consumer of this
+section removes nothing, but its mirrored copy carries
+the emitter in `context`, and a predecessor handler acts on it as a
+self-deregistration. Through a mirroring client, then, a producer
+that omits the target loses its own registrations rather than
+nothing. The mirror runs in both directions: a client that mirrors
+the spec topic onto `detach_skill` also delivers a `detach_skill`
+emission under `ovos.skill.deregister`, so emitting the predecessor
+directly reaches the same consumers and the source is removed
+whichever wire the producer uses. The mirror is a setting of the
+migration tooling, not a property of any handler; the cross-skill
+form is available once the deployment's clients stop mirroring.
+
 Deregistering an intent, entity, or skill that is not currently
 registered is a **no-op**: registrations are fire-and-forget, every
 plugin processes the message independently, and any plugin without a
