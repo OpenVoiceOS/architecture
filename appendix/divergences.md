@@ -142,6 +142,20 @@ defined by any spec** and should be removed or replaced:
   received. Current `Session` deserialization accepts whatever it
   is handed and produces no diagnostic, so a typo'd client field
   fails silently for the life of the session.
+- **The deployment's enabled languages are provisioned, never
+  read from the bus** (SESSION-1 §3.2.7): "a fixed set a component is
+  provisioned with, not a value it learns or negotiates over the
+  bus". Current `ovos-core` resolves the utterance language against
+  `message.context.get("valid_langs") or get_valid_languages()`
+  (`ovos_core/intent_services/service.py:331`), so a `valid_langs`
+  list carried in `context` replaces the configured set for that
+  utterance. Any bus participant can therefore make an utterance
+  resolve to a language that the deployment is not provisioned
+  with. A reader should expect a shipped deployment to honour a
+  context-supplied `valid_langs` until the read is removed. In our
+  orgs, only the `ovos-core` end-to-end tests set the field, so
+  removing the read changes behaviour only for clients outside our
+  orgs.
 
 ### 5.4 Architectural divergences
 
