@@ -524,10 +524,13 @@ after the scheduler starts, the component SHOULD keep the schedules
 of an owner it does not know instead of cancelling them. A delay
 costs nothing, and a cancelled schedule does not come back.
 
-A deployment that installs its skills late loses nothing. The
-scheduler keeps every non-ephemeral schedule until an inventory
-holder asks for a cancel, and an owner that is installed later finds
-its schedules where it left them.
+The scheduler itself removes no schedule of an absent owner. A
+deployment that installs its skills late therefore keeps its
+schedules for as long as every inventory holder keeps to the SHOULD
+above, and an owner that is installed later finds its schedules where
+it left them. An inventory holder that departs from that SHOULD, and
+cancels the schedules of an owner it does not know, is still
+conformant with this specification, and those schedules are gone.
 
 ---
 
