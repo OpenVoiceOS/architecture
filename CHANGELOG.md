@@ -9,6 +9,26 @@ a MUST, SHOULD or MAY, or a wire surface — adds an entry here; editorial
 changes do not. No spec carries a revision counter: these entries are the
 revision record.
 
+The Policy section below records changes to the rules in `VERSIONING.md`.
+Those rules are not a specification and carry no compatibility class, but
+they hold shipped code to a duty, so a reader finds them here with the
+specifications.
+
+## Policy — VERSIONING.md
+
+- Removed mechanisms (new) — states how long an implementation may keep
+  emitting a mechanism that a specification removes. A removal takes away a
+  class of behaviour and names no successor, which is different from a
+  replacement, and no rule covered it before: the "kept one stable cycle"
+  wording applies to replaced topics only. An implementation **MAY** emit a
+  removed mechanism for one stable release cycle after it adopts the
+  specification that removes the mechanism. It **MUST** log a deprecation
+  that names the release which removes the mechanism, and it **MUST NOT**
+  begin to read a mechanism it did not already read.
+- Removed mechanisms — a record in `appendix/divergences.md` may state a
+  narrower window, or keep one part of the mechanism. A record that states
+  no window takes the one cycle.
+
 ## OVOS-TOOLS-1 — Agent Tools Bus Contract
 
 ### 1
