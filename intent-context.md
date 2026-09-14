@@ -585,12 +585,36 @@ received on its last dispatch.
 *Default decay.* An orchestrator **MAY** apply a
 deployer-configurable default decay (turn-based, wall-clock, or
 both) to entries written without an explicit `turns_remaining` or
-`expires_at`, to bound state accumulation. Any particular default
+`expires_at`, to bound state accumulation. A **client library** that
+writes an entry on a component's behalf **MAY** apply such a default
+in the same way, at write-time. Any particular default
 values are tuning guidance — **RECOMMENDED** at most, never a
 conformance requirement; deployers **SHOULD** consider
 both interactive latency (turn-based decay is deterministic across
 pauses) and idle expiry (wall-clock decay bounds a device sitting
 idle).
+
+Neither **MAY** re-write a decay field an entry already carries: a
+default applies only where the writer supplied none, and the explicit
+write-time window of the paragraph above always wins.
+
+A write-time default is read from the configuration of the **process
+that writes it**, which is the orchestrator's configuration only where
+the two run together. A component on a satellite therefore defaults
+from its own deployment, not from the assistant it talks to, and a
+deployer that wants one window across a mesh configures it on each
+writer or writes the window explicitly. A write-time default also
+takes the entry out of reach of the orchestrator's own default above,
+because the entry no longer arrives without a decay field.
+
+A wall-clock default bounds accumulation on its own. A turn-based
+default does not: `turns_remaining` is decayed by the orchestrator
+after each match round (§4), so a deployment whose orchestrator does
+not implement §4 has no turn-based decay at all, whoever wrote the
+field. A writer **SHOULD NOT** default `turns_remaining` where it
+cannot establish that, and **SHOULD** prefer an explicit
+`turns_remaining` set by the component that knows the flow it is
+gating.
 
 **Scope discipline.** A component SHOULD NOT write into another
 component's private namespace (keys prefixed with a foreign
