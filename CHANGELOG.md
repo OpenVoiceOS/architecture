@@ -9,6 +9,27 @@ a MUST, SHOULD or MAY, or a wire surface — adds an entry here; editorial
 changes do not. No spec carries a revision counter: these entries are the
 revision record.
 
+## OVOS-SCHEDULER-1 — Scheduled Events
+
+### 1
+
+- §6.3 now separates an owner that is not running from an owner that is
+  not installed, and §9.A.10 records the rule. The first case is the one
+  §6.3 always protected: a stopped owner starts again and must find its
+  schedules. The second case never reconciles, because nothing starts.
+  The scheduler still restores and fires both (§9.A.4) and now MUST NOT
+  remove either on its own initiative; it MAY write one WARN line for
+  each such schedule in each run. Only a component that holds the
+  install inventory, such as a skill loader, may cancel the schedules of
+  an uninstalled owner, through the `*` grant of §6.2 that already
+  exists. No topic and no field changes, so no implementation changes
+  its wire behaviour. Two pieces of new work. The WARN line is new in
+  the scheduler in ovos-bus-client. The cancel is new work in the skill
+  loader in ovos-core, which holds the inventory as `find_skill_plugins()`
+  but sends no cancel today; a `skill.test` schedule whose skill was
+  removed fired every two seconds on every run of one deployment from
+  2026-09-02.
+
 ## OVOS-TOOLS-1 — Agent Tools Bus Contract
 
 ### 1
