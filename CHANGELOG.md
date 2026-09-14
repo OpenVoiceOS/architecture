@@ -155,6 +155,12 @@ revision record.
 token. A template using `<name>` is not valid version-1 syntax — a version-1
 tool does not recognize the token and cannot expand the template.
 
+- §5.6 — registers a fifth typed-slot type, `language`. Its value is
+  `{"code": <BCP-47 tag>, "name": <string or null>}`: the tag of the
+  language that the surface names, and the name of that language in the
+  utterance's language. An orchestrator built against the four-type table drops the
+  key (OVOS-TRANSFORM-1 §3.7), and a placeholder `{language:name}` degrades to
+  `{name}` (§3.4), so the addition does not change the version class.
 - §3.7 (new) — the `<name>` inline vocabulary reference: a token replaced
   during expansion by a named slot-free vocabulary (a `.voc`, OVOS-INTENT-2).
 - §3 — `<name>` added to the grammar token table; §1 lists it under the

@@ -520,7 +520,7 @@ begins. Like a value set (§5.4), it is a **hint, not a vocabulary**: it tells a
 engine where a datum of a given kind was found and what that datum normalizes
 to, and an engine MAY ignore it entirely.
 
-**Registered types.** This specification registers four types. Each fixes the
+**Registered types.** This specification registers five types. Each fixes the
 JSON representation of a normalized value:
 
 | Type | Normalized value |
@@ -529,6 +529,7 @@ JSON representation of a normalized value:
 | `duration` | A JSON number: the length in seconds. |
 | `date` | A string: an RFC 3339 timestamp, resolved in the session's timezone (OVOS-SESSION-1 §3.5 `location.tz`, and the deployment's configured zone when the session declares none). |
 | `color` | An object `{"hex": "#rrggbb", "name": <string or null>}`, where `hex` is lowercase and `name` is a human-readable colour name when one is known and `null` otherwise. |
+| `language` | An object `{"code": <string>, "name": <string or null>}`, where `code` is a BCP-47 language tag in lowercase for the language the surface names (the same tag form as the OVOS-SESSION-1 §3.2 language fields), and `name` is the name of that language in the utterance's language when one is known and `null` otherwise. |
 
 A type outside this table is unregistered; a placeholder naming one degrades to
 an untyped slot (§3.6).
