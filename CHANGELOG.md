@@ -162,6 +162,13 @@ tool does not recognize the token and cannot expand the template.
   The user-locale text stays in `surface`. An orchestrator built against the four-type table drops the
   key (OVOS-TRANSFORM-1 §3.7), and a placeholder `{language:name}` degrades to
   `{name}` (§3.4), so the addition does not change the version class.
+- §5.6 — registers two more typed-slot types. `location` has the value
+  `{"name": <surface text>, "kind": "city" | "country" | "region" | null}`,
+  with no coordinates and no zone. `timezone` has the value
+  `{"tz": <IANA zone name>}`, read from a zone name or a zone abbreviation. A
+  zone name or abbreviation binds `timezone`; a place binds `location`, and a
+  consumer that needs the zone of a place resolves it. Both degrade like
+  `language`, so the version class does not change.
 - §3.7 (new) — the `<name>` inline vocabulary reference: a token replaced
   during expansion by a named slot-free vocabulary (a `.voc`, OVOS-INTENT-2).
 - §3 — `<name>` added to the grammar token table; §1 lists it under the

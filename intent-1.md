@@ -520,7 +520,7 @@ begins. Like a value set (§5.4), it is a **hint, not a vocabulary**: it tells a
 engine where a datum of a given kind was found and what that datum normalizes
 to, and an engine MAY ignore it entirely.
 
-**Registered types.** This specification registers five types. Each fixes the
+**Registered types.** This specification registers seven types. Each fixes the
 JSON representation of a normalized value:
 
 | Type | Normalized value |
@@ -530,6 +530,13 @@ JSON representation of a normalized value:
 | `date` | A string: an RFC 3339 timestamp, resolved in the session's timezone (OVOS-SESSION-1 §3.5 `location.tz`, and the deployment's configured zone when the session declares none). |
 | `color` | An object `{"hex": "#rrggbb", "name": <string or null>}`, where `hex` is lowercase and `name` is a human-readable colour name when one is known and `null` otherwise. |
 | `language` | An object `{"code": <string>, "name": <string or null>}`, where `code` is a BCP-47 language tag in lowercase for the language the surface names (the same tag form as the OVOS-SESSION-1 §3.2 language fields), and `name` is the autonym of that language (the name of the language in that language itself) when one is known and `null` otherwise. `name` does not depend on the utterance's language: the user's own words stay in the entry's `surface`. Example: for "speak in German" the entry has `"surface": "German"` and `"value": {"code": "de", "name": "Deutsch"}`; for "fala em japonês" it has `"surface": "japonês"` and `"value": {"code": "ja", "name": "日本語"}`. |
+| `location` | An object `{"name": <string>, "kind": <string or null>}`, where `name` is the surface text of the place and `kind` is `"city"`, `"country"` or `"region"` when the place is known to be of that kind and `null` otherwise. The value carries no coordinates and no zone: a consumer that needs either resolves the place itself. Example: for "weather in Lisbon" the entry has `"surface": "Lisbon"` and `"value": {"name": "Lisbon", "kind": "city"}`. |
+| `timezone` | An object `{"tz": <string>}`, where `tz` is an IANA time zone name. The surface is a zone name or a common zone abbreviation in the utterance's language. An abbreviation that names more than one zone gives one entry per zone, with the same span (overlap is permitted, see below). Example: for "what time is it in Central European Time" the entry has `"surface": "Central European Time"` and `"value": {"tz": "Europe/Paris"}`; for "3 pm EST" it has `"surface": "EST"` and `"value": {"tz": "America/New_York"}`. |
+
+A surface that names a zone or a zone abbreviation is a `timezone` entry. A
+surface that names a place is a `location` entry, never a `timezone` entry,
+also when the place has one zone. A consumer that needs the zone of a place
+resolves it from the `location` value.
 
 A type outside this table is unregistered; a placeholder naming one degrades to
 an untyped slot (§3.6).
