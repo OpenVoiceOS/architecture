@@ -529,7 +529,7 @@ JSON representation of a normalized value:
 | `duration` | A JSON number: the length in seconds. |
 | `date` | A string: an RFC 3339 timestamp, resolved in the session's timezone (OVOS-SESSION-1 §3.5 `location.tz`, and the deployment's configured zone when the session declares none). |
 | `color` | An object `{"hex": "#rrggbb", "name": <string or null>}`, where `hex` is lowercase and `name` is a human-readable colour name when one is known and `null` otherwise. |
-| `language` | An object `{"code": <string>, "name": <string or null>}`, where `code` is a BCP-47 language tag in lowercase for the language the surface names (the same tag form as the OVOS-SESSION-1 §3.2 language fields), and `name` is the name of that language in the utterance's language when one is known and `null` otherwise. |
+| `language` | An object `{"code": <string>, "name": <string or null>}`, where `code` is a BCP-47 language tag in lowercase for the language the surface names (the same tag form as the OVOS-SESSION-1 §3.2 language fields), and `name` is the autonym of that language (the name of the language in that language itself) when one is known and `null` otherwise. `name` does not depend on the utterance's language: the user's own words stay in the entry's `surface`. Example: for "speak in German" the entry has `"surface": "German"` and `"value": {"code": "de", "name": "Deutsch"}`; for "fala em japonês" it has `"surface": "japonês"` and `"value": {"code": "ja", "name": "日本語"}`. |
 
 A type outside this table is unregistered; a placeholder naming one degrades to
 an untyped slot (§3.6).

@@ -157,8 +157,9 @@ tool does not recognize the token and cannot expand the template.
 
 - §5.6 — registers a fifth typed-slot type, `language`. Its value is
   `{"code": <BCP-47 tag>, "name": <string or null>}`: the tag of the
-  language that the surface names, and the name of that language in the
-  utterance's language. An orchestrator built against the four-type table drops the
+  language that the surface names, and the autonym of that language (its
+  name in that language itself, for example `Deutsch`, `Português`, `日本語`).
+  The user-locale text stays in `surface`. An orchestrator built against the four-type table drops the
   key (OVOS-TRANSFORM-1 §3.7), and a placeholder `{language:name}` degrades to
   `{name}` (§3.4), so the addition does not change the version class.
 - §3.7 (new) — the `<name>` inline vocabulary reference: a token replaced
