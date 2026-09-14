@@ -130,7 +130,7 @@ fixes the class when it claims the field (§2.2 item 3):
   a deployment-configured behaviour: `pipeline`, the six
   `*_transformers` chains, the `blacklisted_*` denylists, `lang` and
   the other language signals, `fallback_handlers`
-  (OVOS-FALLBACK-1 §4). An omitted
+  (OVOS-FALLBACK-1 §4), and `location` (§3.5). An omitted
   override field resolves to the value the consumer would apply when
   no override is set: the deployment-configured `pipeline` ordering,
   the deployment language, the deployment-configured transformer
@@ -768,6 +768,29 @@ is `tz`:
 > wall-clock time against its own deployment-configured timezone
 > (§2.1's default-fields rule).
 
+`location` is an **override field** in the sense of §2.1 (§2.2 item
+3): an omitted `location`, or an omitted key inside it, resolves at
+each consumer to that consumer's own deployment-configured position.
+The `tz` rule above is the worked case. Omission is a **read-side**
+default, and the box it names is the consumer's, not the origin's.
+
+One consequence follows for the origin. Because `location` is
+client-owned, the value that matters is the origin's, and omission
+cannot express it: a consumer that fills its own deployment default
+answers with the wrong position whenever it runs on a different box
+from the origin. That is the normal case for a satellite, a remote
+peer, or any client across a layer-2 substrate (OVOS-SESSION-2 §2.5).
+A session **origin** that has a configured position **SHOULD**
+therefore set `location` explicitly on the session it originates,
+instead of relying on omission. §4.1 does not forbid this: it binds a
+component that derives a Message for a session it did not originate,
+and an origin is not such a component.
+
+The §3.4 wire-weight rule continues to apply where the origin can
+establish that the consumer computes the same default. A producer
+that cannot establish it is non-optimal but conformant (§6), and
+across a layer-2 boundary it cannot establish it.
+
 No other semantics of `location` — weather lookup, geographic
 routing, region-locked content — are defined here; a specification
 that needs one of those **MAY** claim it by citing this field's shape,
@@ -831,6 +854,14 @@ or "no behaviour" value — those fields carry meaning only when
 explicitly set by the session origin, and materializing them would
 falsely declare a divergence from deployment defaults that the
 origin never requested.
+
+This rule binds a component that derives a Message for a session it
+did **not** originate. It does **not** reach the **session origin**
+populating the session it originates: there is no source Message, so
+there is nothing the origin "did not receive", and the fields it sets
+are by definition the values the origin requests. An origin that sets
+a field on its own session is a producer stating a value, not a
+component synthesizing one on another participant's behalf.
 
 A Message with no `session` carrier takes the orchestrator's
 persistent default session, as OVOS-SESSION-2 §5.1 defines; that
