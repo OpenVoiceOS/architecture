@@ -485,6 +485,53 @@ an error for the scheduler; it remains visible through the `missed`
 and `last_fired` state of §4.1, so an owner that starts after its own
 fire reconciles by reading or listing its schedules.
 
+An owner that is not **running** and an owner that is not
+**installed** are different cases. The paragraph above protects the
+first one. A stopped owner starts again, and it must find its
+schedules waiting. An owner whose `skill_id` is installed nowhere
+never starts. It never reconciles and it never cancels, so its
+schedules fire against no listener for the life of the deployment.
+
+The scheduler MUST NOT act on the difference, and it has no way to
+find the difference. No topic in this specification, and no topic in
+any other, reports which skill ids are installed.
+`ovos.skills.list` (**OVOS-INTENT-4 §10.3**) reports the skills that
+are **loaded**, which is a smaller set. A
+skill that is installed and blacklisted, and a skill that is
+installed and failed to load, are both absent from that listing and
+neither is gone. A scheduler that removed a schedule because its
+owner is absent from a listing, or silent, or silent for some time,
+would remove the schedules of an owner that is only between loads. A
+lost alarm is a worse fault than a fired event that nobody hears.
+The scheduler therefore restores and fires a schedule whose owner is
+absent by any measure (§9.A.4), and MUST NOT cancel it, hold it or
+stop firing it on its own initiative. It MAY write one WARN log line
+for each such schedule in each of its own runs.
+
+A component that holds the install inventory MAY cancel the schedules
+of an owner that is not installed. A skill loader holds such an
+inventory; the bus does not carry it. The component sends
+`ovos.scheduler.cancel` under the `*` grant of §6.2. This adds no
+topic and no field: the scheduler sees an ordinary privileged cancel
+and answers it as it answers any other. Such a component MUST act
+only on an enumeration of the inventory that it completed. It MUST
+NOT act on a partial enumeration, and it MUST NOT act on an
+enumeration that it made while an install or an uninstall was in
+progress, because an update removes a `skill_id` and adds the same
+`skill_id` again, and an enumeration between the two steps reports an
+owner that is about to return. Where a deployment installs skills
+after the scheduler starts, the component SHOULD keep the schedules
+of an owner it does not know instead of cancelling them. A delay
+costs nothing, and a cancelled schedule does not come back.
+
+The scheduler itself removes no schedule of an absent owner. A
+deployment that installs its skills late therefore keeps its
+schedules for as long as every inventory holder keeps to the SHOULD
+above, and an owner that is installed later finds its schedules where
+it left them. An inventory holder that departs from that SHOULD, and
+cancels the schedules of an owner it does not know, is still
+conformant with this specification, and those schedules are gone.
+
 ---
 
 ## 7. Time
@@ -597,6 +644,10 @@ by the `scheduler.id` context field.
 9. Never fire an occurrence at or before the persisted most recent
    fire (§7.1); defer, not drop, while the clock is unsynchronized,
    and replay on the transition to synchronized (§7.2).
+10. Restore and fire a schedule whose owner is absent, and never
+   cancel, hold or stop firing one on its own initiative; only a
+   privileged cancel removes a schedule the owner did not cancel
+   (§6.2, §6.3).
 
 ### An **owner** MUST:
 
