@@ -378,6 +378,22 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 - See also — each field's owning specification, including
   `session.active_handlers` (OVOS-PIPELINE-1 §7.1) and
   `session.converse_handlers` (OVOS-CONVERSE-1 §2.1).
+- §4.1 — the materialization rule binds a component that derives a
+  Message for a session it did not originate. It does not reach the
+  session origin populating the session it originates: there is no
+  source Message, so there is nothing the origin did not receive, and
+  the fields the origin sets are the values it requests. A shipped
+  client library read §4.1 as binding the origin and therefore never
+  put a satellite's configured `location` on the wire, so the master
+  answered every satellite session from its own configuration.
+- §3.5, §2.1 — `location` is named as an **override field**, the
+  resolution class §2.2 item 3 requires and §3.5 never stated. A
+  session origin that has a configured position **SHOULD** set
+  `location` explicitly, because omission is a read-side default that
+  resolves at the consumer, which across a layer-2 boundary is a
+  different box from the origin. The §3.4 wire-weight rule is
+  unchanged and continues to apply where the origin can establish that
+  the consumer computes the same default.
 
 ## OVOS-INTENT-4 — Intent and Entity Registration Bus Contract
 
