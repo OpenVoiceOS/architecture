@@ -263,6 +263,27 @@ publish a fact other components may key off (an entity the
 conversation is currently about, a room the user has selected)
 stores under a bare shared key.
 
+A stored key is read as its shape says, **however the writer derived
+it**. A key that carries no `:` is a shared entry even when the
+component that wrote it meant the entry to be private, and even when
+the key was computed mechanically — by concatenating an owner
+identifier with a caller-chosen name, by translating a key from an
+older mechanism, or by any other derivation. §2 gives the entry no
+`scope` field and no `origin` field, so a private intention that the
+key does not spell is recorded nowhere and no consumer can act on it.
+A component that cannot compute `<own_id>:<key>` for an entry it means
+to keep private therefore **MUST NOT** write the entry at all, rather
+than write it bare.
+
+Concatenation without the separator is not a substitute. `<own_id>`
+followed directly by `<key>`, with the `:` dropped or replaced, is
+not reversible and is not collision-free: two different owner and key
+pairs can produce one bare key, and a bare key the ecosystem agreed on
+can be produced by some owner and key pair that was never meant to
+reach it. §3.1 then lets that entry satisfy a shared-scope gate of any
+intent, and §7 makes its value a slot candidate for any slot of the
+same name.
+
 ### 3.1 Gating resolution by scope
 
 The scope of a `requires_context` / `excludes_context` entry

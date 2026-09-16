@@ -139,6 +139,20 @@ revision record.
   and conformance roles (Orchestrator, Pipeline Plugin, Skill).
   Non-goals: trust enforcement and replay prevention are explicitly
   out of scope.
+- §3 — a stored key is read as its shape says, however the writer
+  derived it: a key without `:` is a shared entry even when the writer
+  meant it to be private, because §2 gives the entry no `scope` field
+  and no `origin` field. A component that cannot compute
+  `<own_id>:<key>` for an entry it means to keep private **MUST NOT**
+  write the entry at all, rather than write it bare. Concatenation
+  without the separator is named as no substitute: it is neither
+  reversible nor collision-free, so two owner and key pairs can produce
+  one bare key, and a bare key the ecosystem agreed on can be produced
+  by a pair that was never meant to reach it. A released client library
+  folded legacy adapt context entities into `intent_context` under such
+  a key, which §3.1 lets satisfy a shared gate and §7 offers as a slot
+  candidate.
+
 ## OVOS-TRANSFORM-1 — Transformer Plugins
 
 ### 2
