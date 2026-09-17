@@ -258,10 +258,16 @@ stream (§4.0).
 
 ### 4.2 Instant sounds
 
-Instant sounds are played via `ovos.audio.play_sound`. They start
-immediately on receipt, play over any audio currently in progress
-from the scheduled queue, MAY overlap each other, and are **not**
-affected by stop signals (§6).
+Instant sounds are played via `ovos.audio.play_sound`. They carry
+the session scope defined in §4.1: the audio output service MUST
+only play an instant sound whose `context.session.session_id`
+matches a session it is configured to serve locally. Playback starts
+immediately on receipt, over any audio currently in progress from
+the scheduled queue, and instant sounds MAY overlap each other. They
+are **not** affected by stop signals (§6): an instant sound is a
+short acknowledgement or error cue, and anything longer belongs on
+the scheduled queue, where it takes its turn with speech and is
+stoppable there.
 
 **Play-sound topic** `ovos.audio.play_sound`:
 
@@ -448,7 +454,8 @@ obligation on receiving a stop signal is the sequence above.
   time in FIFO order (§4.1);
 - support queued sound playback via `ovos.audio.queue` (§4.1);
 - play instant sounds immediately on `ovos.audio.play_sound` without
-  queuing or stopping scheduled playback (§4.2);
+  queuing or stopping scheduled playback, only for a session it is
+  configured to serve locally (§4.2);
 - emit `ovos.audio.output.started` when a playback session begins
   (§5.1);
 - emit `ovos.audio.output.ended` when a playback session ends (§5.2);
