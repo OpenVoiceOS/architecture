@@ -135,6 +135,53 @@ matches. Any such fallback is an **implementation choice**,
 not a requirement of this specification, because cross-region substitution can
 produce wording a user would not expect.
 
+### 2.3 Reference language and locale completeness
+
+A skill has one **reference language**: the language its handler code was
+written against and the language its resource set is measured from. The
+reference language is `en-US` unless the skill declares another. How a skill
+declares a different reference language is assistant-defined. This
+specification fixes only the default.
+
+A locale is **complete** when, for each of the roles `.intent`, `.dialog`,
+`.voc`, `.entity`, `.blacklist` and `.required`, every `(role, base name)`
+pair present in the reference language directory is also present in that
+locale's directory. `.prompt` is not in the set: a prompt is language-model
+input, not a match or speech surface, and a missing one resolves through
+the whole-file precedence of §2.1. A skill SHOULD ship every locale
+complete. A locale that is not complete is not, by itself, malformed. It is
+a locale the handler can reach only in part. The consequence of each
+missing role is defined elsewhere in this specification: a missing
+`.intent` leaves the handler with no trigger in that language
+(OVOS-INTENT-3 §1), a missing `.dialog` leaves the handler with nothing to
+speak for that response in that language (§4.2), a missing `.entity`
+leaves the slot with no value set (OVOS-INTENT-1 §5.4), a missing
+`.blacklist` leaves the intent unsuppressed or the slot with no exclusion in
+that language (§4.3), and a missing `.required` leaves every slot of the
+paired intent optional in that language (§4.5).
+
+A missing `.voc` is a completeness gap only when no `.intent` of that locale
+references it inline. When an `.intent` of the locale carries `<name>` for
+the missing `name`, that `.intent` is malformed under OVOS-INTENT-1 §3.6 and
+a tool MUST reject it. The tool reports the error, not the gap.
+
+A `(role, base name)` pair present in a locale and absent from the reference
+language is a **locale-specific addition**. It is permitted and is never a
+defect: each language is its own definition set.
+
+A skill SHOULD ship, for each locale it provides, a set of **conformance
+utterances**: for every `.intent` in that locale, at least one utterance in
+that language that a conformant engine matches to that intent. The set is
+test data, not a resource role. Its file format and location are
+assistant-defined and it is never loaded at runtime. A locale with no
+conformance utterances is complete when the file-set rule above holds, but
+nothing demonstrates that its templates match.
+
+A tool that reports locale completeness MUST report each missing pair by
+`(role, base name)` and MUST distinguish a missing pair, which is a
+completeness gap, from a malformed file (§5, OVOS-INTENT-1 §3.6), which is
+an error. One file is never both.
+
 ---
 
 ## 3. Common parsing rules

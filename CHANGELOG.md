@@ -256,6 +256,23 @@ tool does not recognize the token and cannot expand the template.
 
 ### 2
 
+- §2.3 (new) names the **reference language**, `en-US` unless the skill
+  declares another, and defines a **complete** locale: every `(role, base
+  name)` of the reference language for `.intent`, `.dialog`, `.voc`,
+  `.entity`, `.blacklist` and `.required` is also present in the locale.
+  `.prompt` is excluded and the clause says why. A skill SHOULD ship every
+  locale complete. An incomplete locale is not, by itself, malformed; a
+  missing `.voc` that an `.intent` of the locale references inline is the
+  OVOS-INTENT-1 §3.6 error, not a gap. A pair present only in the locale is
+  a locale-specific addition, never a defect.
+  A skill SHOULD also ship conformance utterances per locale, one per
+  `.intent`, as test data outside the resource roles. A completeness tool
+  MUST report missing pairs by `(role, base name)` and MUST keep them apart
+  from malformed files. No loader, topic or field changes. New work: the
+  parity census in ovos-m2v-pipeline (skills-qa T-2835) reads this clause.
+  Before it, no clause said which files a locale mirrors, so parity was
+  policy. Held for Miro's ruling on decision `locale-parity-clauses`.
+
 **Breaking change.** Version 2 reinterprets brace handling in `.prompt` and
 `.dialog` files. A `.prompt` authored against version 1 changes meaning under
 version 2: its `{{ … }}` sequences become substitution points, and its
