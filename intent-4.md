@@ -195,6 +195,18 @@ Because the payload carries the identity that acts, a message of
 a skill has no `skill_id` of its own to declare; §3.1 binds
 skills, not every emitter.
 
+The payload is not complete without its identity. A message of
+§§5–8 whose payload omits a required identity field — `skill_id`,
+`intent_name` or `entity_name`, or `lang` where the table above
+requires it — is **malformed**. A consumer **MUST NOT** index or act
+on it, **MUST NOT** derive the missing value from `context`, from
+the topic, from the shape of another field, or from any other
+source, and **MUST** log the rejection at WARN with the §5.3 fields
+that are present, the rejecting topic, and the name of the missing
+field. A registration lacking a third of its identity describes no
+intent, and a consumer that repairs it silently leaves the producer
+with no signal that its message was wrong.
+
 Which sources may act on which targets is, deployment-wide, an
 unsolved trust problem — a hardening decision this specification
 cannot settle. Unguarded, `ovos.skill.deregister` (§8.4) is a remote
