@@ -147,6 +147,28 @@ specifications.
 
 ### 2
 
+- §5.3 *Default decay* now lets a client library apply a
+  deployer-configured default at write-time, as the orchestrator already
+  MAY, and states three things the one-sentence rule left open. Neither
+  default re-writes a decay field the writer supplied. A write-time
+  default is read from the configuration of the process that writes it,
+  which is the orchestrator's only where the two run together, so a
+  component on a satellite defaults from its own deployment; and such an
+  entry no longer arrives without a decay field, so it is out of reach of
+  the orchestrator's own default. A wall-clock default bounds
+  accumulation alone, a turn-based one does not, because
+  `turns_remaining` is decayed by the orchestrator after each match round
+  (§4). This describes what ships: ovos-workshop stamps `context.timeout`
+  on its private write path (the cross-skill path is in ovos-workshop#629,
+  not yet merged), and the adapt-context view in ovos-bus-client stamps
+  the same key, while ovos-core applies no default decay. ovos-core does
+  implement §4: at dev `f3d08e9b` the orchestrator decrements
+  `turns_remaining` after each match round
+  (`ovos_core/intent_services/service.py:843`) and prunes dead entries
+  before the next (`:1207`). No topic and no payload shape changes. The
+  new work is a docstring in each writer naming whose configuration
+  supplies the window.
+
 - Initial draft. Defines `session.intent_context` as a flat map of
   key → entry carried inside the SESSION-1 session carrier. Covers
   context entries (key, value, TTL, owner `skill_id`), private vs.
