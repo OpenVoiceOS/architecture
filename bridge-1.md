@@ -164,6 +164,17 @@ SHOULD emit any cleanup events (e.g. `ovos.skill.deregister` per
 bijection, so that orchestrator state keyed on the hub-side value is
 cleaned up correctly.
 
+When a bridge performs `session_id` mapping, the mapping is
+**total**: the bridge MUST map every inbound `session_id` to a
+hub-side identifier, including the reserved value `"default"`
+(**OVOS-SESSION-1 §3.1**) and the forms that resolve to it, an
+omitted `session_id`, an empty `session` and an absent `session`
+(**OVOS-SESSION-1 §2.1**). The one exception is a participant that a
+layer-2 grant outside this specification authorises to act on the
+default session. Left unmapped, an inbound `"default"` reaches the
+orchestrator's own default-session store (**OVOS-SESSION-2 §5.1**)
+instead of a hub-side identifier.
+
 In all routing modes:
 
 - On matching a Message by any routing signal, the bridge MUST

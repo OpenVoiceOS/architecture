@@ -778,6 +778,15 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 2
 
+- §3.2 — the `session_id` NAT, where a bridge performs it, is
+  **total**: the bridge MUST map every inbound `session_id` to a
+  hub-side identifier, including the reserved `"default"` and the
+  omitted and empty forms that resolve to it, unless a layer-2 grant
+  authorises the participant to act on the default session. Left
+  unmapped, a remote `"default"` reaches the orchestrator's own
+  default-session store. NAT itself stays a MAY (§3.2, §3.4.1,
+  §4.2.3). No wire change: this formalizes the non-admin path
+  HiveMind-core ships since `4.10.9a1`.
 - §4.1 — a gate that refuses a client-supplied session field MAY emit
   `ovos.policy.denied` (OVOS-PIPELINE-1 §9.7).
 - §4.1 — the **gate invariant** made explicit: a bridge that
