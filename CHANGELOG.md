@@ -268,6 +268,15 @@ tool does not recognize the token and cannot expand the template.
   zone: the session's zone when that zone uses the abbreviation, otherwise
   the zone from the language's zone table. Both degrade like
   `language`, so the version class does not change.
+- §3.6 — names a form that was already malformed: a `|` outside a `( … )`
+  group. The pipe separates the branches of a group (§3.2) and has no meaning
+  elsewhere, and §2 forbids the metacharacters as literal text, so a template
+  holding a bare pipe was never valid. The entry is here because the bullet
+  sits inside a MUST list; the sentence adds no requirement, and a tool that
+  already applied §2 and §3.2 accepts and rejects the same templates as
+  before. It closes a real reading gap: every measured loader kept
+  `plata|argent` in an `.entity` file as one value, while two other consumers
+  read it as two.
 - §3.7 (new) — the `<name>` inline vocabulary reference: a token replaced
   during expansion by a named slot-free vocabulary (a `.voc`, OVOS-INTENT-2).
 - §3 — `<name>` added to the grammar token table; §1 lists it under the
