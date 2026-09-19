@@ -411,8 +411,8 @@ does not define an ordering, and no client may assume one.
 
 It is instead **RECOMMENDED** that a client adopt at the
 universal end-marker `ovos.utterance.handled` (PIPELINE-1 §9.5),
-which is emitted exactly once per utterance (§3.3) and so needs
-no ordering to be unambiguous.
+which is emitted exactly once per lifecycle (§3.3) and so needs
+no ordering within that lifecycle to be unambiguous.
 
 **Adopt from what you render.** Independently of that
 convergence point, a client **adopts the session of any
@@ -442,12 +442,30 @@ the round.
 
 ### 3.3 `ovos.utterance.handled` is the canonical convergence point
 
-When a client wants a single canonical "round is over" snapshot,
-the universal end-marker `ovos.utterance.handled` (PIPELINE-1
-§9.5) is the recommended adoption point: emitted exactly once per
-utterance on every terminal path, carrying the assistant's final
-session for the round. A client may also adopt incrementally per
-§3.1, or combine both; all are conformant.
+When a client wants a "round is over" snapshot, the universal
+end-marker `ovos.utterance.handled` (PIPELINE-1 §9.5) is the
+recommended adoption point: emitted once per lifecycle, and a
+round that opens a nested lifecycle (PIPELINE-1 §6.5) produces
+one for each — an inner marker for the nested lifecycle and an
+outer marker for the round that opened it, both correlated by
+the shared `session_id` and neither carrying any further field
+that ranks one above the other.
+
+A client that adopts at `ovos.utterance.handled` **MUST** apply
+that adoption to every marker it receives for its session: each
+marker closes one lifecycle, and a second marker for the same
+session is not a duplicate of the first and **MUST NOT** be
+discarded as one. Each marker's session supersedes whatever the
+client accumulated incrementally (§3.2) before that marker
+arrived. Between the markers of one round this specification
+ranks neither (§3.2, PIPELINE-1 §6.5): the bus guarantees no
+delivery order, so a client **MUST NOT** take the order in which
+two markers arrive as the order in which they were emitted, and
+whichever marker's session it holds when the round is over is a
+conformant snapshot. A client that adopts incrementally
+**SHOULD** also adopt at every such marker. A client may also
+adopt incrementally only, per §3.2, or combine both; all are
+conformant.
 
 ---
 
