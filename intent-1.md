@@ -234,6 +234,14 @@ contains one:
 
 - **Unbalanced metacharacters** — an unmatched `(`, `)`, `[`, `]`, `{`, `}`,
   `<`, or `>`.
+- **Pipe outside a group** — a `|` that is not inside a `( … )` group, such as
+  `a|b` written without parentheses. The pipe separates the branches of a
+  group (§3.2) and has no meaning anywhere else, and it cannot be literal
+  text: §2 forbids the metacharacters as literal input, and a `.dialog` uses
+  them structurally too (OVOS-INTENT-2 §4.2). An author who means
+  alternatives writes a group, `(a|b)`; an author who means separate values
+  in a slot-free file (`.entity`, `.voc`, `.blacklist`) writes one per line,
+  because every line of such a file is one template (OVOS-INTENT-2 §3).
 - **Empty group** — the empty `()`. Its one branch (§3.2) is the empty
   string, so the group expresses no choice at all.
 - **Empty sample** — a template whose sample set (§4) contains the empty
