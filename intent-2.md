@@ -138,21 +138,20 @@ produce wording a user would not expect.
 ### 2.3 Resource parity across locales
 
 A skill's resource set is the same in every locale it ships. For each role of
-§4 other than `.blacklist`, a `(role, base name)` pair present in any one
-language directory of a skill **MUST** be present in every other language
-directory of that skill. There are no per-locale resources: a file that
-exists for one language and not another is a defect of the skill, reported
-against the language that lacks it.
+§4 other than `.blacklist` and `.prompt`, a `(role, base name)` pair present
+in any one language directory of a skill **MUST** be present in every other
+language directory of that skill. There are no per-locale resources: a file
+that exists for one language and not another is a defect of the skill,
+reported against the language that lacks it.
 
-`.blacklist` is the only exception. Its content is a property of one
+`.blacklist` is excepted because its content is a property of one
 language — the canonical case is a pronoun set (§4.3) — and a language whose
 grammar raises no such case needs no file. A `.blacklist` present in one
 locale and absent from another is therefore **not** a defect, and a
 counterpart in another locale is **SHOULD**, never **MUST**.
 
-`.prompt` is outside the rule for a different reason: a prompt is
-language-model input, not a match or speech surface, and a missing one
-resolves through the whole-file precedence of §2.1.
+`.prompt` is excepted for a different reason: a prompt is language-model
+input, not a match or speech surface.
 
 This rule is about the file set, not about content. It does not say which
 language a resource was authored in, and it places no language directory
@@ -182,15 +181,6 @@ leaves the same code path with a value under one language and none under the
 other. This binds the union, not the individual template. OVOS-INTENT-1 §5.5
 leaves the templates of one `.intent` free to declare different slot sets,
 and this rule does not narrow that freedom.
-
-A skill SHOULD ship, for each locale it provides, a set of **conformance
-utterances**: for every `.intent` in that locale, at least one utterance in
-that language that a conformant engine matches to that intent. The set is
-test data, not a resource role. Its file format and location are
-assistant-defined and it is never loaded at runtime. A locale whose file set
-holds and whose slot sets match is conformant to this section even with no
-conformance utterances, but nothing then demonstrates that its templates
-match.
 
 A tool that reports parity MUST report each missing pair by `(role, base
 name)` and each slot-set difference by intent name, and MUST distinguish
