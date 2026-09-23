@@ -250,6 +250,14 @@ specifications.
 token. A template using `<name>` is not valid version-1 syntax — a version-1
 tool does not recognize the token and cannot expand the template.
 
+- §3.6 — the adjacent-slot rule now applies to input-direction templates
+  only. Its reason is a match-time one: a matcher must recover two values
+  from one span of text, and with no literal word between the slots it
+  cannot. The caller fills an output-direction template (`.dialog`) before
+  the renderer renders it (§5.1), so nothing recovers a value from the text
+  and no boundary is ambiguous. A tool MUST NOT reject a `.dialog` template
+  because two of its slots are adjacent. The change only widens the set of
+  templates a tool accepts, so the version class does not change.
 - §5.6 — registers a fifth typed-slot type, `language`. Its value is
   `{"code": <lowercase BCP-47 tag>, "name": <string or null>}`: the tag of
   the language that the surface names, and the autonym of that language (its
