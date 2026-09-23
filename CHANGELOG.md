@@ -256,22 +256,31 @@ tool does not recognize the token and cannot expand the template.
 
 ### 2
 
-- §2.3 (new) names the **reference language**, `en-US` unless the skill
-  declares another, and defines a **complete** locale: every `(role, base
-  name)` of the reference language for `.intent`, `.dialog`, `.voc`,
-  `.entity`, `.blacklist` and `.required` is also present in the locale.
-  `.prompt` is excluded and the clause says why. A skill SHOULD ship every
-  locale complete. An incomplete locale is not, by itself, malformed; a
-  missing `.voc` that an `.intent` of the locale references inline is the
-  OVOS-INTENT-1 §3.6 error, not a gap. A pair present only in the locale is
-  a locale-specific addition, never a defect.
-  A skill SHOULD also ship conformance utterances per locale, one per
-  `.intent`, as test data outside the resource roles. A completeness tool
-  MUST report missing pairs by `(role, base name)` and MUST keep them apart
-  from malformed files. No loader, topic or field changes. New work: the
-  parity census in ovos-m2v-pipeline (skills-qa T-2835) reads this clause.
-  Before it, no clause said which files a locale mirrors, so parity was
-  policy. Held for Miro's ruling on decision `locale-parity-clauses`.
+- §2.3 (new) makes the resource set of a skill the same in every locale: a
+  `(role, base name)` present in one language directory **MUST** be present
+  in every other, with `.blacklist` the only exception, because its content
+  is a property of one language. `.prompt` is outside the rule for a
+  different reason and the clause says which. The rule is about the file
+  set, not about content: it names no reference language and places no
+  language directory above another. §2.3 also fixes the **available slot
+  set** of an intent, the union of the names its templates declare
+  (OVOS-INTENT-1 §5.5), as identical in every locale, because the two
+  definitions of one intent share a qualified name and a handler
+  (OVOS-INTENT-3 §3). A missing `.voc` an `.intent` of the locale
+  references inline stays the OVOS-INTENT-1 §3.6 error, not a parity gap. A
+  skill SHOULD also ship conformance utterances per locale, one per
+  `.intent`, as test data outside the resource roles. A parity tool MUST
+  report each missing pair by `(role, base name)` and each slot-set
+  difference by intent name, and MUST keep them apart from malformed files.
+- §4.3 adds a corpus rule: every untyped `{slot}` an intent declares
+  **SHOULD** have an `.entity` of the same base name in every locale. This
+  binds the corpus and not the matcher — OVOS-INTENT-1 §5.4 is unchanged,
+  the value set stays an optional refinement, and a tool **MUST NOT** reject
+  a skill for a missing `.entity`.
+- No loader, topic or field changes. New work: the parity census in
+  ovos-m2v-pipeline (skills-qa T-2835) reads these clauses, and an extra
+  file or a slot-set mismatch becomes a defect it reports. Before them, no
+  clause said which files a locale mirrors, so parity was policy.
 
 **Breaking change.** Version 2 reinterprets brace handling in `.prompt` and
 `.dialog` files. A `.prompt` authored against version 1 changes meaning under
