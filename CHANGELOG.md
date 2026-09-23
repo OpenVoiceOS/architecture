@@ -469,6 +469,11 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   field is malformed: a consumer **MUST NOT** index or act on it,
   **MUST NOT** derive the value from context, topic or another field,
   and **MUST** log the rejection at WARN naming the missing field.
+- §7.2: an entity registration that omits `lang` is malformed. A
+  consuming plugin rejects it and logs at WARN with the name of the
+  missing field. It does not substitute its own configured language
+  or the session language. §8.3 is unchanged. An omitted `lang` on
+  `ovos.entity.deregister` still removes every language.
 - §8.6 (new) — `ovos.skill.loaded`, the session-keyed load announcement
   with a registered `capabilities` vocabulary (`fallback`, `common_query`,
   `converse`); withdrawn by `ovos.skill.deregister`. §10.3 (new) —

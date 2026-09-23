@@ -547,6 +547,19 @@ value. The §5.3 WARN-log rule applies: the rejecting plugin **MUST**
 log the rejection with `skill_id`, `entity_name`, `lang`, and a
 one-line reason.
 
+A registration that omits `lang` is **malformed**. The field is
+required (§7.1) and it carries the language of the value set. The
+entity identity is `(skill_id, entity_name, lang)`, so a registration
+without `lang` names no entity. A consuming plugin **MUST NOT** index
+such a registration, **MUST NOT** substitute its own configured
+language, the session language, or any other value, and **MUST** log
+the rejection at WARN with the §5.3 fields that are present and the
+name of the missing field.
+
+§8.3 reads the other way for `ovos.entity.deregister`, where an
+omitted `lang` removes every language of the pair. A removal without
+a language has one meaning. A registration without one has none.
+
 An individual entry that is not parsable as OVOS-INTENT-1 §3 grammar,
 or that yields no non-empty value, does **not** malform the
 registration by itself. A consuming plugin **MUST NOT** reject the
