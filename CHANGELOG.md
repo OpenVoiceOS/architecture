@@ -465,8 +465,8 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   self-deregistration. The mirror
   runs both ways, so emitting `detach_skill` directly does not avoid
   it. Divergence row for `detach_skill` records both shapes.
-- §3.2 — a message of §§5–8 whose payload omits a required identity
-  field is malformed: a consumer **MUST NOT** index or act on it,
+- §3.2: a message of §5 to §8 whose payload omits a required identity
+  field is malformed. A consumer **MUST NOT** index or act on it,
   **MUST NOT** derive the value from context, topic or another field,
   and **MUST** log the rejection at WARN naming the missing field.
 - §7.2: an entity registration that omits `lang` is malformed. A
