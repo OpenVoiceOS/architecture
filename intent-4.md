@@ -195,6 +195,19 @@ Because the payload carries the identity that acts, a message of
 a skill has no `skill_id` of its own to declare; §3.1 binds
 skills, not every emitter.
 
+The payload is not complete without its identity. The required
+identity fields are `skill_id`, `intent_name` or `entity_name`, and
+`lang` where the table above requires it. A message of §5 to §8
+whose payload omits one of them is **malformed**. A consumer
+**MUST NOT** index or act on it, **MUST NOT** derive the missing
+value from `context`, from the topic, from the shape of another
+field, or from any other source, and **MUST** log the rejection at
+WARN with the §5.3 fields that are present, the rejecting topic,
+and the name of the missing field. A registration lacking a third
+of its identity describes no intent, and a consumer that repairs it
+silently leaves the producer
+with no signal that its message was wrong.
+
 Which sources may act on which targets is, deployment-wide, an
 unsolved trust problem — a hardening decision this specification
 cannot settle. Unguarded, `ovos.skill.deregister` (§8.4) is a remote
@@ -534,6 +547,19 @@ A consuming plugin **MUST NOT** index an entity registration whose
 value. The §5.3 WARN-log rule applies: the rejecting plugin **MUST**
 log the rejection with `skill_id`, `entity_name`, `lang`, and a
 one-line reason.
+
+A registration that omits `lang` is **malformed**. The field is
+required (§7.1) and it carries the language of the value set. The
+entity identity is `(skill_id, entity_name, lang)`, so a registration
+without `lang` names no entity. A consuming plugin **MUST NOT** index
+such a registration, **MUST NOT** substitute its own configured
+language, the session language, or any other value, and **MUST** log
+the rejection at WARN with the §5.3 fields that are present and the
+name of the missing field.
+
+§8.3 reads the other way for `ovos.entity.deregister`, where an
+omitted `lang` removes every language of the pair. A removal without
+a language has one meaning. A registration without one has none.
 
 An individual entry that is not parsable as OVOS-INTENT-1 §3 grammar,
 or that yields no non-empty value, does **not** malform the
