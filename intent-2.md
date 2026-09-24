@@ -135,6 +135,58 @@ matches. Any such fallback is an **implementation choice**,
 not a requirement of this specification, because cross-region substitution can
 produce wording a user would not expect.
 
+### 2.3 Resource parity across locales
+
+A skill's resource set is the same in every locale it ships. For each role of
+§4 other than `.blacklist` and `.prompt`, a `(role, base name)` pair present
+in any one language directory of a skill **MUST** be present in every other
+language directory of that skill. There are no per-locale resources: a file
+that exists for one language and not another is a defect of the skill,
+reported against the language that lacks it.
+
+`.blacklist` is excepted because its content is a property of one
+language — the canonical case is a pronoun set (§4.3) — and a language whose
+grammar raises no such case needs no file. A `.blacklist` present in one
+locale and absent from another is therefore **not** a defect, and a
+counterpart in another locale is **SHOULD**, never **MUST**.
+
+`.prompt` is excepted for a different reason: a prompt is language-model
+input, not a match or speech surface.
+
+This rule is about the file set, not about content. It does not say which
+language a resource was authored in, and it places no language directory
+above another.
+
+The consequence of a missing file is defined elsewhere in this
+specification, and a tool reports the gap rather than inventing a repair: a
+missing `.intent` leaves the handler with no trigger in that language
+(OVOS-INTENT-3 §1), a missing `.dialog` leaves the handler with nothing to
+speak for that response in that language (§4.2), a missing `.entity` leaves
+the slot with no value set (OVOS-INTENT-1 §5.4), a missing `.blacklist`
+leaves the intent unsuppressed or the slot with no exclusion in that
+language (§4.3), and a missing `.required` leaves every slot of the paired
+intent optional in that language (§4.5).
+
+A missing `.voc` is a parity gap only when no `.intent` of that locale
+references it inline. When an `.intent` of the locale carries `<name>` for
+the missing `name`, that `.intent` is malformed under OVOS-INTENT-1 §3.6 and
+a tool MUST reject it. The tool reports the error, not the gap.
+
+An intent's **available slot set** — the union of the slot names its
+templates declare (OVOS-INTENT-1 §5.5) — **MUST** be identical in every
+locale of the skill. The two definitions of one intent in two languages
+share a qualified name and a handler (OVOS-INTENT-3 §3), and a handler reads
+its slots by name: a name present in one language and absent in another
+leaves the same code path with a value under one language and none under the
+other. This binds the union, not the individual template. OVOS-INTENT-1 §5.5
+leaves the templates of one `.intent` free to declare different slot sets,
+and this rule does not narrow that freedom.
+
+A tool that reports parity MUST report each missing pair by `(role, base
+name)` and each slot-set difference by intent name, and MUST distinguish
+either, which is a parity defect, from a malformed file (§5, OVOS-INTENT-1
+§3.6), which is an error. One file is never both.
+
 ---
 
 ## 3. Common parsing rules
@@ -255,6 +307,16 @@ with the expanded phrase set:
 How an `.entity` or `.voc` phrase set is *used* — slot constraint, keyword
 test — is engine or skill policy, consistent with matching behaviour being out
 of scope for these specifications.
+
+Every untyped `{slot}` an intent declares **SHOULD** have an `.entity` file of
+the same base name in every locale of the skill (§2.3). A typed slot
+(OVOS-INTENT-1 §5.6) takes its values from its type and needs none.
+
+This is a requirement on the **corpus**, not on the matcher. OVOS-INTENT-1
+§5.4 is unchanged: to an engine a value set stays an optional refinement, a
+slot with no `.entity` file still fills, and a slot naming an absent value set
+is not an error. A tool that reports a missing `.entity` therefore reports a
+corpus gap, never a malformed file, and **MUST NOT** reject the skill for it.
 
 A `.voc` may additionally be referenced inline from a template by the `<name>`
 token (OVOS-INTENT-1 §3.7), which expands it in place; a `.voc` may itself
