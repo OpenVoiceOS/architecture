@@ -318,6 +318,20 @@ tool does not recognize the token and cannot expand the template.
 
 ## OVOS-INTENT-2 — Locale Resource Formats
 
+### 3
+
+- §2.3 states that a resource whose content is the same in every language is
+  not an exception to the parity rule. Two skills raised the question, and
+  §2.3 as written answered it only by silence, which reads as a gap rather
+  than as a decision. The `.voc` role is a set of **localized** phrasings
+  (§1), so a set that equals another language's set is still that language's
+  set, and the file belongs in every language directory. The paragraph also
+  states why there is no other place to put it: §2 gives `locale/` one
+  subdirectory per language, named with a BCP-47 tag, and §2.1 resolves from
+  a language directory or an override of one. No loader, topic or field
+  changes, and no file moves. The parity census counts these files as it
+  already counts every other.
+
 ### 2
 
 - §2.3 (new) makes the resource set of a skill the same in every locale: a

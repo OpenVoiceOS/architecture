@@ -157,6 +157,19 @@ This rule is about the file set, not about content. It does not say which
 language a resource was authored in, and it places no language directory
 above another.
 
+A resource whose content is the same in every language is **not** an
+exception to it. The canonical case is a `.voc` of proper nouns: a
+transliterated personal name, a regnal era name, a product name. The `.voc`
+role is a named set of **localized** phrasings (§1), and a set that happens
+to equal another language's set is still the set for that language, because
+the next phrasing added to it is a phrasing of that language. Such a file is
+therefore present in every language directory like any other, and a skill
+that ships it in one locale alone has the defect this section defines. There
+is no shared location for it: §2 gives `locale/` one subdirectory per
+language, named with a BCP-47 tag, and §2.1 resolves a resource from a
+language directory or from an override of a language directory, so a
+directory holding one copy for every language could not be read as one.
+
 The consequence of a missing file is defined elsewhere in this
 specification, and a tool reports the gap rather than inventing a repair: a
 missing `.intent` leaves the handler with no trigger in that language
