@@ -265,8 +265,18 @@ contains one:
   template (`{x} and {x}`). A template defines each slot name exactly once.
   The comparison is on the slot **name**, so `{x} and {date:x}` repeats a name
   and is malformed.
+- **Invalid reference name** — a matched `< … >` whose inner text is not a
+  valid reference name (§3.7): `<Greeting>`, `<1abc>`, `<two words>`. The
+  token is balanced, so it is not an unbalanced metacharacter, and it names
+  no vocabulary, so it is not an undefined reference either. The difference
+  from an undefined reference matters to a tool: an invalid name is decided
+  from the template alone, before any vocabulary is supplied, while
+  "undefined" depends on which vocabularies the expander was given. A tool
+  MUST reject the template and MUST NOT report it as an undefined
+  reference.
 - **Undefined vocabulary reference** — a `<name>` (§3.7) for which no
-  vocabulary `name` is available to the expander.
+  vocabulary `name` is available to the expander. The name is valid; the
+  vocabulary is missing.
 - **Cyclic vocabulary reference** — a chain of inline vocabulary references
   that includes itself; its resolution would not terminate.
 

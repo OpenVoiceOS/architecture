@@ -277,6 +277,16 @@ tool does not recognize the token and cannot expand the template.
   before. It closes a real reading gap: every measured loader kept
   `plata|argent` in an `.entity` file as one value, while two other consumers
   read it as two.
+- §3.6 — names a second form the list omitted: a matched `< … >` whose
+  inner text is not a valid reference name, such as `<Greeting>` or
+  `<1abc>`. §3.7 gives `name` the slot-name charset, and §3.6 named an
+  unmatched bracket and an undefined or cyclic reference, so a balanced
+  token with an invalid name fell between the entries. A tool had to choose
+  a category, and ovos-m2v-pipeline#198 chose "unresolved", which is the
+  wrong one: an invalid name is decided from the template alone, while
+  "undefined" depends on the vocabularies the expander holds. The bullet
+  adds no requirement that §3.7 did not already carry; it says which error a
+  tool reports.
 - §3.7 (new) — the `<name>` inline vocabulary reference: a token replaced
   during expansion by a named slot-free vocabulary (a `.voc`, OVOS-INTENT-2).
 - §3 — `<name>` added to the grammar token table; §1 lists it under the
