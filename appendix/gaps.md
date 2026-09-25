@@ -99,7 +99,7 @@
   satellite to a hub-side STT as bus Message payloads (topic
   names, payload shape, session fields for codec and audio
   preferences).
-- **Session-scoped pipeline plugin registration.** BRIDGE-1 §4.4
+- **Session-scoped pipeline plugin registration.** BRIDGE-1 §4.3
   and INTENT-4 §11 cover session-scoped intent registration for
   satellite-side skills. A satellite that implements a pipeline
   plugin (not an intent-based skill) cannot register that plugin
