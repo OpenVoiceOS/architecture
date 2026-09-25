@@ -652,8 +652,9 @@ poll/response message is correlated by `context.utterance_id`
   session** passed to `match`, not against any early-start snapshot
   (§5.1, §8);
 - honour the live `session.blacklisted_skills` itself (§8 step 2) —
-  the PIPELINE-1 §5.3 orchestrator backstop cannot see the answering
-  skill, because `Match.skill_id` is the plugin's `pipeline_id`;
+  PIPELINE-1 §4.5 already discards a pong naming a denylisted skill
+  before any answer is selected, and this applies the same check to
+  the full-answer responses that follow;
 - run the contest for the first candidate utterance and report that
   same string as `Match.utterance` (§5.2, §9);
 - return `None` when no response survives, letting the pipeline reach
