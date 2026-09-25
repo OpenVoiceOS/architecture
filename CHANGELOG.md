@@ -268,6 +268,28 @@ tool does not recognize the token and cannot expand the template.
   zone: the session's zone when that zone uses the abbreviation, otherwise
   the zone from the language's zone table. Both degrade like
   `language`, so the version class does not change.
+- §3.6 — names a form that was already malformed: a `|` outside a `( … )`
+  group. The pipe separates the branches of a group (§3.2) and has no meaning
+  elsewhere, and §2 forbids the metacharacters as literal text, so a template
+  holding a bare pipe was never valid. The entry is here because the bullet
+  sits inside a MUST list; the sentence adds no requirement, and a tool that
+  already applied §2 and §3.2 accepts and rejects the same templates as
+  before. It closes a real reading gap: every measured loader kept
+  `plata|argent` in an `.entity` file as one value, while two other consumers
+  read it as two.
+- §3.6 — names a second form the list omitted: a matched `< … >` whose
+  inner text is not a valid reference name, such as `<Greeting>` or
+  `<1abc>`. §3.7 gives `name` the slot-name charset, and §3.6 named an
+  unmatched bracket and an undefined or cyclic reference, so a balanced
+  token with an invalid name fell between the entries. A tool had to choose
+  a category, and ovos-m2v-pipeline#198 chose "unresolved", which is the
+  wrong one: an invalid name is decided from the template alone, while
+  "undefined" depends on the vocabularies the expander holds. The rejection
+  itself is old: §3.7 carries the charset, and §6.2 step 2 already tells an
+  engine to verify a template against §3. The reporting duty is new. No
+  clause before this one said which category a tool reports, so "a tool MUST
+  NOT report it as an undefined reference" is a new requirement on a tool's
+  output.
 - §3.7 (new) — the `<name>` inline vocabulary reference: a token replaced
   during expansion by a named slot-free vocabulary (a `.voc`, OVOS-INTENT-2).
 - §3 — `<name>` added to the grammar token table; §1 lists it under the

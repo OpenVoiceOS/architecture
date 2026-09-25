@@ -234,6 +234,18 @@ contains one:
 
 - **Unbalanced metacharacters** — an unmatched `(`, `)`, `[`, `]`, `{`, `}`,
   `<`, or `>`.
+- **Pipe outside a group** — a `|` that is inside no group, where a group is
+  either `( … )` (§3.2) or `[ … ]`, which §3.3 defines as the group `(x|)`.
+  `a|b` written without either bracket is the malformed form. The pipe
+  separates the branches of a group (§3.2) and has no meaning anywhere else,
+  and it cannot be literal text: §2 forbids the metacharacters as literal
+  input, and a `.dialog` uses them structurally too (OVOS-INTENT-2 §4.2). An
+  author who means alternatives writes a group, `(a|b)` or `[a|b]`; an author
+  who means separate values in a slot-free file (`.entity`, `.voc`,
+  `.blacklist`) writes one per line, because every line of such a file is one
+  template (OVOS-INTENT-2 §3). `[a|b]` is well formed: §3.3 makes it the
+  group `(a|b|)` and §3.5 allows alternatives inside an optional group, so
+  its branches are `a`, `b` and the empty branch.
 - **Empty group** — the empty `()`. Its one branch (§3.2) is the empty
   string, so the group expresses no choice at all.
 - **Empty sample** — a template whose sample set (§4) contains the empty
@@ -257,8 +269,18 @@ contains one:
   template (`{x} and {x}`). A template defines each slot name exactly once.
   The comparison is on the slot **name**, so `{x} and {date:x}` repeats a name
   and is malformed.
+- **Invalid reference name** — a matched `< … >` whose inner text is not a
+  valid reference name (§3.7): `<Greeting>`, `<1abc>`, `<two words>`. The
+  token is balanced, so it is not an unbalanced metacharacter, and it names
+  no vocabulary, so it is not an undefined reference either. The difference
+  from an undefined reference matters to a tool: an invalid name is decided
+  from the template alone, before any vocabulary is supplied, while
+  "undefined" depends on which vocabularies the expander was given. A tool
+  MUST reject the template and MUST NOT report it as an undefined
+  reference.
 - **Undefined vocabulary reference** — a `<name>` (§3.7) for which no
-  vocabulary `name` is available to the expander.
+  vocabulary `name` is available to the expander. The name is valid; the
+  vocabulary is missing.
 - **Cyclic vocabulary reference** — a chain of inline vocabulary references
   that includes itself; its resolution would not terminate.
 
