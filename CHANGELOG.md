@@ -284,9 +284,12 @@ tool does not recognize the token and cannot expand the template.
   token with an invalid name fell between the entries. A tool had to choose
   a category, and ovos-m2v-pipeline#198 chose "unresolved", which is the
   wrong one: an invalid name is decided from the template alone, while
-  "undefined" depends on the vocabularies the expander holds. The bullet
-  adds no requirement that §3.7 did not already carry; it says which error a
-  tool reports.
+  "undefined" depends on the vocabularies the expander holds. The rejection
+  itself is old: §3.7 carries the charset, and §6.2 step 2 already tells an
+  engine to verify a template against §3. The reporting duty is new. No
+  clause before this one said which category a tool reports, so "a tool MUST
+  NOT report it as an undefined reference" is a new requirement on a tool's
+  output.
 - §3.7 (new) — the `<name>` inline vocabulary reference: a token replaced
   during expansion by a named slot-free vocabulary (a `.voc`, OVOS-INTENT-2).
 - §3 — `<name>` added to the grammar token table; §1 lists it under the
