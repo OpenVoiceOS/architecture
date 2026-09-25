@@ -170,6 +170,18 @@ language, named with a BCP-47 tag, and §2.1 resolves a resource from a
 language directory or from an override of a language directory, so a
 directory holding one copy for every language could not be read as one.
 
+The **content** of such a file stays per-locale. This section binds the
+file set and not the content, as stated above, so no locale's copy is
+required to equal another's, and a locale **MAY** add phrasings of its
+own to it. Copying the members from a locale that already has them is a
+way to create the file, not an obligation to keep the two equal, and a
+tool **MUST NOT** report two locales as a defect because their copies
+of one resource differ. A locale that has added its own phrasings is
+therefore not a source to copy from: `ovos-skill-wallpapers` `de-DE`
+carries a German alias beside each subreddit name, and two of its files
+carry the German alone, so a byte copy of that locale would put German
+in the other thirteen.
+
 The consequence of a missing file is defined elsewhere in this
 specification, and a tool reports the gap rather than inventing a repair: a
 missing `.intent` leaves the handler with no trigger in that language

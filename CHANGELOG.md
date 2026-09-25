@@ -331,6 +331,17 @@ tool does not recognize the token and cannot expand the template.
   a language directory or an override of one. No loader, topic or field
   changes, and no file moves. The parity census counts these files as it
   already counts every other.
+- §2.3 also states that the **content** of such a file stays per-locale.
+  The first paragraph settled whether the file exists everywhere and left
+  the content open, and a locale lane had to guess between copying the
+  members and letting each locale keep its own. The section binds the file
+  set and not the content, so no locale's copy is required to equal
+  another's, a locale MAY add phrasings of its own, and a tool MUST NOT
+  report two locales as a defect because their copies differ. The
+  measured case is `ovos-skill-wallpapers` `de-DE`, which carries a German
+  alias beside each subreddit name and two files that carry the German
+  alone, so a byte copy of that locale would put German in the other
+  thirteen. No loader, topic or field changes.
 
 ### 2
 
