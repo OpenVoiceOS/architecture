@@ -128,8 +128,12 @@
 - **Configuration change topics.** No specification names
   `configuration.patch`, `configuration.updated` or
   `configuration.patch.clear`, but plugins emit them and
-  ovos-config receives them. Draft clause, pending a ruling on
-  the payload:
+  ovos-config receives them. The payload question is **ruled**:
+  decision `configuration-patch-clause-2`, closed 2026-09-13,
+  chose complete top-level values, no required order against
+  `configuration.updated`, and no full-configuration payload.
+  The clause below states that ruling, and waits only for a
+  specification to carry it:
   1. `configuration.patch` `data.config` **MUST** be an object
      that carries, for each top-level key it changes, the
      **complete** runtime value of that key. An emitter
@@ -155,12 +159,11 @@
   plugin that patches `tts.module`, followed by one that patches
   `{"tts": {"fallback_module": ...}}`, loses the first value
   back to the file, with nothing logged.
-  This pair proposes the behaviour that ships today
-  (`ovos-config` `Configuration.patch` assigns
-  `__patch[k] = v`). The alternative is a **deep merge** in the
-  receiver, which would keep both patches. That is a change to
-  ovos-config, not a description of it, and the choice between
-  them belongs to the payload ruling.
+  This pair states the behaviour that ships today (`ovos-config`
+  `Configuration.patch` assigns `__patch[k] = v`). A **deep
+  merge** in the receiver, which would keep both patches, was the
+  alternative put to `configuration-patch-clause-2` and was not
+  chosen: it would change ovos-config rather than describe it.
   The **SHOULD** in rule 1 is deliberate. No ovos-config emitter
   computes a difference, so an emitter conforms only when its
   caller passes one. A **MUST** there would make the shipped
