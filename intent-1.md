@@ -254,17 +254,39 @@ contains one:
   `(|)` or `[x]`. An engine cannot train on an empty sample. This concerns the
   *whole sample only*: a group with an empty branch inside an otherwise
   non-empty template — such as the optional `[the]` — is valid and unaffected.
-- **Slot-only template** — a template that is a single named slot and nothing
-  else (`{name}`). A template MUST carry at least one literal word; a bare slot
+- **Slot-only template**, in an **input-direction** template (§2) only — a
+  template that is a single named slot and nothing else (`{name}`). An
+  input-direction template MUST carry at least one literal word; a bare slot
   gives an engine no anchoring text to learn from or match against.
-- **Adjacent slots** — two named slots with no literal word between them,
-  whether written `{a}{b}` or separated only by whitespace (`{a} {b}`). With no
-  literal token to delimit them, a matcher cannot tell where one slot's value
-  ends and the next begins; the two would form a single capture, not two. A
-  literal word MUST separate any two slots, and MUST do so in **every sample**:
-  the check applies to the expanded sample set (§4), not only the template
-  surface. A template such as `{a} [foo] {b}`, whose empty-`foo` branch yields
-  the adjacent pair `{a} {b}`, is therefore malformed.
+
+  The rule does **not** reach an **output-direction** template (`.dialog`).
+  The anchoring problem belongs to training and to match-time fill. §6 puts
+  a `.dialog` outside both: it is output-direction and caller-filled (§5.1),
+  and no intent engine trains on it. A bare `{day}` is rendered, not
+  matched: the caller supplies the value for `day` and the renderer puts it
+  in place of the name, which is the terse spoken answer and is the natural
+  short reply in many languages. The line also satisfies §5.5, because
+  `{day}` declares the same slot set as `It is {day}` and may sit beside it
+  in one file. A tool MUST NOT reject an output-direction template because
+  it carries no literal word.
+- **Adjacent slots**, in an **input-direction** template (§2) only — two named
+  slots with no literal word between them, whether written `{a}{b}` or
+  separated only by whitespace (`{a} {b}`). With no literal token to delimit
+  them, a matcher cannot tell where one slot's value ends and the next begins;
+  the two would form a single capture, not two. In an input-direction template
+  a literal word MUST separate any two slots, and MUST do so in **every
+  sample**: the check applies to the expanded sample set (§4), not only the
+  template surface. A template such as `{a} [foo] {b}`, whose empty-`foo`
+  branch yields the adjacent pair `{a} {b}`, is therefore malformed.
+
+  The rule does **not** reach an **output-direction** template (`.dialog`).
+  The boundary problem belongs to match-time fill: a matcher must recover two
+  values from one span of text. Under caller-supplied fill (§5.1) nothing
+  recovers a value from the rendered text. The caller gives one value per slot
+  name, and the renderer puts each value in place of its name. Two adjacent
+  slots are therefore unambiguous, and `{speed} {speed_unit}` is well formed
+  in a `.dialog` file. A tool MUST NOT reject an output-direction template
+  because two of its slots are adjacent.
 - **Repeated slot name** — using the same `{name}` more than once in one
   template (`{x} and {x}`). A template defines each slot name exactly once.
   The comparison is on the slot **name**, so `{x} and {date:x}` repeats a name
@@ -302,8 +324,8 @@ the portability the degrade rule exists to protect; the warning is the author's
 cue that a prefix is misspelled or unsupported.
 
 **Structural adjacent-slot detection.** Because the adjacent-slots check is
-defined over the expanded sample set, a naive implementation must expand the
-full template first — potentially expensive (§4.3). A tool MAY instead
+defined over the expanded sample set of an input-direction template, a
+naive implementation must expand the full template first — potentially expensive (§4.3). A tool MAY instead
 detect adjacency **structurally**, pre-expansion: two slots are adjacent iff
 every token between them on the template surface can reduce to nothing (an
 optional segment, a group with an empty branch, or an inline reference
