@@ -97,6 +97,14 @@ specifications.
 
 ## OVOS-AUDIO-1 — Audio Output Service
 
+### 3
+
+- §4.2 — an instant sound carries the §4.1 session scope: the audio
+  output service MUST only play an instant sound whose
+  `context.session.session_id` matches a session it is configured to
+  serve locally. Matches the enqueue rule already in §4.1; no wire
+  shape changes.
+
 ### 2
 
 - §4.0 (new) — one audio-format rule for all audio payloads: the
@@ -625,6 +633,19 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   divergence entry is restated to match.
 
 ## OVOS-AUDIO-IN-1 — Audio Input Service
+
+### 3
+
+- §6.3 — sleep entry is now acknowledged: the audio input service
+  MUST reply on `ovos.listener.sleep.response` (OVOS-MSG-1 §5.3
+  `response` derivation) once sleep mode has been entered. Supersedes
+  the version-2 entry below, which called sleep entry unacknowledged
+  by design. §6.3 also adds `ovos.listener.sleep.query`, answered on
+  `ovos.listener.sleep.query.response` with an `asleep` bool, so a
+  component can read current sleep state instead of inferring it from
+  the last-seen lifecycle signal. A repeated `ovos.listener.sleep`
+  received while already asleep still gets the `.response`
+  acknowledgement; sleep mode does not change.
 
 ### 2
 
