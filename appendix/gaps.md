@@ -125,3 +125,48 @@
   cleanup protocol for hub-side state created during the session's
   lifetime (e.g. cross-utterance context, active handlers).
   Deferred to a separate session-lifecycle specification.
+- **Configuration change topics.** No specification names
+  `configuration.patch`, `configuration.updated` or
+  `configuration.patch.clear`, but plugins emit them and
+  ovos-config receives them. The payload question is **ruled**:
+  decision `configuration-patch-clause-2`, closed 2026-09-13,
+  chose complete top-level values, no required order against
+  `configuration.updated`, and no full-configuration payload.
+  The clause below states that ruling, and waits only for a
+  specification to carry it:
+  1. `configuration.patch` `data.config` **MUST** be an object
+     that carries, for each top-level key it changes, the
+     **complete** runtime value of that key. An emitter
+     **MUST NOT** send the full merged or full file
+     configuration, and **SHOULD** send only the top-level keys
+     it changes.
+  2. A receiver **replaces** the whole value of each top-level
+     key of `data.config` in a runtime layer that overrides
+     every configuration file. It does not merge into the value
+     already there. The layer stays until
+     `configuration.patch.clear`.
+  3. `configuration.updated` has no required payload. A receiver
+     reloads its configuration files and **MUST NOT** clear the
+     runtime layer.
+  4. No order between the two topics is required. A receiver
+     **MUST NOT** depend on one.
+  Reason for rule 1: receivers keep the payload above every
+  file, so a full-configuration payload makes later file edits
+  have no effect until `configuration.patch.clear`.
+  Reason for the "complete value" in rule 1, which rule 2
+  forces: a receiver replaces the key whole, so a partial value
+  under a key discards any earlier patch of the same key. A
+  plugin that patches `tts.module`, followed by one that patches
+  `{"tts": {"fallback_module": ...}}`, loses the first value
+  back to the file, with nothing logged.
+  This pair states the behaviour that ships today (`ovos-config`
+  `Configuration.patch` assigns `__patch[k] = v`). A **deep
+  merge** in the receiver, which would keep both patches, was the
+  alternative put to `configuration-patch-clause-2` and was not
+  chosen: it would change ovos-config rather than describe it.
+  The **SHOULD** in rule 1 is deliberate. No ovos-config emitter
+  computes a difference, so an emitter conforms only when its
+  caller passes one. A **MUST** there would make the shipped
+  emitters non-conforming on a caller's behaviour they do not
+  control. The **MUST NOT** on the full configuration is what
+  the reason above needs, and the emitters do satisfy that.
