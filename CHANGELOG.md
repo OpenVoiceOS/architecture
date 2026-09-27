@@ -50,6 +50,24 @@ specifications.
   removed fired every two seconds on every run of one deployment from
   2026-09-02.
 
+## OVOS-SPEAKER-1 — Speaker Enrollment Bus Contract
+
+### 1
+
+- New. Specifies the speaker enrollment bus surface: the four static
+  topics `ovos.speaker.enroll`, `ovos.speaker.delete`,
+  `ovos.speaker.list` and `ovos.speaker.verify` with their `.response`
+  replies (§2, §3), the payloads (§4), base64 WAV as the only clip
+  carrier with no capture on this surface (§4.5), the gate that keeps
+  the two mutating topics closed by default (§5), and the error
+  vocabulary (§7). All new work: no implementation speaks any of these
+  topics today. Enrollment in ovos-ww-verifier-plugin-speaker is the
+  `ovos-speaker-enroll` console script over a shell account, which is
+  the boundary §5 replaces with a configuration key. The gate shape and
+  the "refuse loudly, never silently" rule are OVOS-INSTALL-1 §5's, for
+  the same reason: a silent refusal is indistinguishable from an absent
+  service.
+
 ## OVOS-TOOLS-1 — Agent Tools Bus Contract
 
 ### 1
