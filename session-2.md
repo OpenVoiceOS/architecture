@@ -253,7 +253,8 @@ the user's cloud, anything else.
 
 Trust and authorization are layer-2 concerns (§1); this spec
 places no constraint on what `session_id` or `session` value a
-client sends. *(Informative.)* This rule is what obliges a
+client sends, with one exception: the default-session client of
+§6.5 **MUST NOT** synthesise the default session it sends. *(Informative.)* This rule is what obliges a
 boundary component that governs a client by injecting policy
 fields into its session to keep doing so on every Message;
 OVOS-BRIDGE-1 §4.1 states that obligation as the gate invariant.
@@ -756,6 +757,30 @@ rely on the orchestrator's stored state. This is the only place
 this spec recognizes a client that does not carry its own
 authoritative state — and only because the orchestrator's
 default-session store *is* that state for the local device.
+
+The local device **MUST NOT** synthesise a default session from its
+own configuration and put it on the wire. When it holds no session
+adopted per §3.2 to carry, it uses one of the two forms above. It
+**MUST NOT** instead fill `Message.context.session` with a snapshot
+derived from its own deployment configuration, on the connect-time
+Message or on any later one. Carrying a session it adopted from a
+Message it acted on or rendered (§3.2) is adoption, not synthesis,
+and stays conformant.
+
+*(Rationale, informative.)* §5.1 fills an omitted inbound field from
+the store, because the store is the authoritative value and the
+client's configuration is not. A synthesised carrier converts that
+omission into a present field, so the same merge then overwrites the
+authoritative value with the client's deployment default — the
+outcome §5.1's deviation exists to prevent. The store cannot defend
+itself here, because §5.1 fixes the merge as a property of the
+pathway and never of the producer's intent: it cannot tell a
+synthesised field from an adopted one. The obligation therefore sits
+on the emitter. This is also what keeps the one-writer property
+§2.7 describes: a co-located process derives its *initial view* from
+the deployment configuration, and that derivation is for its own
+reading of the session, never a value it asserts back at the
+orchestrator.
 
 ---
 

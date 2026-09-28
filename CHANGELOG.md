@@ -478,6 +478,30 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §6.5, §2.5 — a default-session client **MUST NOT** synthesise the
+  default session from its own configuration and put it on the wire.
+  Before this, §6.5 said only that the local device **MAY** omit the
+  carrier or send `session: {}`, which is a permission and forbids
+  nothing, and §2.5 said without qualification that this spec places
+  no constraint on what `session` value a client sends. A client that
+  stamped a config-derived snapshot was therefore conformant, and
+  §5.1's merge then replaced the store's authoritative field with
+  that client's deployment default — the outcome §5.1's deviation
+  from SESSION-1 §2.1 exists to prevent. §5.1 cannot defend itself,
+  because it fixes the merge as a property of the pathway and never
+  of the producer's intent, so it cannot tell a synthesised field
+  from an adopted one; the obligation goes on the emitter. Adoption
+  per §3.2 is unaffected: carrying a session read off a Message the
+  client acted on or rendered is not synthesis. §2.5's disclaimer now
+  names the exception, which it had to, or the two sections
+  contradict each other. No field, topic or payload changes, and no
+  consumer changes: the orchestrator keeps merging whatever arrives.
+  One piece of new work, in `MessageBusClient.emit` in
+  ovos-bus-client, which stamps `_own_session()` on every
+  carrier-less Message and for a default-id client derives that from
+  its own configuration. A `lang` stamped this way is how one
+  process that never read the user's `mycroft.conf` can set the
+  default session's language for the whole device.
 - §3.2, §3.3 — `ovos.utterance.handled` is emitted once per
   lifecycle, not once per utterance: a round that opens a nested
   lifecycle (OVOS-PIPELINE-1 §6.5) produces an inner and an outer
