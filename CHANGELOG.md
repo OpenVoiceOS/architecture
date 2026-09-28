@@ -476,6 +476,25 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ## OVOS-SESSION-2 — Session Lifecycle and State Ownership
 
+### 2
+
+- `appendix/divergences.md` §5.5 — the V1 removal scope says which half of
+  `ovos.session.sync` the migration keeps. The closing sentence read "the
+  only bridging behaviour code keeps during migration is the connect
+  handshake", which a reader took as an obligation to keep **emitting** a
+  bare sync on connect until `handle_session_sync` also goes, and it cost a
+  review round on `ovos-bus-client#381`. The retained behaviour is
+  receive-side: the handler maps an inbound bare sync onto the
+  `ovos.session.update_default` treatment while it is still subscribed. The
+  three removals are independent and come out in any order.
+- `appendix/divergences.md` §5.5 — the record now states why the emit is not
+  a handshake worth keeping. §2.7 says no handshake, bootstrap request or
+  announcement is needed for co-located processes to agree, and under §5.1 a
+  present inbound field replaces the stored one, so a process that emits on
+  connect overwrites the orchestrator's default store with its own view
+  rather than reading it. Reasoning:
+  `knowledge/wiki/audits/architecture/t6689-bare-sync-bootstrap-ruling.md`.
+
 ### 1
 
 - §3.2, §3.3 — `ovos.utterance.handled` is emitted once per

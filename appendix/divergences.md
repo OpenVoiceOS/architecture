@@ -484,10 +484,23 @@ what exists.
 
 **V1 removal scope.** `handle_session_sync` and its subscription;
 the bare-sync bootstrap on connect; `_broadcast_default_session` and
-its `connect_to_bus` call site. The only bridging behaviour code
-keeps during migration is the connect handshake: a bare sync on
-connect maps to `ovos.session.update_default` until both mechanisms
-are gone.
+its `connect_to_bus` call site. These three come out independently
+and in any order.
+
+The one bridging behaviour code keeps during migration is
+**receive-side**: while `handle_session_sync` is still subscribed, it
+maps an inbound bare sync onto the `ovos.session.update_default`
+treatment, so a message from an older process is still understood.
+Nothing obliges a current process to **send** one: `VERSIONING.md`
+makes emitting a removed mechanism a `MAY` for one cycle, never an
+obligation, so stopping early is conformant. The emit may go
+first, and SESSION-2 §2.7 says why it is not a handshake to preserve:
+a co-located process derives its initial view from the deployment
+configuration, and "no handshake, bootstrap request, or announcement
+is needed to make them agree". The emit also does not read the
+orchestrator's default. Under SESSION-2 §5.1 a present inbound field
+replaces the stored one, so a process that emits on connect
+overwrites the store with its own view.
 
 ### 5.6 Things the specs do *not* change
 
