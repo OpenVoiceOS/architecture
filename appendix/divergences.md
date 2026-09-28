@@ -493,7 +493,10 @@ maps an inbound bare sync onto the `ovos.session.update_default`
 treatment, so a message from an older process is still understood.
 Nothing obliges a current process to **send** one: `VERSIONING.md`
 makes emitting a removed mechanism a `MAY` for one cycle, never an
-obligation, so stopping early is conformant. The emit may go
+obligation, so stopping early is conformant. That rule names this
+record as its worked example of a removal that "keeps only part of
+the mechanism", and requires such a record to state **which part and
+why** — which is what the two paragraphs here do. The emit may go
 first, and SESSION-2 §2.7 says why it is not a handshake to preserve:
 a co-located process derives its initial view from the deployment
 configuration, and "no handshake, bootstrap request, or announcement

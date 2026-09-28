@@ -487,6 +487,10 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   receive-side: the handler maps an inbound bare sync onto the
   `ovos.session.update_default` treatment while it is still subscribed. The
   three removals are independent and come out in any order.
+- `appendix/divergences.md` §5.5 — the record now states **which part and
+  why**, which is what `VERSIONING.md` requires of a removal record that
+  "keeps only part of the mechanism", and this record is the worked example
+  that rule points at by name. It stated neither before.
 - `appendix/divergences.md` §5.5 — the record now states why the emit is not
   a handshake worth keeping. §2.7 says no handshake, bootstrap request or
   announcement is needed for co-located processes to agree, and under §5.1 a
