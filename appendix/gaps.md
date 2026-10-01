@@ -65,6 +65,26 @@
   claims it; the legacy `mycroft.scheduler.*` protocol is
   mapped to it, with divergences and an adoption roadmap, in
   [appendix/scheduler.md](scheduler.md).
+- **The `.list` resource role is undefined.** OVOS-INTENT-2
+  §1 defines seven resource roles by file extension, and
+  `.list` is not one of them. The specification says nothing
+  about a file whose extension is outside the seven: it does
+  not give such a file a role, and it does not make the skill
+  malformed. Skills ship these files today.
+  `ovos-skill-date-time` has 49 `.list` files in 17 language
+  directories, and `ovos-skill-moon-game` has 12 in six.
+  `ovos-workshop` loads them with
+  `SkillResources.load_list_file` (`resource_files.py:831`),
+  and its `ListFile` class (`:559`) is a subclass of
+  `DialogFile` with no changes. So a `.list` file gets the
+  common parsing rules of §3 (strip each line, skip empty
+  lines, skip `#` comment lines) and the caller-side slot
+  substitution of a `.dialog` file, and no clause promises
+  either behaviour. The content in both skills is slot-free
+  phrase sets, which is the shape of the `.voc` role. The gap
+  closes in one of two ways: `.list` becomes an eighth role
+  with its format and its comment rule, or the files move to a
+  defined role. The choice is open.
 
 ### Bridge-specific gaps (OVOS-BRIDGE-1)
 
