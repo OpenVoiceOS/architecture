@@ -147,6 +147,30 @@ specifications.
 
 ### 2
 
+- §5 *Scope discipline* now says that a component removing a duplicate
+  of its own prior output acts inside its user-visible purpose, where
+  the component's own write is what makes the duplicate diverge. The
+  MAY already permitted a component to delete a shared entry it did not
+  set under that test, and it gave two examples, an explicit "forget
+  that" command and end-of-conversation cleanup. Neither is this case.
+  Until the write, the entry carried the same value under a second key,
+  so leaving it serves the superseded value under a name the component
+  answers for. The clause now also states the proof the component owes.
+  The proof is the same value, together with a key its own mechanism
+  derives from the key it is writing, tested at the moment of its own
+  write, which is the last at which both hold. A component that cannot
+  show this is looking at an entry another component set, and the
+  permission does not reach it. The case arrived as the adapt-context
+  view of ovos-bus-client, where a pre-CONTEXT-1 writer stores the bare
+  munged twin of a private entry and the view's own inject then moves
+  the private value. At `origin/dev` 7590020 the twin diverges, two
+  frames carry one registered spelling, and a later removal leaves the
+  pre-inject value serving with nothing logged. The architecture lane's
+  T-7135 report holds the ruling that places this inside the test, and
+  the clause now carries what that report had to argue. No topic and no
+  payload shape changes, and no conformance point moves. The same
+  removals were permitted before.
+
 - §5.3 *Default decay* now lets a client library apply a
   deployer-configured default at write-time, as the orchestrator already
   MAY, and states three things the one-sentence rule left open. Neither

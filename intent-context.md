@@ -620,7 +620,17 @@ gating.
 component's private namespace (keys prefixed with a foreign
 `<id>`). A component MAY delete shared entries it did not set only
 when doing so is part of its user-visible purpose (an explicit
-"forget that" command, end-of-conversation cleanup). Neither
+"forget that" command, end-of-conversation cleanup). Removing a
+duplicate of its own prior output is part of that purpose, where
+the component's own write is what makes the duplicate diverge.
+Until that write the entry carried the same value under a second
+key. Leaving it serves the superseded value under a name the
+component answers for. The component must be able to show the
+entry is that duplicate. The proof is the same value, together
+with a key its own mechanism derives from the key it is writing.
+The moment of its own write is the last at which both hold. A
+component that cannot show this is looking at an entry another
+component set, and the permission does not reach it. Neither
 prohibition requires enforcement by the orchestrator; violations
 produce incorrect behaviour for the violating component's own
 intents.
