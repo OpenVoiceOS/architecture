@@ -14,7 +14,19 @@
   spec, OCP / locale specs as appropriate).
 - **Text normalization of ASR output.** The basis on which a
   typed slot's value is computed (INTENT-1 §5.6). Deferred to
-  its own specification.
+  its own specification. INTENT-1 §2 gives the post-state the
+  text must reach and puts the operation itself out of scope,
+  so the deferred specification writes the rules. One rule is
+  fixed already, by the occurrence rule of INTENT-2 §4.3 and
+  INTENT-3 §4.1: a phrase occurs when its words appear as a
+  contiguous sequence of whole words. A character the
+  normalizer removes must not join two words into one token,
+  or the words stop occurring. A mark that separates two words
+  becomes a space, and runs of whitespace collapse. A mark
+  inside one word (an apostrophe, U+00B7 in `pàl·lid`) can be
+  removed. Removal of a separator gives a two-word utterance
+  the answer §4.3 keeps for one word, where `art` does not
+  occur in `start`.
 - **A machine-checkable conformance corpus** of `template →
   sample set` pairs for INTENT-1 expansion, so expander
   conformance can be verified automatically. A parallel
