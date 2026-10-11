@@ -72,7 +72,7 @@ An intent is defined by one or both of two methods:
 | Method | Defined by | Resources (OVOS-INTENT-2) | Trigger style |
 |--------|-----------|---------------------------|---------------|
 | Keyword intent | Required / optional / one-of / excluded keyword constraints | `.voc` | Presence of keywords, word order free |
-| Template intent | Example sentence templates with named slots | `.intent`, `.entity`, `.blacklist` | Whole phrasings; engine generalizes |
+| Template intent | Example sentence templates with named slots | `.intent`, `.entity`, `.blacklist`, `.required` | Whole phrasings; engine generalizes |
 
 The two methods are **not interoperable**. A keyword intent definition cannot
 be consumed by an engine that implements only template intents, and a template
@@ -299,10 +299,11 @@ requirement.
 ### 5.3 Required slots
 
 A template intent MAY declare **required slots**: a list of slot names that the
-engine **MUST** extract for a match to be valid. The declaration is the
-intent's paired `.required` resource (OVOS-INTENT-2 §4.5), carried to the
-engine on the intent's registration (OVOS-INTENT-4 §6.1). An intent with no
-such declaration has no required slots.
+engine **MUST** extract for a match to be valid. The skill declares them with
+the intent's handler, and the declaration travels on every registration of the
+intent as `required_slots` (OVOS-INTENT-4 §6.1). No locale resource declares
+them: a slot name is an identifier that every language shares, not localized
+text. An intent with no such declaration has no required slots.
 
 The engine **MUST NOT** report a match for a template intent while any of its
 required slots is unbound: the intent does not fire for that utterance. The
@@ -313,10 +314,10 @@ Required slots are an **optional** opt-in guarantee for the handler. When
 present, the handler MAY rely on those slots being populated; when absent,
 the handler must defend against missing slots per §7.1.
 
-A required slot MUST be declared by at least one template in the intent
-(OVOS-INTENT-2 §4.5).
-Declaring a required slot that no template mentions is malformed: the intent
-can never match, and a tool MUST reject the definition at registration time.
+A required slot MUST be declared by at least one template of the intent in
+each language it registers. A `required_slots` entry that no template declares
+is malformed: the intent can never match, and a tool MUST reject the
+definition at registration time (OVOS-INTENT-4 §6.3).
 
 Required slots do not change how templates are authored. A template that does
 not declare a required slot is still valid training data; the engine simply
@@ -358,6 +359,22 @@ entity-level slot-value-exclusion role a `.blacklist` file may also carry
 (OVOS-INTENT-2 §4.3), which is instead scoped to an entity registration
 (OVOS-INTENT-4 §7.1) and applies independently of any intent's kind.
 
+### 5.6 Required keywords — the `.required`
+
+A template intent MAY declare **required keywords** through a paired
+**`.required`** (OVOS-INTENT-2 §4.5), the mirror of the `.blacklist` (§5.5):
+a slot-free keyword set of which at least one keyword **MUST** occur in the
+utterance. The engine **MUST NOT** report a match for the intent when no
+keyword of the set occurs. Like `.blacklist` suppression, this is a hard,
+score-independent rejection, and every engine that scores the intent applies
+it. When present, a `.required` is delivered with the intent's templates as
+part of the same registration (§6.1). An intent with no `.required` has no
+required keywords.
+
+Required keywords are the template-intent counterpart of one **required**
+vocabulary of a keyword intent (§4.2): a vocabulary occurs when at least one
+of its phrasings occurs (§4.1), and the intent matches only when it occurs.
+
 ---
 
 ## 6. Registration and the intent-engine input contract
@@ -374,7 +391,7 @@ A registration carries:
   qualified name the engine identifies the intent by;
 - the **language** (§3);
 - the **definition** — keyword constraints (§4), or templates and any paired
-  `.blacklist` (§5);
+  `.blacklist` and `.required` (§5);
 - a **reference to the handler** — whatever the orchestrator needs to invoke the
   handler later. Its concrete form (an in-process callback, a method, an
   address) is implementation-specific and **not** prescribed here.
@@ -517,7 +534,8 @@ requires is only that a handler not assume a complete slot map.
 - for keyword intents, honour the constraint semantics of §4.2 — never
   reporting a match that violates a required, one-of, or excluded constraint;
 - for template intents, honour the training-data contract of OVOS-INTENT-1 §6,
-  and apply any paired `.blacklist` as match suppression (§5.5);
+  apply any paired `.blacklist` as match suppression (§5.5), and never report
+  a match in which no keyword of a paired `.required` occurs (§5.6);
 - report at most one matched intent per utterance (§6.2);
 - produce the match result of §7 and report it for the orchestrator to route to the
   bound handler.
