@@ -305,7 +305,7 @@ which the vocabulary's captured phrase appears in the match result
 slot-free OVOS-INTENT-1 templates (INTENT-1 §1.1) and **MUST** contain
 at least one entry.
 
-Locale resource files (`.voc`, `.intent`, `.entity`, `.blacklist`;
+Locale resource files (`.voc`, `.intent`, `.entity`, `.blacklist`, `.required`;
 OVOS-INTENT-2) are a producer-side authoring convenience: a skill
 loader reads them and inlines their expanded content into the
 registration payload. File paths never appear on the wire.
@@ -452,11 +452,12 @@ Field reference:
 | `samples` | array of strings | yes | OVOS-INTENT-1 templates with named slots (INTENT-1 §3, §5). |
 | `blacklist` | array of strings | no | Slot-free phrases (INTENT-2 §4.3) whose occurrence suppresses the match (INTENT-3 §5.5). |
 | `required_slots` | array of strings | no | Slot names the engine MUST extract for a match to be valid (INTENT-3 §5.3). |
+| `required_keywords` | array of strings | no | Slot-free keywords (INTENT-2 §4.5), the mirror of `blacklist`: at least one MUST occur in the utterance for a match to be valid (INTENT-3 §5.6). |
 | `slot_types` | object, slot name → type name | no | The typed-slot declarations of the templates in `samples`, derived from their `{type:name}` placeholders (OVOS-INTENT-1 §3.4, §5.6). |
 | `slot_blacklist` | object, slot name → array of strings | no | Per-slot exclusion sets. Membership and the resulting bind-or-leave-unresolved behavior are defined by INTENT-2 §4.3; this field carries that exclusion set for the named slot. |
 
 As in §5.2, an absent list-valued key (`blacklist`,
-`required_slots`) is equivalent to an empty list; an absent
+`required_slots`, `required_keywords`) is equivalent to an empty list; an absent
 `slot_blacklist` is equivalent to an empty object — no exclusions;
 `samples` is the one list a producer must supply, and it must be
 non-empty (§6.3).
@@ -471,10 +472,15 @@ typed slots **MUST** ignore it and read the templates by the degrade rule of
 OVOS-INTENT-1 §3.4; this is the §6.3 unknown-field tolerance applied to a
 named field. An absent `slot_types` is equivalent to an empty object.
 
-A producer derives `required_slots` from the intent's paired `.required`
-resource (INTENT-2 §4.5). Every name it carries **MUST** be a slot declared by
-a template in `samples`. A name no template declares malforms the registration
-(§6.3).
+A producer derives `required_slots` from `samples`: it lists each slot that
+appears in every expanded sample (INTENT-3 §5.3). Every name it carries
+**MUST** be a slot declared by a template in `samples`. A name no template
+declares malforms the registration (§6.3).
+
+A producer derives `required_keywords` from the intent's paired `.required`
+resource (INTENT-2 §4.5): it expands each line (INTENT-1 §4) and sends the
+union of the samples, as it does for `blacklist`. An empty `required_keywords`
+means no keyword requirement, never a requirement that cannot be met.
 
 ### 6.2 Slot sets
 
