@@ -11,7 +11,7 @@ conformance by satisfying the requirements below.
 It serves two roles:
 
 1. The **authoring syntax** skill developers write in `.intent`, `.dialog`,
-   `.entity`, `.voc`, and `.blacklist` files (see §1.1, and the companion
+   `.entity`, `.voc`, `.blacklist`, and `.required` files (see §1.1, and the companion
    *Locale Resource Formats Specification*, OVOS-INTENT-2).
 2. The **wire contract** for training data passed from a skill to an intent
    pipeline plugin (§6).
@@ -58,10 +58,11 @@ text-to-speech (TTS).
 | `.entity` | yes | no | input | — |
 | `.voc` | yes | no | input | — |
 | `.blacklist` | yes | no | input | — |
+| `.required` | yes | no | input | — |
 
-`.entity`, `.voc`, and `.blacklist` are grammatically **identical** — expansion
-only, no named slots. They are the same file format and differ only in the role
-OVOS-INTENT-2 assigns each: three ways a developer encodes a set of
+`.entity`, `.voc`, `.blacklist`, and `.required` are grammatically **identical**
+— expansion only, no named slots. They are the same file format and differ only
+in the role OVOS-INTENT-2 assigns each: four ways a developer encodes a set of
 natural-language phrasings for different components to consume.
 
 ---
@@ -69,7 +70,7 @@ natural-language phrasings for different components to consume.
 ## 2. Input model
 
 Templates whose **direction is input** — `.intent`, `.entity`, `.voc`,
-`.blacklist` — are matched against **ASR (speech recognition) transcription
+`.blacklist`, `.required` — are matched against **ASR (speech recognition) transcription
 output**. This is not a general-purpose text grammar, and the design relies on
 the following input contract.
 
@@ -242,7 +243,7 @@ contains one:
   input, and a `.dialog` uses them structurally too (OVOS-INTENT-2 §4.2). An
   author who means alternatives writes a group, `(a|b)` or `[a|b]`; an author
   who means separate values in a slot-free file (`.entity`, `.voc`,
-  `.blacklist`) writes one per line, because every line of such a file is one
+  `.blacklist`, `.required`) writes one per line, because every line of such a file is one
   template (OVOS-INTENT-2 §3). `[a|b]` is well formed: §3.3 makes it the
   group `(a|b|)` and §3.5 allows alternatives inside an optional group, so
   its branches are `a`, `b` and the empty branch.
@@ -660,7 +661,7 @@ stage of its own between the transformer chains and the first matcher.
 This grammar is the contract for handing intent and entity training data from a
 skill to an intent pipeline plugin. This section covers only the
 **input-direction, engine-trained** resource roles — `.intent`, `.entity`,
-`.voc`, and `.blacklist` (§1.1). `.dialog` is output-direction and
+`.voc`, `.blacklist`, and `.required` (§1.1). `.dialog` is output-direction and
 caller-filled (§5.1); no intent engine trains on it, so it is out of scope
 here. The obligations a `.dialog` consumer takes on are defined in §7's
 Dialog renderer role instead.
@@ -673,7 +674,7 @@ A skill registers an intent or an entity by providing **either**:
 - a **path** to an `.intent` / `.entity` resource file.
 
 A registration carries at least a **name** unique within the registering skill,
-a **language** code, and the samples or file path. Vocabulary (`.voc`) and blacklist (`.blacklist`) data,
+a **language** code, and the samples or file path. Vocabulary (`.voc`), blacklist (`.blacklist`) and required-keyword (`.required`) data,
 where an engine consumes it, are delivered in the same shape — a name, a
 language, and inline samples or a file path.
 
@@ -684,7 +685,7 @@ On receiving training data a conformant engine **MUST**:
 1. Read the file or take the inline samples.
 2. Verify the templates conform to §2–§3 (normalized form, valid tokens).
 3. For `.intent` training data, accept templates with differing slot sets
-   (§5.5); `.entity`, `.voc`, and `.blacklist` data carry no named slots and
+   (§5.5); `.entity`, `.voc`, `.blacklist`, and `.required` data carry no named slots and
    are unaffected by §5.5.
 4. Expand each template to its sample set per §4.
 5. Use the resulting samples as training data; for `.intent` data, treat
@@ -723,7 +724,7 @@ expanded, and filled* — never how an engine *matches*.
   NOT require the map to be present. Matching, generalization, and scoring are deliberately
   unconstrained — an engine MAY add fuzzy matching, neural classification, or
   any scoring strategy. A tool that consumes only **slot-free** input resources
-  (`.voc`, `.entity`, `.blacklist`) — for example a keyword-based engine — does
+  (`.voc`, `.entity`, `.blacklist`, `.required`) — for example a keyword-based engine — does
   not take on this role; it needs only the **Expander** role above.
 
 - **Dialog renderer.** A tool that consumes `.dialog` templates. It MUST read
@@ -742,6 +743,6 @@ No tool may change the meaning of the tokens defined here.
 ## See also
 
 - *Locale Resource Formats Specification* (OVOS-INTENT-2) — the locale folder
-  layout and the six resource roles, five of which — `.intent`, `.entity`,
-  `.voc`, `.dialog`, `.blacklist` — carry templates written in this grammar
+  layout and the seven resource roles, six of which — `.intent`, `.entity`,
+  `.voc`, `.dialog`, `.blacklist`, `.required` — carry templates written in this grammar
   (§1.1).
