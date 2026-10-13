@@ -287,10 +287,22 @@ contains one:
   slots are therefore unambiguous, and `{speed} {speed_unit}` is well formed
   in a `.dialog` file. A tool MUST NOT reject an output-direction template
   because two of its slots are adjacent.
-- **Repeated slot name** — using the same `{name}` more than once in one
-  template (`{x} and {x}`). A template defines each slot name exactly once.
-  The comparison is on the slot **name**, so `{x} and {date:x}` repeats a name
-  and is malformed.
+- **Repeated slot name**, in an **input-direction** template (§2) only —
+  using the same `{name}` more than once in one template (`{x} and {x}`). An
+  input-direction template defines each slot name exactly once: the engine
+  returns one value per slot name (§5.2), and a second occurrence leaves
+  open which span of the utterance that value is. The comparison is on the
+  slot **name**, so `{x} and {date:x}` repeats a name and is malformed.
+
+  The rule does **not** reach an **output-direction** template (`.dialog`).
+  The ambiguity belongs to match-time fill. Under caller-supplied fill (§5.1)
+  the caller gives one value per slot name, and the renderer puts that value
+  in place of every occurrence of the name. `You may roll at most {number}
+  dice. {number} is the limit.` is well formed in a `.dialog` file, and both
+  occurrences take the same value. A repeated name adds nothing to the
+  template's declared slot set (§5.5). A tool MUST NOT reject an
+  output-direction template because it repeats a slot name. The slot-name
+  rule of §3.4 applies to both directions.
 - **Invalid reference name** — a matched `< … >` whose inner text is not a
   valid reference name (§3.7): `<Greeting>`, `<1abc>`, `<two words>`. The
   token is balanced, so it is not an unbalanced metacharacter, and it names
@@ -479,7 +491,8 @@ applies is determined by the file type the slot appears in (§1.1):
   value for **every** slot in the chosen phrase; a phrase with an unfilled slot
   MUST NOT be sent to TTS. This is the output direction, and is the normal way
   to inject **dynamic values** into spoken responses — a weather reading, the
-  current time, a computed result.
+  current time, a computed result. No other source supplies the value: a
+  renderer MUST NOT take it from an `.entity` value set (§5.4).
 
 A slot's `{name}` is identical in both modes; only the filler differs.
 
@@ -512,8 +525,8 @@ still fills with the surface words the user spoke.
 
 ### 5.4 Value sets
 
-A skill MAY supply a set of example values for a named slot through an `.entity`
-file (OVOS-INTENT-2 §4.3) — a file named after the slot it supplies — whose
+A skill MAY supply a set of example values for a named `.intent` slot through
+an `.entity` file (OVOS-INTENT-2 §4.3) — a file named after the slot it supplies — whose
 lines are expansion-only templates (§1.1). An engine MAY use that set to
 *score* a match-time-filled slot — for example, penalizing a value outside the
 set or preferring one within it. An engine MUST NOT treat the set as an

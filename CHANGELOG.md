@@ -250,6 +250,15 @@ specifications.
 token. A template using `<name>` is not valid version-1 syntax — a version-1
 tool does not recognize the token and cannot expand the template.
 
+- §3.6 — the repeated-slot-name rule applies to input-direction templates
+  only. Its reason is a match-time one: the engine returns one value per
+  slot name, so a second occurrence leaves open which span the value is.
+  The caller fills an output-direction template (`.dialog`) with one value
+  per slot name, and the renderer puts it in place of every occurrence. A
+  tool MUST NOT reject a `.dialog` template because it repeats a slot
+  name. The slot-name rule of §3.4 is unchanged for both directions. The
+  change only widens the set of templates a tool accepts, so the version
+  class does not change. INTENT-2 §4.2 and the rationale follow.
 - §3.6 — the adjacent-slot rule now applies to input-direction templates
   only. Its reason is a match-time one: a matcher must recover two values
   from one span of text, and with no literal word between the slots it
@@ -340,6 +349,17 @@ tool does not recognize the token and cannot expand the template.
 ## OVOS-INTENT-2 — Locale Resource Formats
 
 ### 2
+
+- §4.2 — an `.entity` value set never fills a `.dialog` slot. The caller
+  fills every slot, and an implementation **MUST NOT** take a dialog slot
+  value from an `.entity` set; it replaces "an implementation MAY consult
+  one". This narrows what an implementation may do, and a renderer that
+  consulted an `.entity` set must change. The class stays 2, because the
+  specification is already in class 2 and the narrowing adds no new
+  coordinated wire or file change. §4.3, OVOS-INTENT-1 §5.1 and §5.4 and
+  the rationale follow.
+- §4.2 — a `.dialog` phrase MAY use one slot name more than once
+  (OVOS-INTENT-1 §3.6). Each occurrence takes the same value.
 
 - §2.3 (new) makes the resource set of a skill the same in every locale: a
   `(role, base name)` present in one language directory **MUST** be present
