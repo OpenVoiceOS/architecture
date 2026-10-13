@@ -51,16 +51,22 @@ It does **not** define:
   `ovos.ready.state` reply, carrying the current state, never a
   cached first answer.
 
-The orchestrator's readiness is the aggregate of every configured
-pipeline plugin's own warm state (§2.1): ready once every plugin that
-reports one has reported warm, not ready otherwise. A plugin that
-reports no warm state **MUST** be treated as warm by default, so
-readiness never blocks on a signal that does not exist. Process
-status (whether the orchestrator's process itself has started) is a
-necessary floor — an unstarted orchestrator cannot be ready — but is
-not sufficient on its own: a process can be running and answering
-health checks while a pipeline plugin it hosts has boot work left to
-do.
+The orchestrator's readiness is **at least** the aggregate of every
+configured pipeline plugin's own warm state (§2.1): ready once every
+plugin that reports one has reported warm, not ready otherwise. A
+plugin that reports no warm state **MUST** be treated as warm by
+default, so readiness never blocks on a signal that does not exist.
+Process status (whether the orchestrator's process itself has
+started) is a necessary floor — an unstarted orchestrator cannot be
+ready — but is not sufficient on its own: a process can be running
+and answering health checks while a pipeline plugin it hosts has boot
+work left to do.
+
+An implementation **MAY** fold other subsystems it depends on to
+serve a request correctly (audio output, a listener, a GUI surface)
+into the same aggregate, so that `ovos.ready` does not report ready
+while one of those is still unavailable. Pipeline plugins are the
+only subsystem this specification itself requires in the aggregate.
 
 ### 2.1 Per-plugin warm report
 
@@ -88,7 +94,10 @@ for an incoming `ovos.utterance.handle` (§9.1). It **MUST** instead:
 1. speak a short, localized "still starting" response on
    `ovos.utterance.speak` (§9.6), in the utterance's language where a
    translation exists, falling back to the deployment default
-   language otherwise;
+   language otherwise; an implementation that has no localized string
+   at all for the resolved language **MAY** play a non-verbal error
+   sound instead of a dialog in the wrong language -- the choice
+   between the two is implementation-defined;
 2. emit `ovos.utterance.handled` as it would for a normal utterance,
    so a caller does not wait on a terminal event that never arrives;
 3. do none of the pipeline-loop side effects (§8's handler-lifecycle
