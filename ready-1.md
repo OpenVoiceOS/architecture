@@ -72,11 +72,18 @@ A pipeline plugin reports its own cold-to-warm transition to the
 orchestrator once it has finished enough of its own loading to answer
 a `match` (OVOS-PIPELINE-1 §4) call correctly, rather than with a
 stale or partial result; the specific topic is implementation-defined
-between a plugin and its orchestrator. Readiness, once reported, does
-not regress for later work the plugin does on its own schedule (a
-retrain, a configuration change) while still able to answer correctly
-from what it already has: a plugin reports cold once, before its
-first warm report, and warm exactly once after that.
+between a plugin and its orchestrator.
+
+A plugin reports cold at start, and warm when it can answer. It
+**MAY** report cold again at any later time, and **MUST** do so when
+it can no longer answer a `match` call correctly (its model or index
+was discarded, say, or it is serving partial state it cannot vouch
+for); it **MUST** report warm again once it can. Later work that
+leaves the plugin able to answer correctly from what it already has
+(a retrain in the background, a configuration change) is not a loss of
+readiness and **MUST NOT** be reported as one. The orchestrator
+**MUST** treat a cold report at any time as not ready (§2) and stop
+running the pipeline loop until the plugin reports warm again.
 
 ### 2.2 Skill registration
 
@@ -89,12 +96,18 @@ component that loads skills has finished its first load and signalled
 so. The signal is implementation-defined between the orchestrator and
 that component.
 
-Only the **first** load counts. Once the orchestrator has seen the
-first load complete, a skill that is installed, upgraded or reloaded
-later **MUST NOT** make the orchestrator unready: that skill's
-registration is the loading component's own business, and refusing
-every utterance for one skill would cost far more than the one
-utterance it could misroute. An orchestrator that starts after the
+The same test applies here as in §2.1: readiness is lost when the
+orchestrator can no longer answer correctly, not when one part of it
+is busy. Once the orchestrator has seen the first load complete, a
+skill that is installed, upgraded or reloaded later **MUST NOT** make
+the orchestrator unready: the other skills still answer correctly,
+that one skill's registration is the loading component's own
+business, and refusing every utterance for one skill would cost far
+more than the one utterance it could misroute. If the loading
+component reports that it has lost its registrations as a whole (it
+restarted and the skills are gone), that is a loss of readiness and
+the orchestrator **MAY** treat it as one until the first load
+completes again. An orchestrator that starts after the
 loading component has already finished **MUST** be able to learn that
 (by asking it), and **MUST NOT** wait for a signal that was sent
 before it was listening.
@@ -108,12 +121,15 @@ for an incoming `ovos.utterance.handle` (§9.1). It **MUST** instead:
 1. respond with either a short "still starting" dialog on
    `ovos.utterance.speak` (§9.6) or a non-verbal error sound — the
    choice is implementation-defined. If a dialog is spoken, it
-   **MUST** be localized into the session's own language (OVOS-
-   SESSION-1); an implementation that has no such localization
-   **MUST** play the error sound instead, never a dialog in the
-   wrong language;
+   **MUST** be rendered in the language OVOS-SESSION-1 §3.2.3 gives
+   for responses: `output_lang` when the session sets it, otherwise
+   the utterance language resolved at intake (§3.2.7). When there is
+   no such localization for `output_lang`, it **MAY** fall back to
+   the input-side language as §3.2.3 allows. An implementation that
+   has no localization in either **MUST** play the error sound
+   instead, never a dialog in some other language;
 2. carry a stable error identifier, `ovos.ready.not_ready`, in
-   `context.error` on whichever response §1 sent, so a listener on
+   `context.error` on whichever response step 1 sent, so a listener on
    either topic can tell this reply apart from an ordinary one and
    knows why it was declined;
 3. emit `ovos.utterance.handled` as it would for a normal utterance,
@@ -142,7 +158,10 @@ A conforming orchestrator:
 A conforming pipeline plugin that has a warm state (§2.1):
 
 - reports cold before it reports warm for the first time;
-- reports warm exactly once for its first readiness, and never
-  reports cold again afterward;
-- does not answer a `match` call with stale or partial state before
-  its first warm report.
+- reports warm when it can answer a `match` call correctly;
+- reports cold whenever it can no longer answer correctly, and warm
+  again once it can (§2.1);
+- does not report cold for background work that leaves it able to
+  answer correctly;
+- does not answer a `match` call with stale or partial state while
+  its last report is cold, or before its first warm report.
