@@ -2,10 +2,10 @@
 
 **Spec ID:** OVOS-READY-1 · **Version:** 1 · **Status:** Draft
 
-This document defines a **readiness state** the orchestrator tracks
-during boot, and the one requirement it places on the utterance
-lifecycle (OVOS-PIPELINE-1 §6/§9.1): an utterance that arrives before
-the orchestrator is ready **MUST NOT** enter the pipeline loop at all.
+This document defines a **readiness state** the orchestrator tracks,
+and the one requirement it places on the utterance lifecycle
+(OVOS-PIPELINE-1 §6/§9.1): an utterance that arrives while the
+orchestrator is not ready **MUST NOT** enter the pipeline loop at all.
 
 It builds on OVOS-PIPELINE-1 (the utterance lifecycle and pipeline
 plugin abstraction this spec gates) and OVOS-MSG-1 (the envelope and
@@ -14,83 +14,70 @@ session carrier its new topic travels in).
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 **RECOMMENDED** and **MAY** are used as in RFC 2119.
 
-## 1. Motivation
+## 1. Scope
 
-Right after a restart, while plugins are still loading languages,
-training models and warming caches, an utterance can legally reach a
-pipeline whose `match` (OVOS-PIPELINE-1 §4) call exceeds its bound
-(§4.4) purely from contention, not from the utterance being
-unmatchable. The call is declined as designed, and the loop falls
-through to the next pipeline — which, for a mid-conversation
-utterance like a bare "yes", can match an unrelated literal entity
-instead of continuing the conversation it belonged to. Observed in
-production: OpenVoiceOS/ovos-core#1027.
+This specification defines:
 
-Raising the bound only delays the same race; it does not remove the
-window one utterance can land in. Nor is the orchestrator's own
-process status the fix: in the production occurrence above, the
-process had already reported ready for over twenty seconds before the
-misroute, while the pipeline that should have handled the utterance
-was still "compiling in background, serving its last compiled state"
-— on a process that had never finished a first compile, there was no
-prior state to serve. The pipeline plugin itself already knows this
-distinction internally; this specification makes it observable and
-gates the lifecycle on the aggregate of every plugin's own state,
-instead of asking every pipeline's bound to absorb boot contention it
-was never sized for, or conflating process status with plugin
-readiness.
+- the **readiness state** (§2) — `true` once every pipeline plugin
+  that reports one is warm, `false` otherwise;
+- the `ovos.ready` **namespace** (§2) — the state topic and the query
+  a late subscriber uses;
+- the **per-plugin warm report** (§2.1) a pipeline plugin emits;
+- the **lifecycle gate** (§3) — what the orchestrator does with an
+  utterance while not ready.
+
+It does **not** define:
+
+- **how a pipeline plugin decides it is warm** — implementation- and
+  plugin-specific (a language's model finishing its first compile, a
+  cache finishing its first load, or any other plugin-defined
+  condition);
+- **what "ready" means for anything other than the pipeline loop** —
+  a deployment MAY use `ovos.ready` for other gating, but this
+  specification only constrains utterance handling.
 
 ## 2. The `ovos.ready` namespace
 
-- `ovos.ready.state` (bus message, no payload required) — the
-  orchestrator's current readiness, emitted on every transition.
-  `context.ready: bool` carries the state so a late subscriber does
-  not need a second round-trip to learn it.
-- `ovos.ready.query` / `ovos.ready.state` reply — a late subscriber
-  asks and gets exactly one reply, the same way `mycroft.ready` (now
-  superseded by this state for the orchestrator's own gating; a
-  producer **MAY** keep emitting it per VERSIONING.md's one-cycle
-  removal window) could not be queried after the fact.
+- `ovos.ready.state` (bus message) — the orchestrator's current
+  readiness. `context.ready: bool` carries the state. An
+  implementation **MUST** emit this message with `context.ready:
+  false` at orchestrator start, and **MUST** emit it again, with the
+  new value, on every transition between `false` and `true` in
+  either direction — not only the first time it becomes ready.
+  Readiness is not a one-shot milestone: an orchestrator **MAY**
+  become unready again after reporting ready, and **MUST** announce
+  that too.
+- `ovos.ready.query` — a late subscriber asks and gets exactly one
+  `ovos.ready.state` reply, carrying the current state, never a
+  cached first answer.
 
-An implementation **MUST** emit `ovos.ready.state` with
-`context.ready: false` at orchestrator start, and **MUST** emit it
-again, with the new value, on every transition between `false` and
-`true` in either direction — not only the first time it becomes
-ready. "Ready" is not a one-shot milestone: a skill install, a locale
-change, a plugin reload or a dependency outage **MAY** make the
-orchestrator unready again after it was ready, and a consumer that
-only ever saw one `true` and never looked again would keep routing
-into a pipeline that has gone cold. `ovos.ready.query` **MUST** answer
-with the current state, not a cached first answer.
+The orchestrator's readiness is the aggregate of every configured
+pipeline plugin's own warm state (§2.1): ready once every plugin that
+reports one has reported warm, not ready otherwise. A plugin that
+reports no warm state **MUST** be treated as warm by default, so
+readiness never blocks on a signal that does not exist. Process
+status (whether the orchestrator's process itself has started) is a
+necessary floor — an unstarted orchestrator cannot be ready — but is
+not sufficient on its own: a process can be running and answering
+health checks while a pipeline plugin it hosts has boot work left to
+do.
 
-"Ready" is **not** the orchestrator's own process status: a process
-can legitimately be alive and answering health checks while a
-pipeline plugin it hosts is still mid-boot. Process status is a floor
-(an orchestrator that has not started cannot be ready), not the
-signal, because a plugin's own loading work routinely outlives it —
-see §1's production example, where the orchestrator's process status
-was already positive for the entire window the bug occurred in.
+### 2.1 Per-plugin warm report
 
-`ovos.ready`'s `context.ready` is instead the aggregate of every
-configured pipeline plugin's own **warm** state: a plugin that has
-language- or model-dependent boot work (training, prototype loading,
-cache warming) reports its own transition from cold to warm on the
-bus (a per-plugin topic is implementation-defined; the orchestrator
-is the one required subscriber). The orchestrator is ready once every
-plugin that reports a warm state has reported warm, for the
-deployment's configured language set. A plugin that exposes no such
-signal **MUST** be treated as warm by default — this never blocks
-readiness on a signal that cannot exist.
-
-A plugin serving its last-known state while still re-training for a
-configuration change it has not finished (common for an incremental
-retrain) is warm: it has a genuine prior state to serve. The same
-behaviour on a plugin that has **never** finished its first load is
-not the same thing — there is no prior state, so "serving the last
-compiled state" is serving nothing, or a stale placeholder. A
-pipeline **MUST** decline (OVOS-PIPELINE-1 §4.4's bounded-match
-timeout, or an explicit no-match) rather than serve partial or stale
-state while it has not yet reported warm for the first time.
+A pipeline plugin with boot work that can leave it serving a stale or
+partial answer (a language- or model-dependent compile, a cache that
+has not finished its first load) reports its own cold-to-warm
+transition to the orchestrator; the specific topic is
+implementation-defined between a plugin and its orchestrator. A
+plugin that has reported warm once **MUST NOT** report cold again
+merely because it has later boot work to redo (an incremental
+retrain, a configuration change): it already has a genuine prior
+state to serve, which is the condition this report exists to
+distinguish FROM. A plugin that has never reported warm has no prior
+state at all, and **MUST NOT** answer a `match` (OVOS-PIPELINE-1 §4)
+call with a stale or partial result in that state — it **MUST**
+decline instead (§4.4's bounded-match timeout, or an explicit
+no-match).
 
 ## 3. Gating the utterance lifecycle
 
@@ -122,9 +109,10 @@ A conforming orchestrator:
 - resumes ordinary pipeline matching the moment it reports ready,
   with no residual gating once `context.ready` is `true`.
 
----
+A conforming pipeline plugin that has a warm state (§2.1):
 
-Proposed alongside a reference implementation in ovos-core (a boot-
-state check early in `handle_utterance`, gated on this same signal)
-and measured on a production 11-language hub: see the linked PR/issue
-discussion.
+- reports cold before it reports warm for the first time;
+- reports warm exactly once for its first readiness, and never
+  reports cold again afterward;
+- does not answer a `match` call with stale or partial state before
+  its first warm report.
