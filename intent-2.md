@@ -257,10 +257,14 @@ not ASR input, so it MAY contain mixed case and punctuation.
 §5.1). The caller MUST fill **every** slot in the chosen phrase; a phrase with
 an unfilled slot MUST NOT be sent to TTS. Every phrase in the file MUST declare
 the **same set of named slots** (OVOS-INTENT-1 §5.5), so the caller supplies the
-same values whichever phrase is chosen. This is the normal way to inject
+same values whichever phrase is chosen. A phrase MAY use one slot name more than
+once, and each occurrence takes the same value (OVOS-INTENT-1 §3.6). This is
+the normal way to inject
 **dynamic values** into a spoken response — a weather reading, the current time,
-a computed result. An `.entity` value set is normally *not* involved in filling
-a dialog slot, though an implementation MAY consult one.
+a computed result. The caller fills every slot of a dialog phrase. An
+implementation **MUST NOT** take a dialog slot value from an `.entity` value
+set, because `.entity` serves `.intent` files only. A slot the caller leaves
+unfilled makes the phrase unrenderable, and it **MUST NOT** be sent to TTS.
 
 **Limitation.** A `.dialog` phrase uses the metacharacters `( ) [ ] { } |`
 structurally and therefore cannot contain any of them as literal spoken text.
@@ -306,7 +310,8 @@ with the expanded phrase set:
 
 How an `.entity` or `.voc` phrase set is *used* — slot constraint, keyword
 test — is engine or skill policy, consistent with matching behaviour being out
-of scope for these specifications.
+of scope for these specifications. An `.entity` set never fills a `.dialog`
+slot (§4.2).
 
 Every untyped `{slot}` an intent declares **SHOULD** have an `.entity` file of
 the same base name in every locale of the skill (§2.3). A typed slot

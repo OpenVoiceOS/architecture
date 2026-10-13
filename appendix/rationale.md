@@ -67,6 +67,23 @@ the normative sections.
   because the denylist backstop it sits beside is already a MUST.
   `.dialog` keeps strict slot consistency: caller-supplied fill
   has no matched template to take a slot set from.
+- **A dialog may repeat a slot name** (INTENT-1 §3.6, §5.1). The
+  three template checks that exist for matching, the slot-only
+  template, adjacent slots and a repeated slot name, protect a
+  matcher that must recover each value from a span of speech. A
+  dialog is never matched: the caller gives one value per slot
+  name and the renderer writes that value in place of every
+  occurrence. A dialog that states a value twice, such as "You may
+  roll at most {number} dice. {number} is the limit.", is
+  therefore unambiguous, and forbidding it would force an author to
+  invent a second slot name that the caller must fill with the same
+  value. The input direction keeps the rule, because the engine
+  returns one value per name.
+- **An `.entity` never fills a dialog slot** (INTENT-1 §5.1, §5.4,
+  INTENT-2 §4.2). An `.entity` set lists example values that shape
+  how an intent is trained and matched; a dialog value is a fact
+  the skill computed, so a random entity pick would put a made-up
+  value in a spoken answer.
 - **`.blacklist` vs `excluded`** (INTENT-3 §4.2, §5.4). The
   template grammar is purely generative — it cannot express
   "not this". Template intents therefore need a separate
