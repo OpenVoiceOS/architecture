@@ -26,15 +26,9 @@ This specification defines:
 - the **lifecycle gate** (§3) — what the orchestrator does with an
   utterance while not ready.
 
-It does **not** define:
-
-- **how a pipeline plugin decides it is warm** — implementation- and
-  plugin-specific (a language's model finishing its first compile, a
-  cache finishing its first load, or any other plugin-defined
-  condition);
-- **what "ready" means for anything other than the pipeline loop** —
-  a deployment MAY use `ovos.ready` for other gating, but this
-  specification only constrains utterance handling.
+It does **not** define **what "ready" means for anything other than
+the pipeline loop** — a deployment MAY use `ovos.ready` for other
+gating, but this specification only constrains utterance handling.
 
 ## 2. The `ovos.ready` namespace
 
@@ -70,20 +64,15 @@ only subsystem this specification itself requires in the aggregate.
 
 ### 2.1 Per-plugin warm report
 
-A pipeline plugin with boot work that can leave it serving a stale or
-partial answer (a language- or model-dependent compile, a cache that
-has not finished its first load) reports its own cold-to-warm
-transition to the orchestrator; the specific topic is
-implementation-defined between a plugin and its orchestrator. A
-plugin that has reported warm once **MUST NOT** report cold again
-merely because it has later boot work to redo (an incremental
-retrain, a configuration change): it already has a genuine prior
-state to serve, which is the condition this report exists to
-distinguish FROM. A plugin that has never reported warm has no prior
-state at all, and **MUST NOT** answer a `match` (OVOS-PIPELINE-1 §4)
-call with a stale or partial result in that state — it **MUST**
-decline instead (§4.4's bounded-match timeout, or an explicit
-no-match).
+A pipeline plugin reports its own cold-to-warm transition to the
+orchestrator once it has finished enough of its own loading to answer
+a `match` (OVOS-PIPELINE-1 §4) call correctly, rather than with a
+stale or partial result; the specific topic is implementation-defined
+between a plugin and its orchestrator. Readiness, once reported, does
+not regress for later work the plugin does on its own schedule (a
+retrain, a configuration change) while still able to answer correctly
+from what it already has: a plugin reports cold once, before its
+first warm report, and warm exactly once after that.
 
 ## 3. Gating the utterance lifecycle
 
@@ -91,16 +80,20 @@ While `ovos.ready.state`'s `context.ready` is `false`, the
 orchestrator **MUST NOT** run the pipeline loop (OVOS-PIPELINE-1 §6)
 for an incoming `ovos.utterance.handle` (§9.1). It **MUST** instead:
 
-1. speak a short, localized "still starting" response on
-   `ovos.utterance.speak` (§9.6), in the utterance's language where a
-   translation exists, falling back to the deployment default
-   language otherwise; an implementation that has no localized string
-   at all for the resolved language **MAY** play a non-verbal error
-   sound instead of a dialog in the wrong language -- the choice
-   between the two is implementation-defined;
-2. emit `ovos.utterance.handled` as it would for a normal utterance,
+1. respond with either a short "still starting" dialog on
+   `ovos.utterance.speak` (§9.6) or a non-verbal error sound — the
+   choice is implementation-defined. If a dialog is spoken, it
+   **MUST** be localized into the session's own language (OVOS-
+   SESSION-1); an implementation that has no such localization
+   **MUST** play the error sound instead, never a dialog in the
+   wrong language;
+2. carry a stable error identifier, `ovos.ready.not_ready`, in
+   `context.error` on whichever response §1 sent, so a listener on
+   either topic can tell this reply apart from an ordinary one and
+   knows why it was declined;
+3. emit `ovos.utterance.handled` as it would for a normal utterance,
    so a caller does not wait on a terminal event that never arrives;
-3. do none of the pipeline-loop side effects (§8's handler-lifecycle
+4. do none of the pipeline-loop side effects (§8's handler-lifecycle
    trio, `ovos.intent.matched` / `.unmatched`): none of them ran.
 
 This is a **decline-with-dialog**, not a silent drop and not an
