@@ -27,10 +27,18 @@ instead of continuing the conversation it belonged to. Observed in
 production: OpenVoiceOS/ovos-core#1027.
 
 Raising the bound only delays the same race; it does not remove the
-window one utterance can land in. The orchestrator already knows
-whether it is still loading. This specification makes that knowledge
-observable and gates the lifecycle on it, instead of asking every
-pipeline's bound to absorb boot contention it was never sized for.
+window one utterance can land in. Nor is the orchestrator's own
+process status the fix: in the production occurrence above, the
+process had already reported ready for over twenty seconds before the
+misroute, while the pipeline that should have handled the utterance
+was still "compiling in background, serving its last compiled state"
+— on a process that had never finished a first compile, there was no
+prior state to serve. The pipeline plugin itself already knows this
+distinction internally; this specification makes it observable and
+gates the lifecycle on the aggregate of every plugin's own state,
+instead of asking every pipeline's bound to absorb boot contention it
+was never sized for, or conflating process status with plugin
+readiness.
 
 ## 2. The `ovos.ready` namespace
 
@@ -45,19 +53,44 @@ pipeline's bound to absorb boot contention it was never sized for.
   removal window) could not be queried after the fact.
 
 An implementation **MUST** emit `ovos.ready.state` with
-`context.ready: false` at orchestrator start, and with
-`context.ready: true` exactly once, when it considers itself ready
-to match utterances. It **MAY** become unready again later (a
-plugin reload, a dependency outage) and **MUST** emit the state
-change if it does.
+`context.ready: false` at orchestrator start, and **MUST** emit it
+again, with the new value, on every transition between `false` and
+`true` in either direction — not only the first time it becomes
+ready. "Ready" is not a one-shot milestone: a skill install, a locale
+change, a plugin reload or a dependency outage **MAY** make the
+orchestrator unready again after it was ready, and a consumer that
+only ever saw one `true` and never looked again would keep routing
+into a pipeline that has gone cold. `ovos.ready.query` **MUST** answer
+with the current state, not a cached first answer.
 
-"Ready" is implementation-defined per deployment: at minimum it
-**MUST NOT** report ready before every configured pipeline plugin has
-completed its own first-load registration. A plugin whose boot work
-is inherently per-language (training, prototype loading) **MAY**
-report its own partial readiness; the orchestrator's aggregate state
-is not ready until none of its plugins are still in that partial
-state for the deployment's configured language set.
+"Ready" is **not** the orchestrator's own process status: a process
+can legitimately be alive and answering health checks while a
+pipeline plugin it hosts is still mid-boot. Process status is a floor
+(an orchestrator that has not started cannot be ready), not the
+signal, because a plugin's own loading work routinely outlives it —
+see §1's production example, where the orchestrator's process status
+was already positive for the entire window the bug occurred in.
+
+`ovos.ready`'s `context.ready` is instead the aggregate of every
+configured pipeline plugin's own **warm** state: a plugin that has
+language- or model-dependent boot work (training, prototype loading,
+cache warming) reports its own transition from cold to warm on the
+bus (a per-plugin topic is implementation-defined; the orchestrator
+is the one required subscriber). The orchestrator is ready once every
+plugin that reports a warm state has reported warm, for the
+deployment's configured language set. A plugin that exposes no such
+signal **MUST** be treated as warm by default — this never blocks
+readiness on a signal that cannot exist.
+
+A plugin serving its last-known state while still re-training for a
+configuration change it has not finished (common for an incremental
+retrain) is warm: it has a genuine prior state to serve. The same
+behaviour on a plugin that has **never** finished its first load is
+not the same thing — there is no prior state, so "serving the last
+compiled state" is serving nothing, or a stale placeholder. A
+pipeline **MUST** decline (OVOS-PIPELINE-1 §4.4's bounded-match
+timeout, or an explicit no-match) rather than serve partial or stale
+state while it has not yet reported warm for the first time.
 
 ## 3. Gating the utterance lifecycle
 
