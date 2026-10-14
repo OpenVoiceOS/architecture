@@ -2,10 +2,10 @@
 
 **Spec ID:** OVOS-READY-1 · **Version:** 1 · **Status:** Draft
 
-This document defines a **readiness state** the orchestrator tracks,
-and the one requirement it places on the utterance lifecycle
-(OVOS-PIPELINE-1 §6/§9.1): an utterance that arrives while the
-orchestrator is not ready **MUST NOT** enter the pipeline loop at all.
+This document defines when the orchestrator is ready, and the one
+requirement it places on the utterance lifecycle (OVOS-PIPELINE-1
+§6/§9.1): an utterance that arrives before the orchestrator can answer
+**MUST NOT** enter the pipeline loop at all.
 
 It builds on OVOS-PIPELINE-1 (the utterance lifecycle and pipeline
 plugin abstraction this spec gates) and OVOS-MSG-1 (the envelope and
@@ -18,104 +18,63 @@ The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT**,
 
 This specification defines:
 
-- the **readiness state** (§2) — `true` once every pipeline plugin
-  that reports one is warm and the skills the orchestrator routes to
-  are registered, `false` otherwise;
-- the `ovos.ready` **namespace** (§2) — the state topic and the query
-  a late subscriber uses;
-- the **per-plugin warm report** (§2.1) a pipeline plugin emits;
-- the **lifecycle gate** (§3) — what the orchestrator does with an
-  utterance while not ready.
+- what **ready** means for the orchestrator (§2): its process status
+  reaches `READY` once every configured pipeline plugin is loaded;
+- how a pipeline plugin that loads in the background says so (§2.1);
+- the skills condition on answering (§2.2);
+- the **lifecycle gate** (§3), what the orchestrator does with an
+  utterance until it can answer.
 
-It does **not** define **what "ready" means for anything other than
-the pipeline loop** — a deployment MAY use `ovos.ready` for other
-gating, but this specification only constrains utterance handling.
+## 2. Ready
 
-## 2. The `ovos.ready` namespace
+The orchestrator's process status (`ProcessState.READY`, queried with
+`mycroft.<name>.is_ready`) **MUST NOT** reach `READY` until every
+configured pipeline plugin is loaded. A pipeline is either loading or
+loaded; there is no third state. The status is the readiness signal:
+this specification adds no topic of its own for it.
 
-- `ovos.ready.state` (bus message) — the orchestrator's current
-  readiness. `context.ready: bool` carries the state. An
-  implementation **MUST** emit this message with `context.ready:
-  false` at orchestrator start, and **MUST** emit it again, with the
-  new value, on every transition between `false` and `true` in
-  either direction — not only the first time it becomes ready.
-  Readiness is not a one-shot milestone: an orchestrator **MAY**
-  become unready again after reporting ready, and **MUST** announce
-  that too.
-- `ovos.ready.query` — a late subscriber asks and gets exactly one
-  `ovos.ready.state` reply, carrying the current state, never a
-  cached first answer.
+A component that cannot answer yet **MUST NOT** report `READY` to
+make another component's start-up simpler. In particular, the work a
+pipeline needs from skills (compiling their registrations) cannot
+count as the pipeline loading before `READY`, because skills are not
+started until the orchestrator is `READY`; that work belongs to §2.2.
 
-The orchestrator's readiness is **at least** the aggregate of two
-things: every configured pipeline plugin's own warm state (§2.1), and
-the registration of the skills it routes to (§2.2). It is ready once
-every plugin that reports a warm state has reported warm and the
-skills are registered, not ready otherwise. A plugin that reports no
-warm state **MUST** be treated as warm by default, so readiness never
-blocks on a signal that does not exist.
-Process status (whether the orchestrator's process itself has
-started) is a necessary floor — an unstarted orchestrator cannot be
-ready — but is not sufficient on its own: a process can be running
-and answering health checks while a pipeline plugin it hosts has boot
-work left to do.
+### 2.1 Pipeline loading
 
-An implementation **MAY** fold other subsystems it depends on to
-serve a request correctly (audio output, a listener, a GUI surface)
-into the same aggregate, so that `ovos.ready` does not report ready
-while one of those is still unavailable. Pipeline plugins and skill
-registration are the only subsystems this specification itself
-requires in the aggregate.
+A pipeline plugin that finishes loading after its constructor returns
+(a model, an index, a compile) announces `ovos.pipeline.loading`
+(`data.pipeline_id`) when that work begins and `ovos.pipeline.loaded`
+(`data.pipeline_id`) when it ends. The orchestrator **MUST** hold
+`READY` back while a pipeline announced before the plugin load step
+ended is still loading. A plugin that loads synchronously announces
+nothing and counts as loaded. A plugin **MUST** announce `loaded`
+when its work ends for any reason, failure included: a failed load is
+not a load in progress.
 
-### 2.1 Per-plugin warm report
+A plugin that announces `loading` for work caused by a registration
+(retraining after a skill registered) is not holding back `READY`
+with it, because that announcement arrives after `READY`; it is read
+by §2.2.
 
-A pipeline plugin reports its own cold-to-warm transition to the
-orchestrator once it has finished enough of its own loading to answer
-a `match` (OVOS-PIPELINE-1 §4) call correctly, rather than with a
-stale or partial result; the specific topic is implementation-defined
-between a plugin and its orchestrator.
+### 2.2 Skills
 
-A plugin reports cold at start, and warm when it can answer. It
-**MAY** report cold again at any later time, and **MUST** do so when
-it can no longer answer a `match` call correctly (its model or index
-was discarded, say, or it is serving partial state it cannot vouch
-for); it **MUST** report warm again once it can. Later work that
-leaves the plugin able to answer correctly from what it already has
-(a retrain in the background, a configuration change) is not a loss of
-readiness and **MUST NOT** be reported as one. The orchestrator
-**MUST** treat a cold report at any time as not ready (§2) and stop
-running the pipeline loop until the plugin reports warm again.
+An utterance that belongs to a skill which has not registered yet, or
+whose registration a pipeline has not absorbed yet, is matched to
+whatever else is registered. The orchestrator therefore **MUST NOT**
+answer utterances until the component that loads skills has finished
+its first load (signalled by `mycroft.skills.initialized`, or by the
+skills status being `READY`) and no pipeline is loading.
 
-### 2.2 Skill registration
-
-Warm pipelines are not enough. A pipeline can answer correctly from
-what is registered, and an utterance that belongs to a skill which has
-not registered yet is matched to whatever else is registered, or to
-nothing. The orchestrator therefore **MUST NOT** report ready until
-the skills it will route to have been registered: that is, until the
-component that loads skills has finished its first load and signalled
-so. The signal is implementation-defined between the orchestrator and
-that component.
-
-The same test applies here as in §2.1: readiness is lost when the
-orchestrator can no longer answer correctly, not when one part of it
-is busy. Once the orchestrator has seen the first load complete, a
-skill that is installed, upgraded or reloaded later **MUST NOT** make
-the orchestrator unready: the other skills still answer correctly,
-that one skill's registration is the loading component's own
-business, and refusing every utterance for one skill would cost far
-more than the one utterance it could misroute. If the loading
-component reports that it has lost its registrations as a whole (it
-restarted and the skills are gone), that is a loss of readiness and
-the orchestrator **MAY** treat it as one until the first load
-completes again. An orchestrator that starts after the
-loading component has already finished **MUST** be able to learn that
-(by asking it), and **MUST NOT** wait for a signal that was sent
-before it was listening.
+This holds once, at first start. A skill installed, upgraded or
+reloaded later, or a pipeline that retrains for it, **MUST NOT** stop
+the orchestrator answering. An orchestrator that starts after the
+skill component finished **MUST** ask it (`mycroft.skills.is_ready`)
+rather than wait for a signal sent before it was listening. A
+deployment with no skill component MAY turn this condition off.
 
 ## 3. Gating the utterance lifecycle
 
-While `ovos.ready.state`'s `context.ready` is `false`, the
-orchestrator **MUST NOT** run the pipeline loop (OVOS-PIPELINE-1 §6)
+Until the orchestrator is `READY` and §2.2 is satisfied, it **MUST NOT** run the pipeline loop (OVOS-PIPELINE-1 §6)
 for an incoming `ovos.utterance.handle` (§9.1). It **MUST** instead:
 
 1. respond with either a short "still starting" dialog on
@@ -145,23 +104,15 @@ rather than guessing from silence or risking a wrong match.
 
 A conforming orchestrator:
 
-- emits `ovos.ready.state` on every readiness transition (§2);
-- answers `ovos.ready.query` with the current state;
-- does not report ready before the first skill load is complete, and
-  does not report unready again for a later skill load or reload
-  (§2.2);
-- never runs the pipeline loop while unready, substituting the
+- does not report `READY` while a pipeline plugin it loads is loading
+  (§2, §2.1);
+- does not answer before the first skill load is complete and no
+  pipeline is loading, and does not stop answering for a later skill
+  load or retrain (§2.2);
+- never runs the pipeline loop before then, substituting the
   decline-with-dialog of §3;
-- resumes ordinary pipeline matching the moment it reports ready,
-  with no residual gating once `context.ready` is `true`.
+- resumes ordinary pipeline matching the moment it can answer.
 
-A conforming pipeline plugin that has a warm state (§2.1):
-
-- reports cold before it reports warm for the first time;
-- reports warm when it can answer a `match` call correctly;
-- reports cold whenever it can no longer answer correctly, and warm
-  again once it can (§2.1);
-- does not report cold for background work that leaves it able to
-  answer correctly;
-- does not answer a `match` call with stale or partial state while
-  its last report is cold, or before its first warm report.
+A conforming pipeline plugin that loads in the background announces
+`ovos.pipeline.loading` and `ovos.pipeline.loaded` (§2.1), and does
+not answer a `match` call with partial state while loading.
