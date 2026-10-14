@@ -50,14 +50,15 @@ a listener, a GUI surface) are ready too.
 
 An utterance that belongs to a skill that has not registered yet is
 matched to whatever else is registered, or to nothing. The orchestrator
-therefore **MUST NOT** be ready before the component that loads skills
-has finished its first load. How the orchestrator learns this is
-implementation-defined, but it **MUST** be able to learn it when it
-starts after the first load already finished, rather than wait for a
-notification sent before it was listening.
+therefore **MUST NOT** be ready until every skill the component that
+loads skills started with has finished loading. How the orchestrator
+learns this is implementation-defined, but it **MUST** be able to
+learn it when it starts after that load already finished, rather than
+wait for a notification sent before it was listening.
 
-Only the first load counts. A skill installed, upgraded or reloaded
-afterwards **MUST NOT** make the orchestrator unready.
+This applies to the initial set of skills only. A skill installed,
+upgraded or reloaded afterwards **MUST NOT** make the orchestrator
+unready.
 
 A deployment with no component that loads skills has nothing to wait
 for here.
@@ -93,8 +94,8 @@ than guessing from silence or risking a wrong match.
 
 A conforming orchestrator:
 
-- is not ready while a configured pipeline is loading or before the
-  first skill load is complete (§2, §2.1);
+- is not ready while a configured pipeline is loading or while any
+  of the initial skills is still loading (§2, §2.1);
 - once ready, stays ready (§2);
 - never runs the pipeline loop while not ready, substituting the
   decline of §3;
