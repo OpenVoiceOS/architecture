@@ -27,17 +27,14 @@ This specification defines:
 
 ## 2. Ready
 
-The orchestrator's process status (`ProcessState.READY`, queried with
-`mycroft.<name>.is_ready`) **MUST NOT** reach `READY` until every
+The orchestrator's process status (`ProcessState.READY`) **MUST NOT** reach `READY` until every
 configured pipeline plugin is loaded. A pipeline is either loading or
 loaded; there is no third state. The status is the readiness signal:
 this specification adds no topic of its own for it.
 
-A component that cannot answer yet **MUST NOT** report `READY` to
-make another component's start-up simpler. In particular, the work a
-pipeline needs from skills (compiling their registrations) cannot
-count as the pipeline loading before `READY`, because skills are not
-started until the orchestrator is `READY`; that work belongs to §2.2.
+Work that depends on skills, such as compiling their registrations,
+is not part of loading: skills start only after the orchestrator is
+`READY`. It is covered by §2.2.
 
 ### 2.1 Pipeline loading
 
@@ -51,19 +48,14 @@ nothing and counts as loaded. A plugin **MUST** announce `loaded`
 when its work ends for any reason, failure included: a failed load is
 not a load in progress.
 
-A plugin that announces `loading` for work caused by a registration
-(retraining after a skill registered) is not holding back `READY`
-with it, because that announcement arrives after `READY`; it is read
-by §2.2.
-
 ### 2.2 Skills
 
 An utterance that belongs to a skill which has not registered yet, or
 whose registration a pipeline has not absorbed yet, is matched to
 whatever else is registered. The orchestrator therefore **MUST NOT**
 answer utterances until the component that loads skills has finished
-its first load (signalled by `mycroft.skills.initialized`, or by the
-skills status being `READY`) and no pipeline is loading.
+its first load (signalled by the skill component, for example
+`mycroft.skills.initialized`) and no pipeline is loading.
 
 This holds once, at first start. A skill installed, upgraded or
 reloaded later, or a pipeline that retrains for it, **MUST NOT** stop
