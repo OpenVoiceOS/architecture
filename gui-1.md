@@ -258,9 +258,32 @@ criterion (§3.1).
 |----------|------|---------|
 | `SYSTEM_clock` | — | A self-updating clock. Requires no session data; the backend derives the time from the device clock. |
 | `SYSTEM_timer` | `end_time` (number, Unix seconds, *req*), `label` (string), `count_up` (boolean) | A self-updating timer. `count_up` false counts down to `end_time`; true counts up from it. The backend derives the displayed value from the device clock — no polling by the producer. |
-| `SYSTEM_weather` | `current_temp` (number, *req*), `min_temp` (number), `max_temp` (number), `condition` (string, *req*), `icon` (string), `location` (string) | A weather summary card. |
+| `SYSTEM_weather` | `current_temp` (number, *req*), `min_temp` (number), `max_temp` (number), `condition` (string, *req*), `condition_code` (string, enumerated below), `icon` (string), `location` (string), `forecast` (array of `{time (number, Unix seconds, req), min_temp, max_temp, condition_code}`) | A weather summary card. `condition` is display text; `condition_code` is the key a backend styles the condition from. `icon` is an optional producer-supplied override image (§3.3). `forecast` lists later periods in time order, each `time` the start of its period; a backend renders the entries it can show or ignores the key (§6.5). |
 | `SYSTEM_map` | `latitude` (number, WGS-84, *req*), `longitude` (number, WGS-84, *req*), `zoom` (number, 1–20), `label` (string) | A geographic location; the backend chooses the map provider. |
 | `SYSTEM_face` | `sleeping` (boolean) | An avatar face. `sleeping` true is the resting/closed-eyes state, false the awake state. For backends that render a character rather than a screen layout. |
+
+`condition` is free, localised text and `icon` is an image the
+producer chose, so neither lets a backend style a condition once for
+every application as §3.1 intends; `condition_code` is a closed set
+for that purpose. Its values:
+
+| `condition_code` | Meaning |
+|------------------|---------|
+| `clear` | Clear sky. |
+| `partly_cloudy` | Sun and cloud. |
+| `cloudy` | Overcast. |
+| `fog` | Fog or mist. |
+| `drizzle` | Light, fine rain. |
+| `rain` | Rain or showers. |
+| `snow` | Snow. |
+| `sleet` | Sleet, freezing rain, or hail. |
+| `thunder` | Thunderstorm. |
+| `wind` | Strong wind with no other significant condition. |
+
+A producer **MUST NOT** send a `condition_code` outside this list; a
+backend treats an unlisted value as absent. When `condition_code` is
+present a backend **SHOULD** style the condition from it, and
+**MAY** show `icon` in place of its own styling.
 
 #### Interactive companions — reserved names
 
@@ -526,6 +549,7 @@ an indicator) is written against this set.
 | thinking ended | `ovos.intent.unmatched` | OVOS-PIPELINE-1 §9.3 |
 | thinking ended | `ovos.utterance.handled` | OVOS-PIPELINE-1 §9.5 |
 | a response is ready | `ovos.utterance.speak` | OVOS-PIPELINE-1 §9.6 |
+| mouth shapes for speech | `ovos.audio.output.visemes` | OVOS-AUDIO-1 §5.4 |
 | speaking began | `ovos.audio.output.started` | OVOS-AUDIO-1 §5.1 |
 | speaking ended | `ovos.audio.output.ended` | OVOS-AUDIO-1 §5.2 |
 | sleep | `ovos.listener.sleep` | OVOS-AUDIO-IN-1 §6.3 |
@@ -713,6 +737,29 @@ property of the surface, not of any application.
 
 This keeps applications free of display ownership: they declare intents
 (§2), and the surface decides how to rest.
+
+### 6.9.1 Ambient data
+
+A resting display commonly shows the time, the weather, and a count
+of pending notifications. The time needs no producer: a backend reads
+the device clock, as for `SYSTEM_clock` (§3.4). Weather and the
+notification count do. So that every adapter draws the same resting
+state from the same data, and no application owns it, the GUI service
+**SHOULD** keep the most recent Message on each topic below and
+deliver it to every adapter as a status event (§5.3) when it arrives.
+
+| Topic | `data` | Meaning |
+|-------|--------|---------|
+| `gui.ambient.weather` | the `SYSTEM_weather` keys (§3.4) | Current conditions for the device's location. |
+| `gui.ambient.notifications` | `count` (number, *req*) | The number of pending notifications; `0` means none. |
+
+Any component that holds the data **MAY** emit these topics — a
+weather application on its own schedule, a notification service when
+its count changes. Ambient data is not a template and not a namespace:
+it activates nothing, never enters a namespace stack (§4.3), and gives
+its producer no part in what the resting display looks like (§6.9). A
+backend **MAY** show it or ignore it. An adapter that needs the kept
+values later reads them from the state query surface (§6.7).
 
 ---
 
