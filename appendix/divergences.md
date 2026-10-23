@@ -602,6 +602,22 @@ responder's identity in `data.skill_id` and the round identified by
 | `recognizer_loop:wake_up` | `ovos.listener.wake` | Leave sleep mode (AUDIO-IN-1 §6.4); no payload, device-scoped. |
 | `mycroft.awoken` | `ovos.listener.awoken` | Sleep→awake transition; moved into the `ovos.listener.*` namespace. |
 
+#### Resting-display data (GUI-1)
+
+The predecessor events are emitted by the homescreen manager inside
+the legacy render adapter (`ovos-legacy-mycroft-gui-plugin`
+`homescreen.py`, documented in its `docs/homescreen.md`) for the Qt
+shell. They reach no other adapter. The `homescreen.data.apps`,
+`.examples`, `.connectivity` and `homescreen.widget.*` events are not
+mapped here.
+
+| Predecessor topic | Replacement | Notes |
+|--------------|---------------|-------|
+| `homescreen.data.time` | none | The backend reads the device clock (GUI-1 §6.9.1). The predecessor pushed preformatted strings every 10 seconds. |
+| `homescreen.data.weather` | `gui.ambient.weather` | Carries the `SYSTEM_weather` keys instead of `weather_code` / `weather_temp`. The predecessor polled one weather application on its own topic (`skill-ovos-weather.openvoiceos.weather.request`) every 900 seconds; the replacement is emitted by whichever component holds the data. `weather_api_enabled: false` becomes the absence of the event. |
+| `homescreen.data.notifications` | `gui.ambient.notifications` | `notification_counter` becomes `count`. The stored notification model has no successor. |
+| `homescreen.data.wallpaper` | none | The wallpaper is part of the resting display the backend owns (GUI-1 §6.9). |
+
 ### 5.8 Bus bridge (BRIDGE-1)
 
 - **BRIDGE-1 defines source-stamping and destination-based routing;

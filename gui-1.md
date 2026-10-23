@@ -684,6 +684,29 @@ property of the surface, not of any application.
 This keeps applications free of display ownership: they declare intents
 (§2), and the surface decides how to rest.
 
+### 6.9.1 Ambient data
+
+A resting display commonly shows the time, the weather, and a count
+of pending notifications. The time needs no producer: a backend reads
+the device clock, as for `SYSTEM_clock` (§3.4). Weather and the
+notification count do. So that every adapter draws the same resting
+state from the same data, and no application owns it, the GUI service
+**SHOULD** keep the most recent Message on each topic below and
+deliver it to every adapter as a status event (§5.3) when it arrives.
+
+| Topic | `data` | Meaning |
+|-------|--------|---------|
+| `gui.ambient.weather` | the `SYSTEM_weather` keys (§3.4) | Current conditions for the device's location. |
+| `gui.ambient.notifications` | `count` (number, *req*) | The number of pending notifications; `0` means none. |
+
+Any component that holds the data **MAY** emit these topics — a
+weather application on its own schedule, a notification service when
+its count changes. Ambient data is not a template and not a namespace:
+it activates nothing, never enters a namespace stack (§4.3), and gives
+its producer no part in what the resting display looks like (§6.9). A
+backend **MAY** show it or ignore it. An adapter that needs the kept
+values later reads them from the state query surface (§6.7).
+
 ---
 
 ## 7. Interaction (render backend → application)
