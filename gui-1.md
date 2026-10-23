@@ -257,10 +257,33 @@ criterion (§3.1).
 | Template | Keys | Meaning |
 |----------|------|---------|
 | `SYSTEM_clock` | — | A self-updating clock. Requires no session data; the backend derives the time from the device clock. |
-| `SYSTEM_timer` | `end_time` (number, Unix seconds, *req* unless `timers` is present), `label` (string), `count_up` (boolean), `timers` (array of `{end_time (req), label, count_up}`) | One or more self-updating timers. `count_up` false counts down to `end_time`; true counts up from it. The backend derives the displayed value from the device clock — no polling by the producer. `timers` carries one entry per timer, in display order, each entry with the meaning of the scalar keys; the scalar keys alone are equivalent to a one-element `timers` array. When `timers` is present the backend **MUST** render from it and ignore the scalar keys. |
-| `SYSTEM_weather` | `current_temp` (number, *req*), `min_temp` (number), `max_temp` (number), `condition` (string, *req*), `icon` (string), `location` (string) | A weather summary card. |
+| `SYSTEM_timer` | `end_time` (number, Unix seconds, *req*), `label` (string), `count_up` (boolean) | A self-updating timer. `count_up` false counts down to `end_time`; true counts up from it. The backend derives the displayed value from the device clock — no polling by the producer. |
+| `SYSTEM_weather` | `current_temp` (number, *req*), `min_temp` (number), `max_temp` (number), `condition` (string, *req*), `condition_code` (string, enumerated below), `icon` (string), `location` (string), `forecast` (array of `{time (number, Unix seconds, req), min_temp, max_temp, condition_code}`) | A weather summary card. `condition` is display text; `condition_code` is the key a backend styles the condition from. `icon` is an optional producer-supplied override image (§3.3). `forecast` lists later periods in time order, each `time` the start of its period; a backend renders the entries it can show or ignores the key (§6.5). |
 | `SYSTEM_map` | `latitude` (number, WGS-84, *req*), `longitude` (number, WGS-84, *req*), `zoom` (number, 1–20), `label` (string) | A geographic location; the backend chooses the map provider. |
 | `SYSTEM_face` | `sleeping` (boolean) | An avatar face. `sleeping` true is the resting/closed-eyes state, false the awake state. For backends that render a character rather than a screen layout. |
+
+`condition` is free, localised text and `icon` is an image the
+producer chose, so neither lets a backend style a condition once for
+every application as §3.1 intends; `condition_code` is a closed set
+for that purpose. Its values:
+
+| `condition_code` | Meaning |
+|------------------|---------|
+| `clear` | Clear sky. |
+| `partly_cloudy` | Sun and cloud. |
+| `cloudy` | Overcast. |
+| `fog` | Fog or mist. |
+| `drizzle` | Light, fine rain. |
+| `rain` | Rain or showers. |
+| `snow` | Snow. |
+| `sleet` | Sleet, freezing rain, or hail. |
+| `thunder` | Thunderstorm. |
+| `wind` | Strong wind with no other significant condition. |
+
+A producer **MUST NOT** send a `condition_code` outside this list; a
+backend treats an unlisted value as absent. When `condition_code` is
+present a backend **SHOULD** style the condition from it, and
+**MAY** show `icon` in place of its own styling.
 
 #### Interactive companions — reserved names
 
@@ -507,6 +530,35 @@ broadcast them to all of its connected clients regardless of
 `session_id`. The `session_id` accompanying a status event is
 informational; it is not a delivery filter.
 
+A conforming GUI service **MUST** deliver each topic below to every
+adapter as a status event, with `event_name` set to the topic and
+`data` set to the Message's `data` unchanged. A render backend that
+draws listening, thinking or speaking feedback (a face, a light ring,
+an indicator) is written against this set.
+
+| Renderer use | Topic | Defined in |
+|--------------|-------|------------|
+| listening began | `ovos.listener.wakeword` | OVOS-AUDIO-IN-1 §6.5 |
+| listening began | `ovos.listener.record.started` | OVOS-AUDIO-IN-1 §6.1 |
+| listening ended | `ovos.listener.record.ended` | OVOS-AUDIO-IN-1 §6.2 |
+| listening failed | `ovos.stt.failed` | OVOS-AUDIO-IN-1 §5 |
+| thinking began | `ovos.utterance.handle` | OVOS-PIPELINE-1 §9.1 |
+| thinking began | `ovos.intent.handler.start` | OVOS-PIPELINE-1 §8 |
+| thinking ended | `ovos.intent.handler.complete` | OVOS-PIPELINE-1 §8 |
+| thinking ended | `ovos.intent.handler.error` | OVOS-PIPELINE-1 §8 |
+| thinking ended | `ovos.intent.unmatched` | OVOS-PIPELINE-1 §9.3 |
+| thinking ended | `ovos.utterance.handled` | OVOS-PIPELINE-1 §9.5 |
+| a response is ready | `ovos.utterance.speak` | OVOS-PIPELINE-1 §9.6 |
+| mouth shapes for speech | `ovos.audio.output.visemes` | OVOS-AUDIO-1 §5.4 |
+| speaking began | `ovos.audio.output.started` | OVOS-AUDIO-1 §5.1 |
+| speaking ended | `ovos.audio.output.ended` | OVOS-AUDIO-1 §5.2 |
+| sleep | `ovos.listener.sleep` | OVOS-AUDIO-IN-1 §6.3 |
+| awoken | `ovos.listener.awoken` | OVOS-AUDIO-IN-1 §6.4 |
+
+The GUI service **MAY** deliver further topics as status events. An
+adapter **MUST NOT** fail on a status event it does not recognise; it
+ignores it.
+
 ---
 
 ## 6. The adapter contract
@@ -569,6 +621,8 @@ merged (§4.2).
 | idle | the display returns to its resting state | device-wide |
 | session-update | a `gui.value.set` was applied | per-session (`skill_id`, `data`, `session_id`) |
 | status-event | a device-wide status signal occurred (§5.3) | broadcast (`event_name`, `data`, `session_id` informational) |
+
+§5.3 lists the status events every GUI service delivers.
 
 An adapter **MUST** treat per-session events as addressed to the
 clients on the carried `session_id` (§5.1) and **SHOULD** broadcast
@@ -684,6 +738,29 @@ property of the surface, not of any application.
 This keeps applications free of display ownership: they declare intents
 (§2), and the surface decides how to rest.
 
+### 6.9.1 Ambient data
+
+A resting display commonly shows the time, the weather, and a count
+of pending notifications. The time needs no producer: a backend reads
+the device clock, as for `SYSTEM_clock` (§3.4). Weather and the
+notification count do. So that every adapter draws the same resting
+state from the same data, and no application owns it, the GUI service
+**SHOULD** keep the most recent Message on each topic below and
+deliver it to every adapter as a status event (§5.3) when it arrives.
+
+| Topic | `data` | Meaning |
+|-------|--------|---------|
+| `gui.ambient.weather` | the `SYSTEM_weather` keys (§3.4) | Current conditions for the device's location. |
+| `gui.ambient.notifications` | `count` (number, *req*) | The number of pending notifications; `0` means none. |
+
+Any component that holds the data **MAY** emit these topics — a
+weather application on its own schedule, a notification service when
+its count changes. Ambient data is not a template and not a namespace:
+it activates nothing, never enters a namespace stack (§4.3), and gives
+its producer no part in what the resting display looks like (§6.9). A
+backend **MAY** show it or ignore it. An adapter that needs the kept
+values later reads them from the state query surface (§6.7).
+
 ---
 
 ## 7. Interaction (render backend → application)
@@ -758,6 +835,8 @@ conformant way to emit or consume these templates.
   `session_id` (§4.3);
 - deliver every template event, session-data update, and lifecycle
   hook to **every** installed adapter (§6.3, §6.4);
+- deliver every topic in §5.3's status-event table to every adapter
+  as a status event, with `data` unchanged (§5.3);
 - start and operate with zero adapters installed (headless no-op) and
   skip-and-log any adapter that fails to construct, without aborting
   startup (§6.1);
@@ -775,6 +854,7 @@ conformant way to emit or consume these templates.
   `session_id`, with `"default"` not a wildcard (§5.1);
 - never fail on a template it cannot render — render or decline as a
   no-op (§6.5);
+- never fail on a status event it does not recognise (§5.3);
 - release per-namespace state on namespace-deactivated (§6.6).
 
 ### 8.5 A conforming adapter SHOULD

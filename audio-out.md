@@ -384,6 +384,42 @@ The service **MUST** reply via the `response` derivation
 `is_speaking` is deliberately session-scoped; this version defines
 no aggregate query to ask whether any session is speaking.
 
+### 5.4 Mouth shapes
+
+When an item of synthesised speech begins playback and the service
+has mouth shapes for it, the audio output service **SHOULD** emit:
+
+`ovos.audio.output.visemes`
+
+```json
+{ "visemes": [["4", 0.35], ["0", 0.52], ["3", 0.71]], "start": 1791688142.76 }
+```
+
+| Field | Type | Required | Meaning |
+|-------|------|----------|---------|
+| `visemes` | array of `[code, end_offset]` pairs | yes | The mouth shapes of the item, in order. `code` is a viseme code (below). `end_offset` is the number of seconds from the item's playback start at which that shape ends; each shape shows from the previous pair's `end_offset` (or `0`) until its own, and offsets never decrease. |
+| `start` | number, Unix seconds | no | The service's clock time when the item began playback. Meaningful to a renderer only when its clock agrees with the service's. |
+
+The signal is emitted once per spoken item, not once per playback
+session (§5.1). A synthesiser that cannot produce mouth shapes
+produces none, and the service then omits the signal; a renderer
+treats its absence as a mouth that does not follow the speech.
+Sounds (§4.1, §4.2) carry no mouth shapes.
+
+The viseme code set:
+
+| Code | Mouth shape | Phonemes |
+|------|-------------|----------|
+| `"0"` | open wide | `aa`, `ae`, `ah`, `ax`, `ay`, `eh`, `ey`, `hh`, `ih`, `iy`, `y` |
+| `"1"` | small, tall oval | `aw` |
+| `"2"` | rounded | `er`, `ow`, `r`, `uh`, `uw`, `w` |
+| `"3"` | half open | `ch`, `d`, `dh`, `g`, `jh`, `k`, `l`, `n`, `ng`, `s`, `sh`, `t`, `th`, `z`, `zh` |
+| `"4"` | closed; also the rest shape for a pause | `b`, `m`, `p`, pause |
+| `"5"` | lower lip to upper teeth | `f`, `v` |
+| `"6"` | small round | `ao`, `oy` |
+
+A renderer **SHOULD** treat a code outside this set as `"4"`.
+
 ---
 
 ## 6. Stop integration
@@ -430,6 +466,7 @@ obligation on receiving a stop signal is the sequence above.
 | `ovos.audio.is_speaking` | any component → audio | Query whether audio is currently playing (§5.3). |
 | `ovos.audio.output.started` | audio → broadcast | Playback session started (§5.1). |
 | `ovos.audio.output.ended` | audio → broadcast | Playback session ended (§5.2). |
+| `ovos.audio.output.visemes` | audio → broadcast | Mouth shapes for the spoken item now playing (§5.4). |
 | `ovos.audio.speech` | audio → broadcast | Synthesised audio as base64 for remote clients (§4.3). |
 | `ovos.mic.listen` | audio → broadcast | Request microphone re-open after `listen: true` (§4.4). |
 
@@ -463,6 +500,8 @@ obligation on receiving a stop signal is the sequence above.
   TTS synthesis (§3.1);
 - pass the synthesized audio through the TTS-transformer chain
   before enqueueing (§3.3);
+- emit `ovos.audio.output.visemes` when a spoken item with mouth
+  shapes begins playback (§5.4);
 
 ### An audio output service **MAY**:
 
