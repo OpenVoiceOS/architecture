@@ -742,6 +742,22 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §3.4 — `SYSTEM_weather` gains `condition_code` and `forecast`.
+  `condition_code` is a closed set of ten values (`clear`,
+  `partly_cloudy`, `cloudy`, `fog`, `drizzle`, `rain`, `snow`,
+  `sleet`, `thunder`, `wind`) and is the key a backend styles the
+  condition from. `condition` is localised text and `icon` is an
+  image the producer chose, so before this a character display or a
+  face had nothing it could style from. `icon` stays as an optional
+  producer override. `forecast` is an optional array of
+  `{time (req), min_temp, max_temp, condition_code}`, which a backend
+  renders or ignores per §6.5. A producer MUST NOT send an unlisted
+  `condition_code`, and a backend SHOULD style from the code when it
+  is present. The class stays 1: both keys are optional, and a
+  producer or backend that ignores them keeps working. New work: the
+  weather application (`ovos-skill-weather`) can map its provider's
+  condition to a code and send its forecast, and render backends can
+  style from the code.
 - Initial draft. Formalizes the GUI display subsystem that decouples
   voice applications from rendering technology: applications declare
   *what* to display by naming a template from a closed, curated
