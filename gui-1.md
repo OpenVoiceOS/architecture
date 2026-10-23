@@ -507,6 +507,34 @@ broadcast them to all of its connected clients regardless of
 `session_id`. The `session_id` accompanying a status event is
 informational; it is not a delivery filter.
 
+A conforming GUI service **MUST** deliver each topic below to every
+adapter as a status event, with `event_name` set to the topic and
+`data` set to the Message's `data` unchanged. A render backend that
+draws listening, thinking or speaking feedback (a face, a light ring,
+an indicator) is written against this set.
+
+| Renderer use | Topic | Defined in |
+|--------------|-------|------------|
+| listening began | `ovos.listener.wakeword` | OVOS-AUDIO-IN-1 §6.5 |
+| listening began | `ovos.listener.record.started` | OVOS-AUDIO-IN-1 §6.1 |
+| listening ended | `ovos.listener.record.ended` | OVOS-AUDIO-IN-1 §6.2 |
+| listening failed | `ovos.stt.failed` | OVOS-AUDIO-IN-1 §5 |
+| thinking began | `ovos.utterance.handle` | OVOS-PIPELINE-1 §9.1 |
+| thinking began | `ovos.intent.handler.start` | OVOS-PIPELINE-1 §8 |
+| thinking ended | `ovos.intent.handler.complete` | OVOS-PIPELINE-1 §8 |
+| thinking ended | `ovos.intent.handler.error` | OVOS-PIPELINE-1 §8 |
+| thinking ended | `ovos.intent.unmatched` | OVOS-PIPELINE-1 §9.3 |
+| thinking ended | `ovos.utterance.handled` | OVOS-PIPELINE-1 §9.5 |
+| a response is ready | `ovos.utterance.speak` | OVOS-PIPELINE-1 §9.6 |
+| speaking began | `ovos.audio.output.started` | OVOS-AUDIO-1 §5.1 |
+| speaking ended | `ovos.audio.output.ended` | OVOS-AUDIO-1 §5.2 |
+| sleep | `ovos.listener.sleep` | OVOS-AUDIO-IN-1 §6.3 |
+| awoken | `ovos.listener.awoken` | OVOS-AUDIO-IN-1 §6.4 |
+
+The GUI service **MAY** deliver further topics as status events. An
+adapter **MUST NOT** fail on a status event it does not recognise; it
+ignores it.
+
 ---
 
 ## 6. The adapter contract
@@ -569,6 +597,8 @@ merged (§4.2).
 | idle | the display returns to its resting state | device-wide |
 | session-update | a `gui.value.set` was applied | per-session (`skill_id`, `data`, `session_id`) |
 | status-event | a device-wide status signal occurred (§5.3) | broadcast (`event_name`, `data`, `session_id` informational) |
+
+§5.3 lists the status events every GUI service delivers.
 
 An adapter **MUST** treat per-session events as addressed to the
 clients on the carried `session_id` (§5.1) and **SHOULD** broadcast
@@ -758,6 +788,8 @@ conformant way to emit or consume these templates.
   `session_id` (§4.3);
 - deliver every template event, session-data update, and lifecycle
   hook to **every** installed adapter (§6.3, §6.4);
+- deliver every topic in §5.3's status-event table to every adapter
+  as a status event, with `data` unchanged (§5.3);
 - start and operate with zero adapters installed (headless no-op) and
   skip-and-log any adapter that fails to construct, without aborting
   startup (§6.1);
@@ -775,6 +807,7 @@ conformant way to emit or consume these templates.
   `session_id`, with `"default"` not a wildcard (§5.1);
 - never fail on a template it cannot render — render or decline as a
   no-op (§6.5);
+- never fail on a status event it does not recognise (§5.3);
 - release per-namespace state on namespace-deactivated (§6.6).
 
 ### 8.5 A conforming adapter SHOULD

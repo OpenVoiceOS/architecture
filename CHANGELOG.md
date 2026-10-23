@@ -742,6 +742,24 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §5.3 — the status events a GUI service delivers are now enumerated.
+  A conforming GUI service MUST deliver fifteen topics from
+  AUDIO-IN-1, PIPELINE-1 and AUDIO-1 to every adapter as status
+  events, with `data` unchanged, grouped by what a renderer draws from
+  them (listening, thinking, speaking, sleep). An adapter MUST NOT
+  fail on a status event it does not recognise. Before this, a face or
+  an indicator could not be written against the specification,
+  because §5.3 named no event. §8.3 and §8.4 gain the matching rows,
+  and `appendix/divergences.md` §5.7 maps the predecessor names. The
+  class stays 1: the change adds a delivery duty and no wire shape,
+  and a render backend that reads the predecessor names keeps working
+  while the GUI service forwards both. New work in `ovos-gui`: version
+  1.5.3a1 forwards five of the fifteen under their spec names
+  (`ovos.listener.record.*`, `ovos.listener.sleep`,
+  `ovos.listener.awoken`, `ovos.utterance.handled`) and the rest only
+  under predecessor names, and it forwards
+  `recognizer_loop:recognition_unknown`, which `ovos-dinkum-listener`
+  does not emit, so listening failure never reaches a client today.
 - Initial draft. Formalizes the GUI display subsystem that decouples
   voice applications from rendering technology: applications declare
   *what* to display by naming a template from a closed, curated
