@@ -258,9 +258,32 @@ criterion (§3.1).
 |----------|------|---------|
 | `SYSTEM_clock` | — | A self-updating clock. Requires no session data; the backend derives the time from the device clock. |
 | `SYSTEM_timer` | `end_time` (number, Unix seconds, *req*), `label` (string), `count_up` (boolean) | A self-updating timer. `count_up` false counts down to `end_time`; true counts up from it. The backend derives the displayed value from the device clock — no polling by the producer. |
-| `SYSTEM_weather` | `current_temp` (number, *req*), `min_temp` (number), `max_temp` (number), `condition` (string, *req*), `icon` (string), `location` (string) | A weather summary card. |
+| `SYSTEM_weather` | `current_temp` (number, *req*), `min_temp` (number), `max_temp` (number), `condition` (string, *req*), `condition_code` (string, enumerated below), `icon` (string), `location` (string), `forecast` (array of `{time (number, Unix seconds, req), min_temp, max_temp, condition_code}`) | A weather summary card. `condition` is display text; `condition_code` is the key a backend styles the condition from. `icon` is an optional producer-supplied override image (§3.3). `forecast` lists later periods in time order, each `time` the start of its period; a backend renders the entries it can show or ignores the key (§6.5). |
 | `SYSTEM_map` | `latitude` (number, WGS-84, *req*), `longitude` (number, WGS-84, *req*), `zoom` (number, 1–20), `label` (string) | A geographic location; the backend chooses the map provider. |
 | `SYSTEM_face` | `sleeping` (boolean) | An avatar face. `sleeping` true is the resting/closed-eyes state, false the awake state. For backends that render a character rather than a screen layout. |
+
+`condition` is free, localised text and `icon` is an image the
+producer chose, so neither lets a backend style a condition once for
+every application as §3.1 intends; `condition_code` is a closed set
+for that purpose. Its values:
+
+| `condition_code` | Meaning |
+|------------------|---------|
+| `clear` | Clear sky. |
+| `partly_cloudy` | Sun and cloud. |
+| `cloudy` | Overcast. |
+| `fog` | Fog or mist. |
+| `drizzle` | Light, fine rain. |
+| `rain` | Rain or showers. |
+| `snow` | Snow. |
+| `sleet` | Sleet, freezing rain, or hail. |
+| `thunder` | Thunderstorm. |
+| `wind` | Strong wind with no other significant condition. |
+
+A producer **MUST NOT** send a `condition_code` outside this list; a
+backend treats an unlisted value as absent. When `condition_code` is
+present a backend **SHOULD** style the condition from it, and
+**MAY** show `icon` in place of its own styling.
 
 #### Interactive companions — reserved names
 
