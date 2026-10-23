@@ -257,7 +257,7 @@ criterion (§3.1).
 | Template | Keys | Meaning |
 |----------|------|---------|
 | `SYSTEM_clock` | — | A self-updating clock. Requires no session data; the backend derives the time from the device clock. |
-| `SYSTEM_timer` | `end_time` (number, Unix seconds, *req*), `label` (string), `count_up` (boolean) | A self-updating timer. `count_up` false counts down to `end_time`; true counts up from it. The backend derives the displayed value from the device clock — no polling by the producer. |
+| `SYSTEM_timer` | `end_time` (number, Unix seconds, *req* unless `timers` is present), `label` (string), `count_up` (boolean), `timers` (array of `{end_time (req), label, count_up}`) | One or more self-updating timers. `count_up` false counts down to `end_time`; true counts up from it. The backend derives the displayed value from the device clock — no polling by the producer. `timers` carries one entry per timer, in display order, each entry with the meaning of the scalar keys; the scalar keys alone are equivalent to a one-element `timers` array. When `timers` is present the backend **MUST** render from it and ignore the scalar keys. |
 | `SYSTEM_weather` | `current_temp` (number, *req*), `min_temp` (number), `max_temp` (number), `condition` (string, *req*), `icon` (string), `location` (string) | A weather summary card. |
 | `SYSTEM_map` | `latitude` (number, WGS-84, *req*), `longitude` (number, WGS-84, *req*), `zoom` (number, 1–20), `label` (string) | A geographic location; the backend chooses the map provider. |
 | `SYSTEM_face` | `sleeping` (boolean) | An avatar face. `sleeping` true is the resting/closed-eyes state, false the awake state. For backends that render a character rather than a screen layout. |
