@@ -758,6 +758,23 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §6.9.1 (new) — ambient data for the resting display. §6.9 gives the
+  resting display to the backend but named no source for what it
+  shows, so the only weather and notification data a resting screen
+  had was the `homescreen.data.*` events that one adapter emits for
+  its own client. Two new topics, `gui.ambient.weather` (the
+  `SYSTEM_weather` keys) and `gui.ambient.notifications` (`count`),
+  MAY be emitted by any component that holds the data. The GUI service
+  SHOULD keep the most recent of each and deliver it to every adapter
+  as a status event. The time needs no producer, because the backend
+  reads the device clock. `appendix/divergences.md` §5.7 maps
+  `homescreen.data.time`, `.weather`, `.notifications` and
+  `.wallpaper`. The class stays 1: both topics are new and optional,
+  and the legacy adapter's homescreen manager keeps working beside
+  them. New work: `ovos-gui` can keep and deliver the two topics, the
+  weather application (`ovos-skill-weather`) can emit
+  `gui.ambient.weather`, and the legacy adapter can move its
+  homescreen manager onto them.
 - §3.4 — `SYSTEM_weather` gains `condition_code` and `forecast`.
   `condition_code` is a closed set of ten values (`clear`,
   `partly_cloudy`, `cloudy`, `fog`, `drizzle`, `rain`, `snow`,
