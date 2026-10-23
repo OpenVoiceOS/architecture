@@ -526,6 +526,7 @@ an indicator) is written against this set.
 | thinking ended | `ovos.intent.unmatched` | OVOS-PIPELINE-1 §9.3 |
 | thinking ended | `ovos.utterance.handled` | OVOS-PIPELINE-1 §9.5 |
 | a response is ready | `ovos.utterance.speak` | OVOS-PIPELINE-1 §9.6 |
+| mouth shapes for speech | `ovos.audio.output.visemes` | OVOS-AUDIO-1 §5.4 |
 | speaking began | `ovos.audio.output.started` | OVOS-AUDIO-1 §5.1 |
 | speaking ended | `ovos.audio.output.ended` | OVOS-AUDIO-1 §5.2 |
 | sleep | `ovos.listener.sleep` | OVOS-AUDIO-IN-1 §6.3 |

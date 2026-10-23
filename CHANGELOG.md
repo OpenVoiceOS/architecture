@@ -99,6 +99,22 @@ specifications.
 
 ### 2
 
+- §5.4 (new) — `ovos.audio.output.visemes`, the mouth shapes for a
+  spoken item, emitted when the item begins playback: `visemes`, a
+  list of `[code, end_offset]` pairs with offsets in seconds from the
+  item's start, and an optional `start` clock time. The section
+  defines the seven-code viseme set (`"0"`–`"6"`) with its phoneme
+  groups, and a renderer SHOULD treat an unknown code as the closed
+  shape `"4"`. The service SHOULD emit the signal (§8) and omits it
+  when the synthesiser produces no mouth shapes. Before this, a face
+  renderer had no specified source for lip movement. §7 gains the row
+  and `appendix/divergences.md` §5.7 maps `enclosure.mouth.viseme_list`
+  as the predecessor. The class stays 2: the change is an additive
+  SHOULD with the same payload as the predecessor, so a consumer of
+  the predecessor keeps working while both are emitted. New work: `ovos-audio` emits
+  `enclosure.mouth.viseme_list` from `playback.py` today and can emit
+  the new topic beside it.
+
 - §4.0 (new) — one audio-format rule for all audio payloads: the
   container is the single source of truth (self-describing WAV / MP3 /
   OGG / FLAC); `mime` and `sample_rate` are OPTIONAL advisory fields on
@@ -742,6 +758,12 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §5.3 — `ovos.audio.output.visemes` (AUDIO-1 §5.4) joins the
+  status-event table, so a GUI service MUST deliver the mouth shapes
+  to every adapter and a face renderer can move its mouth with the
+  speech. The class stays 1: it adds one delivery duty and no wire
+  shape. New work in `ovos-gui`: it forwards the predecessor
+  `enclosure.mouth.viseme_list` today and can forward the new topic.
 - §5.3 — the status events a GUI service delivers are now enumerated.
   A conforming GUI service MUST deliver fifteen topics from
   AUDIO-IN-1, PIPELINE-1 and AUDIO-1 to every adapter as status

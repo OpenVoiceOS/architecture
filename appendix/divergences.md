@@ -621,6 +621,7 @@ clients only under the predecessor names.
 | `complete_intent_failure` | `ovos.intent.unmatched` | PIPELINE-1 §9.3. |
 | `speak` | `ovos.utterance.speak` | PIPELINE-1 §9.6. |
 | `recognizer_loop:audio_output_start` / `recognizer_loop:audio_output_end` | `ovos.audio.output.started` / `.ended` | AUDIO-1 §5.1, §5.2. |
+| `enclosure.mouth.viseme_list` | `ovos.audio.output.visemes` | AUDIO-1 §5.4. Same payload (`start`, `visemes` as `[code, end]` pairs with codes `"0"`–`"6"` from `ovos-utils` `lang/visimes.py`); emitted by `ovos-audio` `playback.py` at the start of each spoken item, from the TTS plugin or a G2P plugin. The predecessor name sits in the enclosure namespace of the Mark 1 hardware; the signal belongs to the audio output service. |
 | `recognizer_loop:recognition_unknown` | `ovos.stt.failed` | The forward list names a spelling the shipped listener does not emit (it emits `recognizer_loop:speech.recognition.unknown`, see listening-failure topic, above), so no listening-failure event reaches a render backend today. |
 | `mycroft.events.triggered` (`namespace: "system"`, `event_name`: the topic) | the status-event hook (GUI-1 §6.3) | The envelope the legacy GUI service wraps each forwarded topic in on its client socket. Under GUI-1 the client framing is the adapter's concern (GUI-1 §1); the legacy render adapter keeps it. |
 
