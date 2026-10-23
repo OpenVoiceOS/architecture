@@ -618,6 +618,29 @@ mapped here.
 | `homescreen.data.notifications` | `gui.ambient.notifications` | `notification_counter` becomes `count`. The stored notification model has no successor. |
 | `homescreen.data.wallpaper` | none | The wallpaper is part of the resting display the backend owns (GUI-1 §6.9). |
 
+#### GUI status events (GUI-1)
+
+The status events a render backend sees today, as forwarded by
+`ovos-gui` 1.5.3a1 (`namespace.py` `_define_messages_to_forward`),
+mapped to the topics GUI-1 §5.3 requires the GUI service to deliver.
+That release already forwards `ovos.listener.record.started` /
+`.ended`, `ovos.listener.sleep`, `ovos.listener.awoken` and
+`ovos.utterance.handled` under their spec names; the rest reach
+clients only under the predecessor names.
+
+| Predecessor topic | Replacement | Notes |
+|--------------|---------------|-------|
+| `recognizer_loop:wakeword` | `ovos.listener.wakeword` | AUDIO-IN-1 §6.5. |
+| `recognizer_loop:record_begin` / `recognizer_loop:record_end` | `ovos.listener.record.started` / `.ended` | See listening-lifecycle topics, above. |
+| `recognizer_loop:utterance` | `ovos.utterance.handle` | PIPELINE-1 §9.1. |
+| `mycroft.skill.handler.start` / `.complete` | `ovos.intent.handler.start` / `.complete` | PIPELINE-1 §8. The predecessor forward list carries no `.error`; GUI-1 adds it, so an erroring handler ends the thinking state. |
+| `complete_intent_failure` | `ovos.intent.unmatched` | PIPELINE-1 §9.3. |
+| `speak` | `ovos.utterance.speak` | PIPELINE-1 §9.6. |
+| `recognizer_loop:audio_output_start` / `recognizer_loop:audio_output_end` | `ovos.audio.output.started` / `.ended` | AUDIO-1 §5.1, §5.2. |
+| `enclosure.mouth.viseme_list` | `ovos.audio.output.visemes` | AUDIO-1 §5.4. Same payload (`start`, `visemes` as `[code, end]` pairs with codes `"0"`–`"6"` from `ovos-utils` `lang/visimes.py`); emitted by `ovos-audio` `playback.py` at the start of each spoken item, from the TTS plugin or a G2P plugin. The predecessor name sits in the enclosure namespace of the Mark 1 hardware; the signal belongs to the audio output service. |
+| `recognizer_loop:recognition_unknown` | `ovos.stt.failed` | The forward list names a spelling the shipped listener does not emit (it emits `recognizer_loop:speech.recognition.unknown`, see listening-failure topic, above), so no listening-failure event reaches a render backend today. |
+| `mycroft.events.triggered` (`namespace: "system"`, `event_name`: the topic) | the status-event hook (GUI-1 §6.3) | The envelope the legacy GUI service wraps each forwarded topic in on its client socket. Under GUI-1 the client framing is the adapter's concern (GUI-1 §1); the legacy render adapter keeps it. |
+
 ### 5.8 Bus bridge (BRIDGE-1)
 
 - **BRIDGE-1 defines source-stamping and destination-based routing;

@@ -99,6 +99,22 @@ specifications.
 
 ### 2
 
+- §5.4 (new) — `ovos.audio.output.visemes`, the mouth shapes for a
+  spoken item, emitted when the item begins playback: `visemes`, a
+  list of `[code, end_offset]` pairs with offsets in seconds from the
+  item's start, and an optional `start` clock time. The section
+  defines the seven-code viseme set (`"0"`–`"6"`) with its phoneme
+  groups, and a renderer SHOULD treat an unknown code as the closed
+  shape `"4"`. The service SHOULD emit the signal (§8) and omits it
+  when the synthesiser produces no mouth shapes. Before this, a face
+  renderer had no specified source for lip movement. §7 gains the row
+  and `appendix/divergences.md` §5.7 maps `enclosure.mouth.viseme_list`
+  as the predecessor. The class stays 2: the change is an additive
+  SHOULD with the same payload as the predecessor, so a consumer of
+  the predecessor keeps working while both are emitted. New work: `ovos-audio` emits
+  `enclosure.mouth.viseme_list` from `playback.py` today and can emit
+  the new topic beside it.
+
 - §4.0 (new) — one audio-format rule for all audio payloads: the
   container is the single source of truth (self-describing WAV / MP3 /
   OGG / FLAC); `mime` and `sample_rate` are OPTIONAL advisory fields on
@@ -759,6 +775,46 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   weather application (`ovos-skill-weather`) can emit
   `gui.ambient.weather`, and the legacy adapter can move its
   homescreen manager onto them.
+- §3.4 — `SYSTEM_weather` gains `condition_code` and `forecast`.
+  `condition_code` is a closed set of ten values (`clear`,
+  `partly_cloudy`, `cloudy`, `fog`, `drizzle`, `rain`, `snow`,
+  `sleet`, `thunder`, `wind`) and is the key a backend styles the
+  condition from. `condition` is localised text and `icon` is an
+  image the producer chose, so before this a character display or a
+  face had nothing it could style from. `icon` stays as an optional
+  producer override. `forecast` is an optional array of
+  `{time (req), min_temp, max_temp, condition_code}`, which a backend
+  renders or ignores per §6.5. A producer MUST NOT send an unlisted
+  `condition_code`, and a backend SHOULD style from the code when it
+  is present. The class stays 1: both keys are optional, and a
+  producer or backend that ignores them keeps working. New work: the
+  weather application (`ovos-skill-weather`) can map its provider's
+  condition to a code and send its forecast, and render backends can
+  style from the code.
+- §5.3 — `ovos.audio.output.visemes` (AUDIO-1 §5.4) joins the
+  status-event table, so a GUI service MUST deliver the mouth shapes
+  to every adapter and a face renderer can move its mouth with the
+  speech. The class stays 1: it adds one delivery duty and no wire
+  shape. New work in `ovos-gui`: it forwards the predecessor
+  `enclosure.mouth.viseme_list` today and can forward the new topic.
+- §5.3 — the status events a GUI service delivers are now enumerated.
+  A conforming GUI service MUST deliver fifteen topics from
+  AUDIO-IN-1, PIPELINE-1 and AUDIO-1 to every adapter as status
+  events, with `data` unchanged, grouped by what a renderer draws from
+  them (listening, thinking, speaking, sleep). An adapter MUST NOT
+  fail on a status event it does not recognise. Before this, a face or
+  an indicator could not be written against the specification,
+  because §5.3 named no event. §8.3 and §8.4 gain the matching rows,
+  and `appendix/divergences.md` §5.7 maps the predecessor names. The
+  class stays 1: the change adds a delivery duty and no wire shape,
+  and a render backend that reads the predecessor names keeps working
+  while the GUI service forwards both. New work in `ovos-gui`: version
+  1.5.3a1 forwards five of the fifteen under their spec names
+  (`ovos.listener.record.*`, `ovos.listener.sleep`,
+  `ovos.listener.awoken`, `ovos.utterance.handled`) and the rest only
+  under predecessor names, and it forwards
+  `recognizer_loop:recognition_unknown`, which `ovos-dinkum-listener`
+  does not emit, so listening failure never reaches a client today.
 - Initial draft. Formalizes the GUI display subsystem that decouples
   voice applications from rendering technology: applications declare
   *what* to display by naming a template from a closed, curated
