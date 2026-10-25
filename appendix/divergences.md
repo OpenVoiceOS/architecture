@@ -670,6 +670,22 @@ that type.
 |--------------|---------------|-------|
 | `<namespace>.<event>` (data: the event's `parameters`) | `gui.interaction` (`namespace`, `event`, `data`) | GUI-1 §7.2. The predecessor puts a skill id in the message type, can collide with a skill's own messages, and cannot be filtered as one family. The adapter, not the GUI service, emits the replacement. An adapter MAY emit both for one stable release cycle (VERSIONING.md). |
 
+#### Page focus and touch (GUI-1)
+
+The legacy GUI service reads two bus topics that a client emits about
+the page it shows (`ovos-gui` `namespace.py`
+`handle_page_gained_focus`, `handle_page_interaction`). Both carry
+`namespace`, `page_number` and `skill_id`; the handlers key on
+`skill_id`.
+
+| Predecessor topic | Replacement | Notes |
+|--------------|---------------|-------|
+| `gui.page_gained_focus` | `gui.page.focus` (`namespace`, `page_number`) | GUI-1 §4.2. The predecessor is a report that the client already changed page, and acts on any active namespace; the replacement is a request, acts only on the namespace on top, and makes the service dispatch the new entry to every adapter. Keyed on `namespace`, not `skill_id`. |
+| `gui.page_interaction` | `gui.page.focus` naming the current entry | GUI-1 §4.2. Restarts the namespace's removal timer, as the predecessor does. |
+
+A GUI service MAY read both predecessors for one stable release cycle
+(VERSIONING.md).
+
 ### 5.8 Bus bridge (BRIDGE-1)
 
 - **BRIDGE-1 defines source-stamping and destination-based routing;

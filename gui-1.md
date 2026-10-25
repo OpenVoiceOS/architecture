@@ -40,8 +40,9 @@ This specification defines:
   `SYSTEM_*` templates and each template's normative session-data
   keys;
 - the **wire protocol** (§4) — the `gui.value.set`,
-  `gui.value.replace` and `gui.page.show` Message shapes, where a
-  GUI Message names its namespace, and the namespace lifecycle topics;
+  `gui.value.replace` and `gui.page.show` Message shapes, the
+  `gui.page.focus` request a render backend sends, where a GUI
+  Message names its namespace, and the namespace lifecycle topics;
 - **addressing and routing** (§5) — the rule that a GUI Message is
   routed solely by its `session_id`;
 - the **adapter contract** (§6) — how a render backend is discovered,
@@ -468,14 +469,58 @@ path outside this specification's scope.
 When `page_names` carries more than one entry, all entries belong to
 **one namespace** — they are not independent activations. Only the
 entry at `index` is the active template (§4.3 activation applies to it
-alone); the other entries are **held**, not rendered, until a later
-`gui.page.show` from the same namespace changes which entry is active.
-A producer changes the active entry by re-emitting `gui.page.show` with
-the same (or an updated) `page_names` and the new `index`; there is no
-separate "switch index" Message. This specification does not define
-what the non-active entries are *for* beyond this holding behaviour —
-e.g. a paged or swipeable presentation is an adapter-side choice, not a
-normative one.
+alone); the other entries are **held**, not rendered, until the active
+entry changes. Only a producer changes the active entry through
+`gui.page.show`: it re-emits the Message with the same (or an updated)
+`page_names` and the new `index`. A render backend **MAY** ask for
+another held entry with `gui.page.focus` (below), for example when the
+user swipes. This specification does not define what the non-active
+entries are *for* beyond this holding behaviour — e.g. a paged or
+swipeable presentation is an adapter-side choice, not a normative one.
+
+#### `gui.page.focus` — ask for another held entry, or touch the page
+
+Emitted on the Message bus by an adapter (§6.2) on behalf of a render
+backend whose user asked to see another entry of a namespace's
+`page_names`. The context carries the `session_id` of the client that
+asked (§5.1).
+
+```json
+{
+  "type": "gui.page.focus",
+  "data": { "namespace": "weather.example", "page_number": 1 },
+  "context": { "session": { "session_id": "default" } }
+}
+```
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `namespace` | string | The namespace whose active entry changes. |
+| `page_number` | number | The zero-based entry of that namespace's `page_names` to make active. |
+
+On receipt, the GUI service **MUST**
+set that namespace's active entry to `page_number` in that session and
+dispatch the newly active entry to every adapter (§6.4) through the
+path this section selects for the namespace, whether its entries are
+templates or not, so every client of the session stays in step. The
+request does not reorder the stack. The GUI service ignores the
+request, and emits an observable diagnostic, when `page_number` is out
+of range or when the namespace is not on top of that session's stack.
+The producer **MAY** observe the Message; its next `gui.page.show`
+sets the active entry again.
+
+A render backend learns which entry is active, and how many there
+are, from the `index` and `page_count` of each template event (§6.3).
+After a valid request the GUI service dispatches the newly active
+entry with its new `index`; that dispatch is how a backend learns the
+request took effect. A render backend that has not received both
+values for a namespace **MUST NOT** send `gui.page.focus` for it.
+
+Every valid `gui.page.focus` also restarts the namespace's removal
+timer (§4.3). A request that names the current active entry changes
+nothing else and dispatches nothing: it is how a render backend
+reports that the user touched the page, so that a namespace the user
+is reading does not time out.
 
 #### `gui.clear.namespace` — clear a namespace
 
@@ -662,10 +707,13 @@ The GUI service delivers events to **every** installed adapter. Each
 event is one of:
 
 **Template events** (per-session). Carry `(skill_id, data,
-session_id)` where `skill_id` is the producing namespace, `data` is
-the namespace's full current session data, and `session_id` is the
-routing key (§5). One template event is delivered per active template
-named in a `gui.page.show`.
+session_id, index, page_count)` where `skill_id` is the producing
+namespace, `data` is the namespace's full current session data,
+`session_id` is the routing key (§5), `index` is the zero-based
+position of the active entry in the namespace's `page_names`, and
+`page_count` is the length of `page_names` (§4.2). One template
+event is delivered per active template named in a `gui.page.show`,
+and per active entry a `gui.page.focus` makes active.
 
 **Session-data updates** (per-session). Carry `(skill_id, data,
 session_id)` on every `gui.value.set` after the namespace data is
@@ -947,6 +995,11 @@ layer-2 trust-boundary concern as the producing namespace (§4.1).
   stack became empty, and only then (§4.3, §6.3);
 - deliver every topic in §5.3's status-event table to every adapter
   as a status event, with `data` unchanged (§5.3);
+- deliver every template event with the active entry's `index` and
+  the namespace's `page_count` (§6.3); on a valid `gui.page.focus`,
+  change that namespace's active entry in that session, dispatch the
+  new entry, with its new `index`, to every adapter, and restart the
+  namespace's removal timer (§4.2);
 - start and operate with zero adapters installed (headless no-op) and
   skip-and-log any adapter that fails to construct, without aborting
   startup (§6.1);
@@ -973,6 +1026,8 @@ layer-2 trust-boundary concern as the producing namespace (§4.1).
   `session_id`, with `"default"` not a wildcard (§5.1);
 - never fail on a template it cannot render — render or decline as a
   no-op (§6.5);
+- send `gui.page.focus` for a namespace only after it has received
+  that namespace's `index` and `page_count` (§4.2, §6.3);
 - never fail on a status event it does not recognise (§5.3);
 - release per-namespace state on namespace-deactivated (§6.6);
 - emit each interaction event as one `gui.interaction` Message with
