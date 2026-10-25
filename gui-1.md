@@ -48,7 +48,7 @@ This specification defines:
   what events it receives, its handler and hook obligations, and
   capability-degradation guidance;
 - the **interaction path** (§7) — the events a render backend emits
-  back to the originating application;
+  back to the originating application, as `gui.interaction`;
 - **conformance** (§8).
 
 This specification does **not** define:
@@ -115,9 +115,8 @@ Within a session, namespaces form a **last-activated-on-top** stack
 - The display **accompanies** a spoken interaction. A template that
   solicits a response is a visual companion to a concurrent spoken
   prompt; the spoken path **MUST** remain sufficient on a client with
-  no display. (No such template is
-  normative in this version — the round-trip names are reserved,
-  §3.4.)
+  no display. The interactive companions of §3.4 are such templates;
+  their GUI reply is a shortcut (§7.2).
 
 ---
 
@@ -151,8 +150,8 @@ intent (§4.3). A page name that does not begin with `SYSTEM_` is **not
 a template of this specification**; a conforming GUI service **MUST
 NOT** dispatch it as a template (§4.3).
 
-A page name that **does** begin with `SYSTEM_` but names neither a
-template in §3.4's catalogue nor a name reserved by §3.4 is not
+A page name that **does** begin with `SYSTEM_` but names no template
+in §3.4's catalogue is not
 recognised by any adapter conformant to this version. This is not a
 protocol error: it is the ordinary case of an adapter receiving a
 template it cannot render, and is handled exactly as §6.5 already
@@ -163,8 +162,8 @@ does not guarantee every `SYSTEM_`-prefixed name is currently defined
 or renderable.
 
 A conforming GUI service **MUST** emit an observable diagnostic
-naming a `SYSTEM_`-prefixed page name it dispatches that names
-neither a template in §3.4's catalogue nor a name reserved by §3.4,
+naming a `SYSTEM_`-prefixed page name it dispatches that names no
+template in §3.4's catalogue,
 so that a deployment in which no installed adapter recognises the
 template is still diagnosable rather than silently rendering
 nothing. This specification defines no wire topic for the diagnostic;
@@ -291,21 +290,31 @@ backend treats an unlisted value as absent. When `condition_code` is
 present a backend **SHOULD** style the condition from it, and
 **MAY** show `icon` in place of its own styling.
 
-#### Interactive companions — reserved names
+#### Interactive companions
 
-Two round-trip template names are **reserved** but not defined:
-`SYSTEM_confirm` (a yes/no companion to a spoken question, `question`
-string) and `SYSTEM_select` (a choice companion to a spoken set of
-options, `prompt` string plus `items` array of `{label, value}`).
-Their display leg is straightforward, but their **reply leg** — the
-interaction event carrying the user's answer back to the originating
-application (§7.2) — has no specified topic or payload schema, and a
-template whose interaction reply is unspecified is unimplementable
-interoperably: every producer/adapter pair would invent its own return
-channel. The names are reserved so that no application-defined
-template claims them; specifying the full round trip is left to an
-amendment of this specification. Producers **MUST NOT** emit them; the
-spoken path (§2.3) covers the interaction on its own.
+Each of these templates accompanies a spoken prompt and lets the
+user answer it on the display. The spoken path stays authoritative
+(§2.3); the GUI reply is a shortcut.
+
+| Template | Keys | Meaning |
+|----------|------|---------|
+| `SYSTEM_confirm` | `question` (string, *req*), `yes_label` (string), `no_label` (string) | A yes/no companion to a spoken question. The labels override the backend's own wording for the two answers. |
+| `SYSTEM_select` | `prompt` (string, *req*), `items` (array of `{label (req), value (req), image}`, *req*) | A choice companion to a spoken set of options. `label` is display text; `value` (string or number) is what the reply carries; `image` obeys §3.3 / §3.5. |
+| `SYSTEM_input` | `prompt` (string, *req*), `placeholder` (string), `secret` (boolean) | A free-text companion to a spoken question. `secret` true asks the backend to mask the entered text. |
+
+When the user answers on the display, a render backend **MAY** emit
+the template's reply event. It travels as the `event` and `data` of a
+`gui.interaction` Message (§7.2):
+
+| Template | Reply event | `data` |
+|----------|-------------|--------|
+| `SYSTEM_confirm` | `confirm` | `{"answer": true \| false}` |
+| `SYSTEM_select` | `select` | `{"value": …}`, the `value` of the chosen item, unchanged |
+| `SYSTEM_input` | `input` | `{"text": …}`, the entered text as a string |
+
+A backend that cannot take the answer renders the prompt alone, or
+degrades per §6.5; the spoken path covers the interaction on its
+own.
 
 ### 3.5 Image delivery
 
@@ -825,8 +834,8 @@ values later reads them from the state query surface (§6.7).
 
 The subsystem is output-primary; the input path is deliberately
 narrow. A render backend emits an event back to the originating
-application only for the templates that define one, and only as a
-**shortcut** for a path the spoken interaction already covers (§2.3).
+application only as a **shortcut** for a path the spoken interaction
+already covers (§2.3).
 
 ### 7.1 Media transport
 
@@ -838,18 +847,48 @@ template's session data is a reflection of media state, not a command
 channel. The media-control wire surface is owned by the media
 subsystem and is out of scope here.
 
-### 7.2 Interactive companions (reserved)
+### 7.2 Interaction events
 
-The round-trip templates are reserved, not defined, in this version
-(§3.4). When a future version specifies them, the reply leg will
-follow the shape sketched here: the render backend emits an
-interaction event back to the originating namespace, carrying the
-originating `session_id` in the Message context so the application
-can attribute the answer to the session it asked in; the application
-treats the event as a *shortcut* — it independently handles the
-spoken response and never blocks waiting for the GUI event (§2.3).
-Until the event topic and payload schema are specified, there is no
-conformant way to emit or consume these templates.
+A render backend **MAY** emit an interaction event: the interactive
+companions' reply events (§3.4), or any other event a namespace
+expects from its display. The adapter **MUST** emit each one as one
+Message of type `gui.interaction` on the Message bus, with the bus
+handle it is constructed with (§6.2):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `namespace` | string | The namespace the event answers (§2.2). |
+| `event` | string | The event name, e.g. a reply event of §3.4. |
+| `data` | object | The event's payload. |
+
+The context carries the `session_id` of the client the event came
+from (§5.1). The Message is not a producer Message (§4.2), so §4.1
+does not apply to it and its context names no `skill_id`. A client
+with no Message-bus access of its own, such
+as a web client, reaches the bus through its adapter: it sends the
+event over the adapter's own transport, and the adapter emits it.
+
+```json
+{
+  "type": "gui.interaction",
+  "data": {
+    "namespace": "weather.example",
+    "event": "confirm",
+    "data": { "answer": true }
+  },
+  "context": { "session": { "session_id": "kitchen" } }
+}
+```
+
+An application subscribes to `gui.interaction`, keeps the Messages
+whose `namespace` is its own, and attributes the answer to the session
+it asked in. The application **MUST** treat the event as a
+*shortcut*: it handles the spoken response independently and **MUST
+NOT** block waiting for the GUI event (§2.3).
+
+An application trusts `namespace` as delivered: any client can emit
+any event into any namespace. Verifying who emitted it is the same
+layer-2 trust-boundary concern as the producing namespace (§4.1).
 
 ---
 
@@ -935,7 +974,11 @@ conformant way to emit or consume these templates.
 - never fail on a template it cannot render — render or decline as a
   no-op (§6.5);
 - never fail on a status event it does not recognise (§5.3);
-- release per-namespace state on namespace-deactivated (§6.6).
+- release per-namespace state on namespace-deactivated (§6.6);
+- emit each interaction event as one `gui.interaction` Message with
+  `namespace`, `event` and `data`, and the originating `session_id`
+  in the context; a companion's reply uses the `event` name and
+  payload §3.4 defines for it (§7.2).
 
 ### 8.5 A conforming adapter SHOULD
 

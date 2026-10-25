@@ -658,6 +658,18 @@ Message as `Message(type, data)` with no context and puts
 | `data.__from` | `context.skill_id` | GUI-1 §4.1, the attribution key of INTENT-4 §3.1. For one stable release cycle a producer **MAY** keep sending `__from` beside `context.skill_id`, and a GUI service **MAY** read `__from` when the context names no `skill_id`. GUI-1 reserves no data keys, so during that cycle a GUI service removes `__from` from `data` before it merges the rest as session data. After that cycle a GUI Message with no `context.skill_id` is ignored with a diagnostic. |
 | `data.__idle` | `data.persist` | GUI-1 §4.2, §4.3; same values and meaning. For one stable release cycle a producer **MAY** keep sending `__idle` beside `persist`, and a GUI service **MAY** read `__idle` when `persist` is absent. A `null` `__idle` means omitted. `gui.page.show` data is not session data, so nothing is stripped. |
 
+#### Interaction events (GUI-1)
+
+The legacy GUI service turns a client's `mycroft.events.triggered`
+into a bus Message whose type it builds from the client's `namespace`
+and `event_name` (`ovos-gui` `bus.py` `on_message`).
+`GUIInterface.register_handler` in `ovos-bus-client` subscribes to
+that type.
+
+| Predecessor topic | Replacement | Notes |
+|--------------|---------------|-------|
+| `<namespace>.<event>` (data: the event's `parameters`) | `gui.interaction` (`namespace`, `event`, `data`) | GUI-1 §7.2. The predecessor puts a skill id in the message type, can collide with a skill's own messages, and cannot be filtered as one family. The adapter, not the GUI service, emits the replacement. An adapter MAY emit both for one stable release cycle (VERSIONING.md). |
+
 ### 5.8 Bus bridge (BRIDGE-1)
 
 - **BRIDGE-1 defines source-stamping and destination-based routing;
