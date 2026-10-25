@@ -421,7 +421,18 @@ A `gui.page.show` whose first `page_names` entry is **not** a
 `SYSTEM_*` template is not a template intent under this specification.
 A conforming GUI service **MUST NOT** dispatch it to adapters as a
 template; it MAY reject it or route it to a deployment-specific legacy
-path outside this specification's scope.
+path. §6.3 defines one such path, the legacy-page hook; a producer
+that relies on it is not conformant (§8.1).
+
+The **first** entry of `page_names` selects the path for the whole
+namespace: the template path when it is a `SYSTEM_*` template, the
+legacy path otherwise. The GUI service then dispatches the **active**
+entry (the one at `index`) through that path. A `page_names` that
+mixes `SYSTEM_*` templates and other names is a producer error. The
+GUI service keeps the path the first entry selects, emits one
+observable diagnostic for the namespace, and never dispatches a
+non-`SYSTEM_*` entry as a template (§3.2): when such an entry is
+active on the template path, nothing is dispatched for it.
 
 When `page_names` carries more than one entry, all entries belong to
 **one namespace** — they are not independent activations. Only the
@@ -623,6 +634,32 @@ merged (§4.2).
 | status-event | a device-wide status signal occurred (§5.3) | broadcast (`event_name`, `data`, `session_id` informational) |
 
 §5.3 lists the status events every GUI service delivers.
+
+**Legacy-page hook** (optional, transitional). Carries `(skill_id,
+page, data, session_id, index, page_count)`, as
+`on_legacy_page(skill_id, page, data, session_id, index,
+page_count)`. It exists only so that a display can show an
+application that still names its own pages while applications move to
+the templates of §3.4. It is not part of the template contract: a
+producer that relies on it is not conformant (§8.1), and a later
+version of this specification may remove it.
+
+- The GUI service **MUST NOT** dispatch a non-template page as a
+  template (§4.2). When the first entry of `page_names` selects the
+  legacy path (§4.2), it **MAY** instead deliver the name of the
+  namespace's active entry, exactly as the producer sent it, as `page`
+  to the adapters that implement this hook.
+- `data` is the namespace's merged session data with reserved keys
+  stripped (§4.1), the same map a template event carries.
+- `index` is the zero-based position of the active entry in the
+  namespace's `page_names`, and `page_count` is the length of
+  `page_names` (§4.2), so that a backend can page through a legacy
+  namespace as it does through templates.
+- Session routing, activation, `__idle`, deactivation and idle apply
+  as for a template (§4.3, §5.1).
+- The GUI service logs one diagnostic per namespace and page the first
+  time it takes this path.
+- An adapter that does not implement the hook ignores it.
 
 An adapter **MUST** treat per-session events as addressed to the
 clients on the carried `session_id` (§5.1) and **SHOULD** broadcast

@@ -758,6 +758,26 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §6.3, §4.2 — the legacy-page hook (optional, transitional). §4.2
+  lets a GUI service route a page that is not a template to a
+  deployment-specific legacy path but described none, so every stock
+  skill, which names its own pages, shows nothing on a GUI-1 display
+  until it moves to templates. §4.2 now states that the first entry
+  of `page_names` selects the path for the namespace, that the
+  service dispatches the active entry through it, and that a list
+  mixing templates and other names is a producer error handled by the
+  first-entry rule with one diagnostic. On the legacy path a GUI
+  service MAY deliver the active entry's name, exactly as the producer
+  sent it, with the namespace's merged data and the active entry's
+  `index` and the `page_count`, to the adapters that implement
+  `on_legacy_page(skill_id, page, data, session_id, index,
+  page_count)`. Session routing and the stack rules are those of a template, and
+  the service logs one diagnostic per namespace and page. It still
+  MUST NOT dispatch such a page as a template, and a producer that
+  relies on the hook is not conformant (§8.1). The class stays 1: the
+  change adds a MAY. New work: OPM adds the hook and `ovos-gui` routes
+  to it, both on prototype branches that follow this text (the
+  first-entry rule, `index` and `page_count`).
 - §6.9.1 (new) — ambient data for the resting display. §6.9 gives the
   resting display to the backend but named no source for what it
   shows, so the only weather and notification data a resting screen
