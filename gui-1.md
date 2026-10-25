@@ -115,8 +115,8 @@ Within a session, namespaces form a **last-activated-on-top** stack
   **MUST NOT** block waiting for a GUI-originated event (§7).
 - The display **accompanies** a spoken interaction. A template that
   solicits a response is a visual companion to a concurrent spoken
-  prompt; the spoken path **MUST** remain sufficient on a
-  display-only or display-less client. (No such template is
+  prompt; the spoken path **MUST** remain sufficient on a client with
+  no display. (No such template is
   normative in this version — the round-trip names are reserved,
   §3.4.)
 
@@ -170,9 +170,10 @@ so that a deployment in which no installed adapter recognises the
 template is still diagnosable rather than silently rendering
 nothing. This specification defines no wire topic for the diagnostic;
 absent one, the GUI service **MUST** log it. The GUI service **MUST**
-continue processing the remaining entries of the namespace's
+continue checking the remaining entries of the namespace's
 `page_names` (§4.2) after emitting the diagnostic; an unrecognised
-entry **MUST NOT** halt dispatch of the rest of the namespace.
+entry **MUST NOT** stop the dispatch of the active entry. The held
+entries are checked, not dispatched (§4.2).
 
 ### 3.3 Session-data typing rules
 
@@ -216,10 +217,14 @@ template to render meaningfully, all others are optional.
 
 | Template | Keys | Meaning |
 |----------|------|---------|
-| `SYSTEM_idle` | — | A request to return to the resting state. *What* the resting display shows (clock, wallpaper, now-playing, nothing, …) is owned entirely by the rendering backend — see §6.9. An application **MUST NOT** request this template directly and **MUST NOT** provide a resting/home screen of its own. |
 | `SYSTEM_loading` | `label` (string) | An indeterminate progress indication with an optional label. |
 | `SYSTEM_status` | `label` (string), `success` (boolean) | A terminal success/failure result. `success` selects the affirmative or negative presentation. |
 | `SYSTEM_error` | `label` (string, *req*), `detail` (string) | An error, with a short message and optional detail. |
+
+A session returns to its resting display when its namespace stack
+empties, through the idle hook (§4.3, §6.3),
+and what that display shows is owned entirely by the render backend
+(§6.9).
 
 #### Content primitives
 
@@ -480,17 +485,17 @@ active namespaces.
   already on top — moves it to the top of that session's stack,
   invoking the activation hook on every adapter (§6.3).
 - **Persist.** `__idle` controls how long the activated namespace
-  stays on top before automatic removal:
+  stays on the stack before automatic removal:
 
   | `__idle` | Behaviour |
   |----------|-----------|
   | `true` | Persistent — stays until cleared. |
-  | `false` | Not persistent — the render backend **MUST NOT** treat the namespace as idle-persistent; removal follows the same deployment default as an omitted `__idle`. |
+  | `false` | Not persistent — the GUI service treats it as omitted. |
   | a number *N* | Visible for *N* seconds, then auto-removed. |
   | omitted / absent | A deployment default applies. RECOMMENDED default: `30` (auto-remove after 30 seconds). |
 
-  A namespace persisted with `__idle: true` stays on top until an
-  explicit `gui.clear.namespace`, even if its producer terminates or
+  A namespace persisted with `__idle: true` stays on the stack until
+  an explicit `gui.clear.namespace`, even if its producer terminates or
   crashes without emitting one — this specification defines no
   liveness check on producers, so a vanished producer's persistent
   namespace is not reclaimed by any mechanism here. This is a
@@ -498,9 +503,14 @@ active namespaces.
   producer liveness, and cleanup of such an orphaned namespace is left
   to deployer policy (e.g. a supervisor that clears a skill's
   namespaces on process exit).
+- **Supersede.** When another namespace moves to the top, each
+  non-persistent namespace below it is removed (below). A persistent
+  namespace stays on the stack, below the new top. When the
+  namespaces above it are removed, it is on top again, and the
+  activation hook is invoked for it on every adapter (§6.3).
 - **Deactivate / clear.** On `gui.clear.namespace`, on auto-removal by
-  the `__idle` timer, or when another namespace supersedes it, the
-  namespace is removed from the session's active stack and the
+  the `__idle` timer, or when it is superseded while not persistent,
+  the namespace is removed from the session's active stack and the
   deactivation hook is invoked on every adapter (§6.3). When the stack
   becomes empty the session returns to its idle presentation, and the
   idle hook is invoked on every adapter with that `session_id` (§6.3).
@@ -551,13 +561,23 @@ The common arrangements:
 
 ### 5.3 System-wide signals
 
-Some events are not per-session: device-wide status signals (e.g.
-wake-word detected, the assistant is speaking) and certain lifecycle
-notifications concern the device as a whole. These are delivered to
-adapters as **status events** (§6.3) and a render backend **SHOULD**
-broadcast them to all of its connected clients regardless of
-`session_id`. The `session_id` accompanying a status event is
-informational; it is not a delivery filter.
+Signals about the assistant's state reach adapters as **status
+events** (§6.3), whatever their session. Each topic below has a
+scope:
+
+- **device-wide** — it concerns the device as a whole (the wake word
+  and recording on the device's microphone, sleep). A render backend
+  **SHOULD**
+  broadcast it to all of its connected clients regardless of
+  `session_id`; the `session_id` that accompanies it is informational.
+- **per-session** — it concerns one session's interaction (thinking,
+  speaking), and its `session_id` names that
+  session. A render backend **MAY** deliver it only to the clients of
+  that `session_id`, so that a reply in one room does not animate the
+  screens of another; otherwise it broadcasts it.
+
+A further topic, delivered under the **MAY** below the table, is
+device-wide unless its defining specification says otherwise.
 
 A conforming GUI service **MUST** deliver each topic below to every
 adapter as a status event, with `event_name` set to the topic and
@@ -565,24 +585,24 @@ adapter as a status event, with `event_name` set to the topic and
 draws listening, thinking or speaking feedback (a face, a light ring,
 an indicator) is written against this set.
 
-| Renderer use | Topic | Defined in |
-|--------------|-------|------------|
-| listening began | `ovos.listener.wakeword` | OVOS-AUDIO-IN-1 §6.5 |
-| listening began | `ovos.listener.record.started` | OVOS-AUDIO-IN-1 §6.1 |
-| listening ended | `ovos.listener.record.ended` | OVOS-AUDIO-IN-1 §6.2 |
-| listening failed | `ovos.stt.failed` | OVOS-AUDIO-IN-1 §5 |
-| thinking began | `ovos.utterance.handle` | OVOS-PIPELINE-1 §9.1 |
-| thinking began | `ovos.intent.handler.start` | OVOS-PIPELINE-1 §8 |
-| thinking ended | `ovos.intent.handler.complete` | OVOS-PIPELINE-1 §8 |
-| thinking ended | `ovos.intent.handler.error` | OVOS-PIPELINE-1 §8 |
-| thinking ended | `ovos.intent.unmatched` | OVOS-PIPELINE-1 §9.3 |
-| thinking ended | `ovos.utterance.handled` | OVOS-PIPELINE-1 §9.5 |
-| a response is ready | `ovos.utterance.speak` | OVOS-PIPELINE-1 §9.6 |
-| mouth shapes for speech | `ovos.audio.output.visemes` | OVOS-AUDIO-1 §5.4 |
-| speaking began | `ovos.audio.output.started` | OVOS-AUDIO-1 §5.1 |
-| speaking ended | `ovos.audio.output.ended` | OVOS-AUDIO-1 §5.2 |
-| sleep | `ovos.listener.sleep` | OVOS-AUDIO-IN-1 §6.3 |
-| awoken | `ovos.listener.awoken` | OVOS-AUDIO-IN-1 §6.4 |
+| Renderer use | Topic | Scope | Defined in |
+|--------------|-------|-------|------------|
+| listening began | `ovos.listener.wakeword` | device-wide | OVOS-AUDIO-IN-1 §6.5 |
+| listening began | `ovos.listener.record.started` | device-wide | OVOS-AUDIO-IN-1 §6.1 |
+| listening ended | `ovos.listener.record.ended` | device-wide | OVOS-AUDIO-IN-1 §6.2 |
+| listening failed | `ovos.stt.failed` | per-session | OVOS-AUDIO-IN-1 §5 |
+| thinking began | `ovos.utterance.handle` | per-session | OVOS-PIPELINE-1 §9.1 |
+| thinking began | `ovos.intent.handler.start` | per-session | OVOS-PIPELINE-1 §8 |
+| thinking ended | `ovos.intent.handler.complete` | per-session | OVOS-PIPELINE-1 §8 |
+| thinking ended | `ovos.intent.handler.error` | per-session | OVOS-PIPELINE-1 §8 |
+| thinking ended | `ovos.intent.unmatched` | per-session | OVOS-PIPELINE-1 §9.3 |
+| thinking ended | `ovos.utterance.handled` | per-session | OVOS-PIPELINE-1 §9.5 |
+| a response is ready | `ovos.utterance.speak` | per-session | OVOS-PIPELINE-1 §9.6 |
+| mouth shapes for speech | `ovos.audio.output.visemes` | per-session | OVOS-AUDIO-1 §5.4 |
+| speaking began | `ovos.audio.output.started` | per-session | OVOS-AUDIO-1 §5.1 |
+| speaking ended | `ovos.audio.output.ended` | per-session | OVOS-AUDIO-1 §5.2 |
+| sleep | `ovos.listener.sleep` | device-wide | OVOS-AUDIO-IN-1 §6.3 |
+| awoken | `ovos.listener.awoken` | device-wide | OVOS-AUDIO-IN-1 §6.4 |
 
 The GUI service **MAY** deliver further topics as status events. An
 adapter **MUST NOT** fail on a status event it does not recognise; it
@@ -649,15 +669,15 @@ merged, and on every `gui.value.replace` after it is replaced (§4.2).
 | namespace-deactivated | a namespace leaves the active stack | per-session (`skill_id`, `session_id`) |
 | idle (`on_idle(session_id)`) | a session's stack becomes empty (§4.3) | per-session (`session_id`) |
 | session-update | a `gui.value.set` was applied | per-session (`skill_id`, `data`, `session_id`) |
-| status-event | a device-wide status signal occurred (§5.3) | broadcast (`event_name`, `data`, `session_id` informational) |
+| status-event | a status signal occurred (§5.3) | by the topic's scope (§5.3): broadcast, or per-session (`event_name`, `data`, `session_id`) |
 
 §5.3 lists the status events every GUI service delivers.
 
 An adapter **MUST** treat per-session events as addressed to the
-clients on the carried `session_id` (§5.1) and **SHOULD** broadcast
-status events to all clients (§5.3). Idle is a per-session event: a
-client on another session, whose stack is not empty, does not return
-to its resting display.
+clients on the carried `session_id` (§5.1) and **SHOULD** deliver
+status events by the scope §5.3 gives each topic. Idle is a
+per-session event: a client on another session, whose stack is not
+empty, does not return to its resting display.
 
 ### 6.4 Multi-modal fan-out
 
@@ -691,7 +711,7 @@ gracefully declining — every template.
 
   | Requested | Suggested degradation |
   |-----------|-----------------------|
-  | `SYSTEM_video_player` | a still image (`image`/`icon`) plus the title as text |
+  | `SYSTEM_video_player` | the title as text |
   | `SYSTEM_media_player` / `SYSTEM_audio_player` | track title + artist as text |
   | `SYSTEM_table` | the rows rendered as a list |
   | `SYSTEM_grid` | the items rendered as a list |
@@ -723,21 +743,25 @@ and a producer **MUST NOT** assume any template was actually rendered.
   state on namespace-deactivated. It **MUST NOT** mutate GUI-service
   state, and **SHOULD NOT** cache the `data` map across events — it
   re-reads current state from the GUI service's read-only query
-  surface (§6.7) when it needs state later.
+  surface (§6.7), where the service offers one, when it needs state
+  later.
 
 ### 6.7 State query (recovery)
 
 The GUI service **MAY** expose a read-only query surface for an
 adapter that must reconstruct current state — for example a client
 that connects after a template was already shown. Such queries return
-**copies** of current per-session namespace state and **MUST NOT**
-mutate it. An adapter using them **MUST** tolerate a `None`/empty
-result, since the queried namespace may have been removed between query
-and use. The exact query surface is backend-facing and non-normative.
+**copies** of current per-session namespace state, and of the kept
+ambient data (§6.9.1), and **MUST NOT** mutate it. An adapter using
+them **MUST** tolerate a `None`/empty result, since the queried
+namespace may have been removed between query and use. An adapter
+that rebuilds a late client's state (a snapshot) includes the kept
+ambient data with the namespace stack. The exact query surface is
+backend-facing and non-normative.
 
 ### 6.8 Connection status
 
-An adapter **MAY** report whether it currently has at least one
+An adapter **SHOULD** report whether it currently has at least one
 connected client. The GUI service aggregates these reports to answer a
 connectivity query: the subsystem reports "a display is connected" if
 **any** installed adapter reports a connected client. An adapter that
@@ -754,10 +778,9 @@ nothing at all) — is owned **entirely by the render backend**. It is a
 property of the surface, not of any application.
 
 - An application **MUST NOT** provide, register, or render a resting /
-  home screen, and **MUST NOT** assume one exists. `SYSTEM_idle` is a
-  request to *return to* the resting state (§3, §4.3); it carries no
-  content and does not let the caller dictate what the resting state
-  looks like.
+  home screen, and **MUST NOT** assume one exists. No template
+  requests the resting state (§3.4): a session returns to it when its
+  stack empties (§4.3), and no caller dictates what it looks like.
 - A render backend **MAY** present any resting display it chooses, or
   none. Two backends driven by the same subsystem **MAY** show entirely
   different idle surfaces.
@@ -835,6 +858,11 @@ conformant way to emit or consume these templates.
 
 - name only templates from the closed vocabulary (§3); never invent
   template names;
+- use no `__`-prefixed key as session data, and set `__from` only to
+  its own namespace (§4.1);
+- provide, register or render no resting or home screen (§6.9);
+- send every `SYSTEM_table` row with the length of `columns`, and no
+  `condition_code` outside the list in §3.4;
 - emit `gui.page.show` with a `SYSTEM_*` template as the first
   `page_names` entry (§4.2);
 - include `__from` on every GUI Message it emits (§4.1);
@@ -872,6 +900,8 @@ conformant way to emit or consume these templates.
 - route by `session_id` alone, defaulting an absent/empty session to
   `"default"` (§5.1), and maintain an independent namespace stack per
   `session_id` (§4.3);
+- log a diagnostic for a `SYSTEM_` name outside the catalogue, and
+  still dispatch the namespace's active entry (§3.2);
 - deliver every template event, session-data update, and lifecycle
   hook to **every** installed adapter (§6.3, §6.4);
 - invoke the idle hook with the `session_id` of the session whose
@@ -883,6 +913,11 @@ conformant way to emit or consume these templates.
   startup (§6.1);
 - run no client transport and perform no rendering of its own (§2.1).
 
+### 8.3a A conforming GUI service SHOULD
+
+- keep the most recent Message on each ambient topic and deliver it
+  to every adapter as a status event (§6.9.1).
+
 ### 8.4 A conforming adapter MUST
 
 - be discoverable via the adapter entry-point group (§6.1);
@@ -891,6 +926,10 @@ conformant way to emit or consume these templates.
 - never let an exception escape a handler or hook (§6.6);
 - never block the dispatch path and never mutate GUI-service state
   (§6.6);
+- treat the session-data map delivered with an event as the namespace's
+  authoritative current state (§3.3), not rely on the GUI service's
+  defensive wrapping (§6.4), and tolerate a `None`/empty result from
+  the query surface (§6.7);
 - treat per-session events as addressed to the clients on the carried
   `session_id`, with `"default"` not a wildcard (§5.1);
 - never fail on a template it cannot render — render or decline as a
@@ -902,12 +941,15 @@ conformant way to emit or consume these templates.
 
 - degrade an unrenderable template to the nearest renderable
   presentation rather than show nothing (§6.5);
-- broadcast status events to all clients regardless of `session_id`
-  (§5.3), and deliver idle only to the clients of its session (§6.9);
+- broadcast device-wide status events to all clients regardless of
+  `session_id` (§5.3), and deliver idle only to the clients of its
+  session (§6.9);
 - report connection status so the connectivity aggregate is accurate
   (§6.8);
-- re-read state from the GUI service's query surface rather than cache
-  the `data` map (§6.6, §6.7).
+- re-read state from the GUI service's query surface, where the
+  service offers one, rather than cache the `data` map (§6.6, §6.7);
+- style a weather condition from `condition_code` when it is present
+  (§3.4).
 
 ### 8.6 Non-goals
 

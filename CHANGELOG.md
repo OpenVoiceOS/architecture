@@ -758,6 +758,33 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §2.3, §3.2, §3.4, §4.3, §5.3, §6.3, §6.5–§6.9, §8 — consistency
+  fixes found by an independent review of the whole section.
+  §4.3 said a superseded namespace is removed, yet a persistent one
+  "stays on top"; it now states the rule the reference service runs:
+  a superseded non-persistent namespace is removed, and a persistent
+  one stays below and is activated again when what covered it goes.
+  `__idle: false` is treated as omitted by the GUI service, which runs
+  the timer. §5.3 gives every status topic a scope: the wake word,
+  recording start and end, sleep and awoken come from the device's
+  microphone and are device-wide and broadcast; the rest are
+  per-session, and a backend MAY deliver them only to their session.
+  `SYSTEM_idle` is removed from the catalogue: no application could
+  send it, and a session returns to its resting display through the
+  idle hook. §3.2 checks the held entries rather than
+  dispatching them. §6.5 degrades `SYSTEM_video_player` to its title,
+  since the template has no image. §6.7 covers the kept ambient data,
+  and a snapshot carries it. §6.8 and §8.5 agree on SHOULD for the
+  connection report, and the query-surface SHOULD applies where the
+  service offers one. §2.3 says "a client with no display". §8.1,
+  §8.3, §8.4 and §8.5 gain the rows for MUSTs and SHOULDs the body
+  already stated, and a new §8.3a lists what a GUI service SHOULD do.
+  GLOSSARY.md separates adapter, render backend and client, and adds
+  page entries, predecessor topics, the resting display
+  and idle. The class stays 1: every change states existing behaviour
+  or relaxes a rule, and the one removal is a name no conforming
+  producer could send. New work: `ovos-gui`, OPM and render backends
+  stop treating `SYSTEM_idle` as a template.
 - §4.2 — `gui.value.replace` (new). Session data is cumulative
   (§3.3), so a producer that moved from one template to another could
   drop the earlier template's keys only by sending `null` for each
