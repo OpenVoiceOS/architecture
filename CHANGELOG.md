@@ -797,6 +797,20 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §5.4 (new) — notifications. The specification had no way to show a
+  short message without taking over the screen: a template activates
+  a namespace, and §6.9.1 carries only a count. Two new topics,
+  `ovos.notification.set` (`id`, `text`, `sender`, `type`, `style`,
+  `action`, `duration_ms`) and `ovos.notification.clear` (`id`), MAY
+  be emitted by any component, and the GUI service SHOULD deliver
+  both to every adapter as status events, so they are device-wide.
+  The render backend owns the presentation. A tapped notification's
+  adapter emits `gui.interaction` (§7.2) with `sender` as `namespace`
+  and `action` as `event`. §8.3a gains the service row; the list is
+  the one the editorial consistency change adds. The class stays 1: the topics are new and
+  optional, and a producer MAY also emit the predecessor
+  `ovos.notification.api.set` for one stable release cycle, which
+  `appendix/divergences.md` §5.7 maps.
 - §3.3, §3.4, §3.5, §6.9.1 — catalogue gaps that a render backend
   implementing every template met, where each implementer would
   otherwise guess. `items` is required on `SYSTEM_list` and

@@ -44,7 +44,8 @@ This specification defines:
   `gui.page.focus` request a render backend sends, where a GUI
   Message names its namespace, and the namespace lifecycle topics;
 - **addressing and routing** (§5) — the rule that a GUI Message is
-  routed solely by its `session_id`;
+  routed solely by its `session_id`, and the `ovos.notification.*`
+  topics shown outside the templates;
 - the **adapter contract** (§6) — how a render backend is discovered,
   what events it receives, its handler and hook obligations, and
   capability-degradation guidance;
@@ -677,6 +678,42 @@ The GUI service **MAY** deliver further topics as status events. An
 adapter **MUST NOT** fail on a status event it does not recognise; it
 ignores it.
 
+### 5.4 Notifications
+
+A notification is a short message shown outside the templates: it
+does not activate a namespace, never enters a namespace stack (§4.3),
+and does not replace what a session shows. Any component **MAY** emit
+the topics below. A GUI service **SHOULD** deliver each one to every
+adapter as a status event, with `event_name` set to the topic and
+`data` unchanged (§5.3). Notifications are device-wide.
+
+| Topic | `data` | Meaning |
+|-------|--------|---------|
+| `ovos.notification.set` | the fields below | Show a notification, or replace the one with the same `id`. |
+| `ovos.notification.clear` | `id` (string, *req*) | Remove the notification with this `id`. An unknown `id` is ignored. |
+
+`ovos.notification.set` carries:
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `id` | string, *req* | Identifies the notification for replacement and removal. |
+| `text` | string, *req* | The notification text. |
+| `sender` | string | The namespace (§2.2) of the component that sent it. Required when `action` is present. |
+| `type` | string: `transient` \| `sticky` | `transient` (the default) goes away by itself; `sticky` stays until cleared. |
+| `style` | string: `info` \| `warning` \| `error` | The presentation class; `info` is the default. |
+| `action` | string | The interaction event to emit when the user taps the notification. |
+| `duration_ms` | number, ms | How long a transient notification shows; the backend's default when omitted. |
+
+The render backend owns the presentation: position, grouping, sound,
+whether it keeps a list, and how many it shows at once. A backend
+**MAY** ignore notifications. When the user taps a notification that
+carries `action`, the backend **MAY** emit an interaction event with
+namespace `sender`, event `action` and data `{"id": …}`, from the
+client that was tapped; its adapter emits it as a `gui.interaction`
+Message (§7.2). The notification topics are status topics, not GUI
+Messages, so §4.1 does not apply to them: the context need not name
+a `skill_id`.
+
 ---
 
 ## 6. The adapter contract
@@ -1037,7 +1074,9 @@ layer-2 trust-boundary concern as the producing namespace (§4.1).
 - emit an observable diagnostic when a namespace it does not know as
   the media subsystem's sends `SYSTEM_media_player` (§3.4);
 - keep the most recent Message on each ambient topic and deliver it
-  to every adapter as a status event (§6.9.1).
+  to every adapter as a status event (§6.9.1);
+- deliver `ovos.notification.set` and `ovos.notification.clear` to
+  every adapter as status events (§5.4).
 
 ### 8.4 A conforming adapter MUST
 
