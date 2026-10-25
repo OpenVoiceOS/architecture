@@ -474,7 +474,8 @@ active namespaces.
   the `__idle` timer, or when another namespace supersedes it, the
   namespace is removed from the session's active stack and the
   deactivation hook is invoked on every adapter (§6.3). When the stack
-  becomes empty the session returns to its idle presentation.
+  becomes empty the session returns to its idle presentation, and the
+  idle hook is invoked on every adapter with that `session_id` (§6.3).
 
 The lifecycle is **per session**: each `session_id` owns an
 independent stack (§5). A namespace activation in one session does not
@@ -618,7 +619,7 @@ merged (§4.2).
 |------|------|---------|
 | namespace-activated | a namespace moves to the top of a session's stack | per-session (`skill_id`, `session_id`) |
 | namespace-deactivated | a namespace leaves the active stack | per-session (`skill_id`, `session_id`) |
-| idle | the display returns to its resting state | device-wide |
+| idle (`on_idle(session_id)`) | a session's stack becomes empty (§4.3) | per-session (`session_id`) |
 | session-update | a `gui.value.set` was applied | per-session (`skill_id`, `data`, `session_id`) |
 | status-event | a device-wide status signal occurred (§5.3) | broadcast (`event_name`, `data`, `session_id` informational) |
 
@@ -626,7 +627,9 @@ merged (§4.2).
 
 An adapter **MUST** treat per-session events as addressed to the
 clients on the carried `session_id` (§5.1) and **SHOULD** broadcast
-status events and device-wide signals to all clients (§5.3).
+status events to all clients (§5.3). Idle is a per-session event: a
+client on another session, whose stack is not empty, does not return
+to its resting display.
 
 ### 6.4 Multi-modal fan-out
 
@@ -730,6 +733,9 @@ property of the surface, not of any application.
 - A render backend **MAY** present any resting display it chooses, or
   none. Two backends driven by the same subsystem **MAY** show entirely
   different idle surfaces.
+- The resting display is per session. A backend shows it to the
+  clients of a session when that session's stack empties (the idle
+  hook, §6.3), and only to them. Idle is never device-wide.
 - There is no subsystem-level "home screen" concept, no home-screen
   registry, and no home-screen application type. A backend that wants a
   configurable or app-like resting surface implements that **privately**,
@@ -835,6 +841,8 @@ conformant way to emit or consume these templates.
   `session_id` (§4.3);
 - deliver every template event, session-data update, and lifecycle
   hook to **every** installed adapter (§6.3, §6.4);
+- invoke the idle hook with the `session_id` of the session whose
+  stack became empty, and only then (§4.3, §6.3);
 - deliver every topic in §5.3's status-event table to every adapter
   as a status event, with `data` unchanged (§5.3);
 - start and operate with zero adapters installed (headless no-op) and
@@ -861,8 +869,8 @@ conformant way to emit or consume these templates.
 
 - degrade an unrenderable template to the nearest renderable
   presentation rather than show nothing (§6.5);
-- broadcast status events and device-wide signals to all clients
-  regardless of `session_id` (§5.3);
+- broadcast status events to all clients regardless of `session_id`
+  (§5.3), and deliver idle only to the clients of its session (§6.9);
 - report connection status so the connectivity aggregate is accurate
   (§6.8);
 - re-read state from the GUI service's query surface rather than cache
