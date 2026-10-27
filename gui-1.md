@@ -39,8 +39,9 @@ This specification defines:
 - the **closed template vocabulary** (§3) — the fixed, curated set of
   `SYSTEM_*` templates and each template's normative session-data
   keys;
-- the **wire protocol** (§4) — the `gui.value.set` and `gui.page.show`
-  Message shapes, the reserved keys `__from` / `__idle`, and the
+- the **wire protocol** (§4) — the `gui.value.set`,
+  `gui.value.replace` and `gui.page.show` Message shapes, the reserved
+  keys `__from` / `__idle`, and the
   namespace lifecycle topics;
 - **addressing and routing** (§5) — the rule that a GUI Message is
   routed solely by its `session_id`;
@@ -194,12 +195,13 @@ otherwise:
   required to read the producer's filesystem (§3.5).
 
 Session data is **cumulative within a namespace**: keys set by earlier
-template events persist until the namespace is cleared (§4.3). A
+template events persist until the namespace is cleared (§4.3) or its
+data is replaced with `gui.value.replace` (§4.2). A
 render backend **MUST** treat the session-data map delivered with an
 event as the authoritative current state for that namespace and
 **MUST NOT** assume a key absent from one event has been deleted
-unless the namespace was cleared or the key was removed by an
-explicit `null` (§4.2). Cumulative state, like the namespace
+unless the namespace was cleared, its data was replaced, or the key
+was removed by an explicit `null` (§4.2). Cumulative state, like the namespace
 stack itself, is scoped per `session_id` (§4.3, §5.1) — accumulation
 in one session's namespace has no effect on the same namespace name in
 another session.
@@ -391,6 +393,32 @@ the key, and a `null` value **removes** the key, so a later state
 query (§6.7) does not return it. The service forwards the merged,
 reserved-key-stripped map to every adapter as a session update
 (§6.3); the delivered map no longer contains the removed key.
+
+#### `gui.value.replace` — replace session data
+
+Emitted by a producer to replace its namespace's whole session data
+in one step. `data` carries `__from` and `data`, the new content map.
+
+```json
+{
+  "type": "gui.value.replace",
+  "data": {
+    "__from": "weather.example",
+    "data": { "text": "Done", "title": "Timer" }
+  },
+  "context": { "session": { "session_id": "default" } }
+}
+```
+
+On receipt, the GUI service discards the namespace's cumulative
+session data in that session and stores the new map in its place; a
+`null` value in the new map is not stored. The namespace stack,
+activation and the active entry are unchanged. The service delivers
+one session update (§6.3) with the new, reserved-key-stripped map.
+This exists because a producer that moves to another template has no
+other way to drop the earlier template's keys except a clear, which
+empties the stack and shows the resting display between the two
+templates.
 
 #### `gui.page.show` — request a template
 
@@ -611,7 +639,7 @@ is delivered per active template named in a `gui.page.show`.
 
 **Session-data updates** (per-session). Carry `(skill_id, data,
 session_id)` on every `gui.value.set` after the namespace data is
-merged (§4.2).
+merged, and on every `gui.value.replace` after it is replaced (§4.2).
 
 **Lifecycle hooks.** Invoked as the namespace stack changes:
 
@@ -825,6 +853,8 @@ conformant way to emit or consume these templates.
   escape hatches (§3.6);
 - batch related session-data changes into a single `gui.value.set`
   rather than one Message per key;
+- when it moves to another template, replace its session data with
+  `gui.value.replace` rather than clear its namespace first (§4.2);
 - clear its namespace (`gui.clear.namespace`) when done displaying
   (§4.2).
 
@@ -836,6 +866,9 @@ conformant way to emit or consume these templates.
   delivering it to adapters (§4.1);
 - remove a session-data key whose `gui.value.set` value is `null`
   rather than store the `null` (§3.3, §4.2);
+- on `gui.value.replace`, replace the namespace's session data in one
+  step, leave the stack unchanged, and deliver one session update
+  (§4.2);
 - route by `session_id` alone, defaulting an absent/empty session to
   `"default"` (§5.1), and maintain an independent namespace stack per
   `session_id` (§4.3);

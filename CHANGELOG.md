@@ -758,6 +758,19 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §4.2 — `gui.value.replace` (new). Session data is cumulative
+  (§3.3), so a producer that moved from one template to another could
+  drop the earlier template's keys only by sending `null` for each
+  one, or by clearing its namespace. A clear empties the stack, and
+  every adapter shows its resting display between the two templates:
+  a demo skill that walks the 19 templates produced 19 idles. The new
+  message replaces the namespace's whole session data in one step,
+  without touching the stack, activation or the active entry, and the
+  service delivers one session update with the new map. §3.3 and
+  §6.3 name it beside `gui.value.set`; §8.2 asks a producer that
+  switches templates to use it, and §8.3 gains the service row. The
+  class stays 1: the message is new. New work: `ovos-gui` handles it,
+  and `GUIInterface` in `ovos-bus-client` can offer it.
 - §6.3, §6.9, §4.3 — idle is per session. §4.3 returns a session to
   its idle presentation when that session's stack empties, but the
   idle hook was device-wide and carried no session, so a screen could
