@@ -758,6 +758,18 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §3.4 — `SYSTEM_timer` carries several timers. The new optional
+  `timers` key is an array of `{end_time (req), label, count_up}` in
+  display order. Session data is cumulative per namespace, so a
+  producer could show only one timer, and an application that runs
+  several timers at once could not show them together. The scalar
+  keys alone mean a one-element `timers` array, and when both are
+  present a backend MUST render from `timers`. The class stays 1:
+  the key is optional, every current producer stays valid, and a
+  backend that does not read `timers` still renders the scalar keys
+  when a producer sends both. New work: the timer application
+  (`ovos-skill-alerts`) can send `timers`, and render backends can
+  read it.
 - §6.9.1 (new) — ambient data for the resting display. §6.9 gives the
   resting display to the backend but named no source for what it
   shows, so the only weather and notification data a resting screen
