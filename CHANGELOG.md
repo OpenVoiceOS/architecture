@@ -771,6 +771,31 @@ version 2: its `{{ … }}` sequences become substitution points, and its
   switches templates to use it, and §8.3 gains the service row. The
   class stays 1: the message is new. New work: `ovos-gui` handles it,
   and `GUIInterface` in `ovos-bus-client` can offer it.
+- §6.3, §6.9, §4.3 — idle is per session. §4.3 returns a session to
+  its idle presentation when that session's stack empties, but the
+  idle hook was device-wide and carried no session, so a screen could
+  not tell whose idle it was and the hook reached clients that still
+  showed a page on another session. The hook (`on_idle(session_id)`)
+  now carries the session whose stack became empty and is invoked
+  only then. §6.9 states that the resting display is per session and
+  that idle is never device-wide. §8.3 gains the row and §8.5 no
+  longer lists idle among the broadcasts. The class stays 1 if
+  OPM gives the new argument a default, so an adapter written to the
+  old hook keeps loading. New work: `ovos-gui` calls the hook when any
+  session empties today and passes no session; OPM's `on_idle` takes
+  none.
+- §3.4 — `SYSTEM_timer` carries several timers. The new optional
+  `timers` key is an array of `{end_time (req), label, count_up}` in
+  display order. Session data is cumulative per namespace, so a
+  producer could show only one timer, and an application that runs
+  several timers at once could not show them together. The scalar
+  keys alone mean a one-element `timers` array, and when both are
+  present a backend MUST render from `timers`. The class stays 1:
+  the key is optional, every current producer stays valid, and a
+  backend that does not read `timers` still renders the scalar keys
+  when a producer sends both. New work: the timer application
+  (`ovos-skill-alerts`) can send `timers`, and render backends can
+  read it.
 - §6.9.1 (new) — ambient data for the resting display. §6.9 gives the
   resting display to the backend but named no source for what it
   shows, so the only weather and notification data a resting screen
