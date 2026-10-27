@@ -641,6 +641,23 @@ clients only under the predecessor names.
 | `recognizer_loop:recognition_unknown` | `ovos.stt.failed` | The forward list names a spelling the shipped listener does not emit (it emits `recognizer_loop:speech.recognition.unknown`, see listening-failure topic, above), so no listening-failure event reaches a render backend today. |
 | `mycroft.events.triggered` (`namespace: "system"`, `event_name`: the topic) | the status-event hook (GUI-1 §6.3) | The envelope the legacy GUI service wraps each forwarded topic in on its client socket. Under GUI-1 the client framing is the adapter's concern (GUI-1 §1); the legacy render adapter keeps it. |
 
+#### Producing namespace (GUI-1)
+
+The predecessor carries the producing namespace in `data`.
+`ovos-bus-client` `GUIInterface` (`apis/gui.py`) builds every GUI
+Message as `Message(type, data)` with no context and puts
+`{'__from': skill_id}` in the data; `ovos-gui` (`namespace.py`) reads
+`data['__from']`. With no context, these Messages also carry no
+`session`, so routing (GUI-1 §5.1) falls back to `"default"`.
+`GUIInterface.show_page` (`apis/gui.py`) also puts `__idle` in the
+`gui.page.show` data, as `null` when the caller set none, and
+`ovos-gui` strips `__`-prefixed keys from session data and reads `__idle`.
+
+| Predecessor key | Replacement | Notes |
+|-----------------|-------------|-------|
+| `data.__from` | `context.skill_id` | GUI-1 §4.1, the attribution key of INTENT-4 §3.1. For one stable release cycle a producer **MAY** keep sending `__from` beside `context.skill_id`, and a GUI service **MAY** read `__from` when the context names no `skill_id`. GUI-1 reserves no data keys, so during that cycle a GUI service removes `__from` from `data` before it merges the rest as session data. After that cycle a GUI Message with no `context.skill_id` is ignored with a diagnostic. |
+| `data.__idle` | `data.persist` | GUI-1 §4.2, §4.3; same values and meaning. For one stable release cycle a producer **MAY** keep sending `__idle` beside `persist`, and a GUI service **MAY** read `__idle` when `persist` is absent. A `null` `__idle` means omitted. `gui.page.show` data is not session data, so nothing is stripped. |
+
 ### 5.8 Bus bridge (BRIDGE-1)
 
 - **BRIDGE-1 defines source-stamping and destination-based routing;
