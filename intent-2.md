@@ -39,7 +39,7 @@ loader how to parse it.
 | Entity | `.entity` | slot-free | Example values that can fill a named slot |
 | Vocabulary | `.voc` | slot-free | A named set of localized phrasings |
 | Blacklist | `.blacklist` | slot-free | Words that suppress an intent or must not fill a slot |
-| Required slots | `.required` | slot-free | Slots an intent's match must bind (§4.5) |
+| Required keywords | `.required` | slot-free | Keywords of which at least one must occur for an intent to match (§4.5) |
 | Prompt | `.prompt` | whole-file verbatim | A localized language-model prompt (§4.4) |
 
 The slot-bearing roles map onto the data path of a voice interaction:
@@ -52,7 +52,8 @@ The slot-bearing roles map onto the data path of a voice interaction:
 `.entity`, `.voc`, and `.blacklist` share the slot-free format; they are how a
 developer encodes a set of natural-language phrasings for the assistant to use, and
 differ only in *which component consumes them* (§4.3). `.required` uses that
-same format to name slots rather than phrasings (§4.5).
+same format as the mirror of `.blacklist` suppression: keywords of which at
+least one must occur for an intent to match (§4.5).
 
 This specification covers the **folder layout**, the **common parsing rules**,
 and the **two file formats** across their **seven roles**. It does not cover
@@ -164,8 +165,8 @@ missing `.intent` leaves the handler with no trigger in that language
 speak for that response in that language (§4.2), a missing `.entity` leaves
 the slot with no value set (OVOS-INTENT-1 §5.4), a missing `.blacklist`
 leaves the intent unsuppressed or the slot with no exclusion in that
-language (§4.3), and a missing `.required` leaves every slot of the paired
-intent optional in that language (§4.5).
+language (§4.3), and a missing `.required` leaves the paired intent with no
+required keyword in that language, so the intent is unanchored there (§4.5).
 
 A missing `.voc` is a parity gap only when no `.intent` of that locale
 references it inline. When an `.intent` of the locale carries `<name>` for
@@ -461,28 +462,64 @@ is unchanged (whether or not it sits in a code block). A `{{tone}}` slot the
 caller passed no value for would likewise stay literal.
 
 
-### 4.5 `.required` — an intent's required slots
+### 4.5 `.required` — an intent's required keywords
 
-**Format.** Slot-free: each line is a bare slot name, obeying the slot-name
-rule of OVOS-INTENT-1 §3.4 — lowercase ASCII letters, digits, and underscores,
-not beginning with a digit. A line carrying expansion metacharacters, a named
-slot, or whitespace is malformed.
+**Format.** Slot-free, the same format as `.blacklist` (§4.3): a list of
+templates using expansion `(a|b)` / `[x]` and inline vocabulary references
+`<name>` (OVOS-INTENT-1 §3.7), **no named slots**. A line that carries a named
+slot `{name}` is malformed.
 
-**Role.** Names the slots the intent's match must bind (OVOS-INTENT-3 §5.3).
-The file is paired by base name with exactly one `.intent`, as a `.blacklist`
-is (§4.3), and constrains that intent alone. Every name it lists MUST be
-declared by at least one template of the paired `.intent`; a name no template
-declares makes the intent unmatchable and the definition malformed.
+**Role.** The `.required` role is the mirror of the `.blacklist` suppression
+contract (§4.3), with the logic inverted. A `.required` file is paired by base
+name with exactly one `.intent`, and its expanded keyword set scopes to that
+intent alone. A required keyword **occurs** in an utterance by the same rule
+as a blacklist phrase: its words appear there as a **contiguous sequence of
+whole words**, a token subsequence and not a raw substring. If **no** keyword
+from the set occurs in the user's utterance, that intent is suppressed — a
+**hard, score-independent rejection**, not a confidence penalty. A `.required`
+does not affect any other intent. Every engine that scores the intent **MUST**
+apply it (OVOS-INTENT-3 §5.6).
 
-A `.required` file is optional. Without one the intent has no required slots
-and every slot is optional for its handler.
+| | `.blacklist` (intent suppression) | `.required` |
+|---|---|---|
+| Pairing | Base name = the `.intent` it constrains | Base name = the `.intent` it constrains |
+| Format | Slot-free | Slot-free |
+| Occurrence | Contiguous whole-word sequence | Contiguous whole-word sequence |
+| The intent is rejected when | **any** listed phrase occurs | **no** listed keyword occurs |
 
-**Loads as.** The set of slot names, one per line, carried on the intent's
-registration (OVOS-INTENT-4 §6.1).
+A `.required` pairs only with an `.intent`. Unlike a `.blacklist`, it has no
+slot-value role: a base name that names only an `.entity` or a `{slot}` gives
+a `.required` nothing to constrain.
+
+A `.required` file is optional. Without one, no keyword has to occur for the
+intent to match. A `.required` does not name slots; the skill declares
+required slots with the intent's handler (OVOS-INTENT-3 §5.3).
+
+**Use.** Required keywords anchor an intent to words the utterance must
+contain. Consider an intent that answers questions about one named person, for
+example when a particular philosopher was born and when he died. Its templates
+name that person. A sentence-embedding engine scores by meaning, so it also
+matches the same question about any other person. A `.required` that lists the
+person's name and its common variants stops this: a question that names
+nobody on the list cannot match the intent, whatever its score. The keywords
+are localized text, so each locale lists the name forms of its own language.
+
+**Lint.** A sample of the paired `.intent` (OVOS-INTENT-1 §4) in which no
+required keyword occurs describes an utterance that the intent rejects, unless
+a slot value supplies the keyword at match time. A sample with no slots and no
+required keyword can never match. A linter **SHOULD** flag each such sample.
+The file is not malformed on its account.
+
+**Loads as.** The union of the sample sets of all lines (OVOS-INTENT-1 §4),
+carried on the intent's registration as `required_keywords` (OVOS-INTENT-4
+§6.1).
 
 ```
-# play_music.required   — play_music.intent matches only with {query} bound
-query
+# philosopher_dates.required   — philosopher_dates.intent matches only when
+#                                one of these name forms occurs
+aristotle
+aristoteles
+(the stagirite|the philosopher of stagira)
 ```
 
 ---

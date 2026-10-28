@@ -24,7 +24,8 @@ open a PR adding it.
 | **Typed-slot map** | The hint accompanying an utterance: type name → list of `{span, surface, value}` entries naming where a datum of that type was found and what it normalizes to, keyed only by types with at least one entry ([INTENT-1 §5.6](intent-1.md)), carried as `data.typed_slots`. |
 | **Typed-slots transformer** | A transformer that computes the typed-slot map from the utterance and the session, in a stage of its own between the transformer chains and the first matcher; it returns the map and changes nothing else ([TRANSFORM-1 §3.7](transformer.md)). |
 | **Slot map** | The names→values mapping a match produces — slot names or vocabulary names as keys ([PIPELINE-1 §4.3](pipeline-1.md)). |
-| **Resource file / role** | A skill's plain-text files: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`, `.prompt` ([INTENT-2 §1](intent-2.md)). |
+| **Resource file / role** | A skill's plain-text files: `.intent`, `.dialog`, `.entity`, `.voc`, `.blacklist`, `.required`, `.prompt` ([INTENT-2 §1](intent-2.md)). |
+| **Required keywords** | The mirror of the blacklist: the expanded keywords of an intent's paired `.required`, of which at least one MUST occur in the utterance, or the intent is rejected regardless of score ([INTENT-2 §4.5](intent-2.md), [INTENT-3 §5.6](intent-3.md)). |
 | **Vocabulary** | A named slot-free phrase set; the unit a keyword intent constrains over ([INTENT-3 §4.1](intent-3.md)). |
 | **Occurrence** | A phrase appearing in an utterance as a contiguous whole-word subsequence ([INTENT-2 §4.3](intent-2.md), [INTENT-3 §4.1](intent-3.md)). |
 | **Skill** | An app — a self-contained unit of assistant functionality ([INTENT-3 §1, §3](intent-3.md)). |

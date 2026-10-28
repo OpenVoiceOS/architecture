@@ -357,6 +357,19 @@ tool does not recognize the token and cannot expand the template.
 
 ### 2
 
+- §4.5 — `.required` holds required keywords and no slots. It mirrors the
+  §4.3 `.blacklist` intent suppression with the logic inverted: the same
+  base-name pairing with one `.intent`, the same slot-free format and the
+  same whole-word occurrence rule. At least one keyword **MUST** occur in
+  the utterance, or the paired intent is rejected regardless of score.
+  Every engine that scores the intent **MUST** apply it. A `.required` has
+  no slot-value role. A linter **SHOULD** flag a sample of the paired
+  `.intent` in which no required keyword occurs. §1, §2.3 and §4.1 follow.
+  **Breaking change:** a `.required` that lists slot names no longer
+  declares required slots; its lines are read as required keywords.
+  The skill declares required slots with the intent's handler
+  (OVOS-INTENT-3 §5.3).
+
 - §2.3 (new) makes the resource set of a skill the same in every locale: a
   `(role, base name)` present in one language directory **MUST** be present
   in every other, with `.blacklist` and `.prompt` the two exceptions.
@@ -429,6 +442,14 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 ## OVOS-INTENT-3 — Intent Definition
 
 ### 1
+
+- §5.3 — required slots stay an opt-in declaration. The skill declares
+  them with the intent's handler, and they travel on every registration
+  as `required_slots`. No locale resource declares them.
+- §5.6 — required keywords: a template intent MAY pair a `.required`
+  (OVOS-INTENT-2 §4.5), the mirror of the `.blacklist`. The engine **MUST
+  NOT** report a match when no keyword of the set occurs. §6.1 and §8 name
+  the `.required` with the definition and in engine conformance.
 
 - The intent definition model: keyword and template intents, identity,
   captured slots, suppression, and the handler contract.
@@ -585,6 +606,16 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 ## OVOS-INTENT-4 — Intent and Entity Registration Bus Contract
 
 ### 2
+
+- §6.1 — `required_keywords`, an optional array of slot-free keywords on
+  the `ovos.intent.register.template` payload and the mirror of
+  `blacklist`. A producer derives it from the paired `.required` (INTENT-2
+  §4.5) and expands it like `blacklist`. At least one MUST occur in the
+  utterance for a match to be valid (INTENT-3 §5.6). Absent equals empty,
+  and empty means no requirement. A consumer that does not know the field
+  ignores it under the §6.3 unknown-field rule. A producer sends
+  `required_slots` when the skill declares required slots for the intent
+  (INTENT-3 §5.3).
 
 - §8.4 — the cross-skill deregistration (source ≠ target) is carried
   only by a transport that delivers `ovos.skill.deregister` on its own;
