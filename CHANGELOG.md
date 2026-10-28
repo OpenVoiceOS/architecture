@@ -357,6 +357,14 @@ tool does not recognize the token and cannot expand the template.
 
 ### 2
 
+- §4.3 — defines the word of the whole-word occurrence rule. A word is a
+  maximal run of letters, marks and digits. In Han, Hiragana, Katakana, Thai,
+  Lao, Khmer and Myanmar, scripts that do not separate words with spaces,
+  each character is a word. A `.blacklist` phrase, a slot-value exclusion
+  and a `.required` keyword (§4.5) of such a language occur inside an
+  unspaced utterance, and a Latin keyword occurs next to Han text with no
+  space between them.
+
 - §4.5 — `.required` holds required keywords and no slots. It mirrors the
   §4.3 `.blacklist` intent suppression with the logic inverted: the same
   base-name pairing with one `.intent`, the same slot-free format and the
