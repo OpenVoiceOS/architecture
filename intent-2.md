@@ -328,7 +328,12 @@ file is paired by base name with exactly one `.intent`, and its expanded phrase
 set scopes to that intent alone. A blacklist phrase **occurs** in an utterance
 when its words appear there as a **contiguous sequence of whole words** — a
 token subsequence, not a raw substring (the phrase `art` does not occur within
-the word `start`). If any phrase from the set occurs in the user's utterance,
+the word `start`). A **word** is a maximal run of letters, marks and digits.
+Han, Hiragana, Katakana, Thai, Lao, Khmer and Myanmar do not separate words
+with spaces, so in these scripts each character is a word on its own. The
+words of `在WordNet中搜索` are `在`, `WordNet`, `中`, `搜` and `索`, so the
+phrase `WordNet` occurs there, and the phrase `维基百科` occurs in
+`打开维基百科`. If any phrase from the set occurs in the user's utterance,
 that intent is suppressed — a **hard, score-independent rejection**, not a
 confidence penalty. A `.blacklist` does not affect any other intent.
 
