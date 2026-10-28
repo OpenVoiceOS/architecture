@@ -43,10 +43,16 @@ open a PR adding it.
 | **Dotted addressed topic** | An ordinary `:`-free dotted topic (`<x>.<y>.<verb>`) that names a specific recipient in one of its segments — e.g. `<skill_id>.common_query.request` — an addressed message, not a dispatch ([MSG-1 §2.1.1](msg-1.md), [COMMON-QUERY-1 §7](common-query.md)). |
 | **Recency-targeted stop** | See [STOP-1 §4.1](stop-1.md) — the stop plugin's no-answer fallback. |
 | **Listening lifecycle signal** | A payload-free bus signal the audio input service emits or consumes around voice-command capture and sleep mode — `ovos.listener.wakeword`, `ovos.listener.record.started` / `.record.ended`, `ovos.listener.sleep`, `ovos.listener.awoken` ([AUDIO-IN-1 §6](audio-in.md)). |
-| **GUI template** | A member of the closed, curated `SYSTEM_*` vocabulary an application names to declare *what* to display; distinct from an INTENT-1 sentence template ([GUI-1 §3](gui-1.md)). |
-| **Render backend / Adapter** | An additive plugin that turns GUI template intents into a concrete presentation (screen, browser, terminal, face); every installed adapter receives every event ([GUI-1 §6](gui-1.md)). |
-| **GUI service** | The state-and-dispatch hub between applications and adapters: holds per-session display state, fans template events out to every adapter, runs the namespace lifecycle, and renders nothing itself ([GUI-1 §2.1](gui-1.md)). |
-| **GUI namespace** | The opaque string (by convention the producing `skill_id`) that scopes a stack of display state within a session ([GUI-1 §2.2](gui-1.md)). |
+| **GUI template** | A member of the closed, curated `SYSTEM_*` vocabulary an application names to declare *what* to display; always a page name with the `SYSTEM_` prefix; distinct from an INTENT-1 sentence template ([GUI-1 §3](gui-1.md)). |
+| **Adapter** | An additive plugin that the GUI service discovers, constructs and calls; the normative name of the hook interface. Every installed adapter receives every event ([GUI-1 §6](gui-1.md)). |
+| **Render backend** | An adapter considered as a renderer, together with whatever it drives (screen, browser, terminal, face); a synonym of "adapter" in prose, never a different component ([GUI-1 §6](gui-1.md)). |
+| **GUI client** | A display program connected to an adapter over the adapter's own transport, which the specification does not define; never called a backend ([GUI-1 §1, §5.1](gui-1.md)). |
+| **GUI service** | The state-and-dispatch hub between applications and adapters: holds per-session display state, fans template events out to every adapter, runs the namespace lifecycle, and renders nothing itself and runs no client transport ([GUI-1 §2.1](gui-1.md)). |
+| **GUI namespace** | The opaque string that owns a stack entry and its session data within a session; by convention the producing `skill_id`, which is also the name of the hook argument that carries it. Message fields that carry it are named `namespace` ([GUI-1 §2.2](gui-1.md)). |
+| **Page name / entry** | One element of `page_names` in `gui.page.show`. The **active entry** is the one at `index`; the others are **held entries** ([GUI-1 §4.2](gui-1.md)). |
+| **Predecessor topic** | A bus topic, or a `SYSTEM_*Frame` page name, that a GUI-1 name replaces; mapped in [appendix/divergences.md §5.7](appendix/divergences.md). |
+| **Resting display** | What a render backend shows to the clients of a session whose namespace stack is empty; owned entirely by the backend ([GUI-1 §6.9](gui-1.md)). |
+| **Idle** | The adapter hook that says a session's namespace stack became empty ([GUI-1 §3.4, §6.3](gui-1.md)). |
 | **Session data** | The flat key-value map describing a GUI template's content, accumulated per namespace and synced via `gui.value.set` ([GUI-1 §3.3](gui-1.md)). |
 | **Common query** | A pipeline plugin that answers factual questions by holding a timed contest among skills — broadcast, collect competing answers, rank, speak the best ([COMMON-QUERY-1 §2](common-query.md)). |
 | **Scatter-gather** | The contest pattern: one broadcast fans out to many skills (scatter), their answers are collected and ranked (gather) ([COMMON-QUERY-1 §2](common-query.md)). |
