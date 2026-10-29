@@ -686,6 +686,16 @@ the page it shows (`ovos-gui` `namespace.py`
 A GUI service MAY read both predecessors for one stable release cycle
 (VERSIONING.md).
 
+#### Notifications (GUI-1, draft)
+
+`GUIInterface.show_notification` in `ovos-bus-client` emits the
+predecessor for the Qt shell's notification popups.
+
+| Predecessor topic | Replacement | Notes |
+|--------------|---------------|-------|
+| `ovos.notification.api.set` (`duration` s, `sender`, `text`, `action`, `type`, `style`, `callback_data`) | `ovos.notification.set` (`id`, `text`, `sender`, `type`, `style`, `action`, `duration_ms`) | GUI-1 §5.4. `duration` in seconds becomes `duration_ms`; `id` is new and required; the `success` style and `callback_data` have no successor; a tap emits `gui.interaction` with `action` as `event`. A producer MAY emit both for one stable release cycle (VERSIONING.md). |
+| `ovos.notification.api.set.controlled` / `ovos.notification.api.remove.controlled` | `ovos.notification.set` with `type: "sticky"` / `ovos.notification.clear` | The controlled notification becomes a sticky one with an `id`. |
+
 ### 5.8 Bus bridge (BRIDGE-1)
 
 - **BRIDGE-1 defines source-stamping and destination-based routing;
