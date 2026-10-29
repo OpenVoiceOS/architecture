@@ -40,9 +40,8 @@ This specification defines:
   `SYSTEM_*` templates and each template's normative session-data
   keys;
 - the **wire protocol** (§4) — the `gui.value.set`,
-  `gui.value.replace` and `gui.page.show` Message shapes, the reserved
-  keys `__from` / `__idle`, and the
-  namespace lifecycle topics;
+  `gui.value.replace` and `gui.page.show` Message shapes, where a
+  GUI Message names its namespace, and the namespace lifecycle topics;
 - **addressing and routing** (§5) — the rule that a GUI Message is
   routed solely by its `session_id`;
 - the **adapter contract** (§6) — how a render backend is discovered,
@@ -188,8 +187,8 @@ otherwise:
   key from the namespace's cumulative session data (§4.2). A producer
   that wants a previously set key gone sends it as `null`; a producer
   that has never set a key omits it. The two are not interchangeable
-  on the reserved keys of §4.1: `__idle` is omitted when unset, never
-  sent as `null`;
+  on the `persist` field of `gui.page.show` (§4.2): it is omitted when
+  unset, never sent as `null`;
 - an image-bearing key (`image`, `icon`) carries **either** an
   `http(s)` URL **or** a `data:` URI. A producer **MUST NOT** place a
   local filesystem path on the wire; a render backend **MUST NOT** be
@@ -342,34 +341,30 @@ backend **MAY** decline to render either and **SHOULD** degrade per
 ## 4. Wire protocol
 
 GUI Messages are ordinary OVOS-MSG-1 envelopes. This section fixes
-their `type` and `data`; the `context` (and therefore the `session`
-carrier and routing, §5) follows OVOS-MSG-1 and OVOS-SESSION-1
-unchanged.
+their `type`, their `data` and the context's `skill_id` (§4.1); the
+rest of the `context` (and therefore the `session` carrier and
+routing, §5) follows OVOS-MSG-1 and OVOS-SESSION-1 unchanged.
 
-### 4.1 Reserved data keys
+### 4.1 Producing namespace
 
-Two keys carry protocol meaning inside a GUI Message's `data` and are
-reserved by this specification:
+The producing namespace (§2.2) of a GUI Message is the `skill_id` of
+its Message context, the attribution key OVOS-INTENT-4 §3.1 fixes for
+skill-originated traffic. The GUI service reads it from the context,
+as it reads the `session` (§5.1), and never from `data`. A GUI Message
+whose context names no `skill_id` is a producer error: the GUI service
+**MUST** ignore it and **MUST** emit an observable diagnostic naming
+its `type`. This specification defines no wire topic for the
+diagnostic; absent one, the GUI service **MUST** log it.
 
-- **`__from`** — string — the producing namespace (§2.2). Every GUI
-  Message a producer emits **MUST** carry `__from`.
-- **`__idle`** — controls how long the activated namespace persists
-  (§4.3); meaningful on `gui.page.show`.
-
-Both keys are **protocol metadata, not session data**. The GUI service
-**MUST** strip `__from` and `__idle` (and any other reserved `__`-
-prefixed key it defines) before delivering session data to an adapter:
-an adapter receives content keys only. A producer **MUST NOT** use a
-`__`-prefixed key as application session data.
-
-`__from` **MUST** be the producer's own identifier — a producer
-**MUST NOT** set `__from` to a namespace it does not own. This
-specification defines no mechanism that verifies the claim: the GUI
-service trusts the value as delivered and acts on it (merging session
-data into that namespace, clearing that namespace, §4.2), so a Message
-with a forged `__from` clears or mutates another producer's namespace.
+A producer **MUST** set the context's `skill_id` to its own
+identifier on every GUI Message it emits, and **MUST NOT** set it to a
+namespace it does not own. This specification defines no mechanism
+that verifies the claim: the GUI service trusts the value as delivered
+and acts on it (merging session data into that namespace, clearing
+that namespace, §4.2), so a Message with a forged `skill_id` clears or
+mutates another producer's namespace.
 Enforcing this constraint — verifying that the entity emitting a GUI
-Message is who `__from` claims — is a trust-boundary concern for
+Message is who its `skill_id` claims — is a trust-boundary concern for
 layer-2 systems built on the Message bus (OVOS-MSG-1 §3.4), not
 something the GUI wire protocol itself can arbitrate.
 
@@ -378,40 +373,44 @@ something the GUI wire protocol itself can arbitrate.
 #### `gui.value.set` — push session data
 
 Emitted by a producer to update its namespace's session data. `data`
-is the flat content map plus `__from`.
+is the flat content map; the context's `skill_id` names the namespace
+(§4.1).
 
 ```json
 {
   "type": "gui.value.set",
   "data": {
-    "__from": "weather.example",
     "current_temp": 22,
     "condition": "Sunny"
   },
-  "context": { "session": { "session_id": "default" } }
+  "context": {
+    "skill_id": "weather.example",
+    "session": { "session_id": "default" }
+  }
 }
 ```
 
 On receipt, the GUI service merges the content keys into the named
 namespace's cumulative session data (§3.3): a non-`null` value sets
 the key, and a `null` value **removes** the key, so a later state
-query (§6.7) does not return it. The service forwards the merged,
-reserved-key-stripped map to every adapter as a session update
-(§6.3); the delivered map no longer contains the removed key.
+query (§6.7) does not return it. The service forwards the merged map
+to every adapter as a session update (§6.3); the delivered map no
+longer contains the removed key.
 
 #### `gui.value.replace` — replace session data
 
 Emitted by a producer to replace its namespace's whole session data
-in one step. `data` carries `__from` and `data`, the new content map.
+in one step. `data` is the new content map; the context's `skill_id`
+names the namespace (§4.1).
 
 ```json
 {
   "type": "gui.value.replace",
-  "data": {
-    "__from": "weather.example",
-    "data": { "text": "Done", "title": "Timer" }
-  },
-  "context": { "session": { "session_id": "default" } }
+  "data": { "text": "Done", "title": "Timer" },
+  "context": {
+    "skill_id": "weather.example",
+    "session": { "session_id": "default" }
+  }
 }
 ```
 
@@ -419,7 +418,7 @@ On receipt, the GUI service discards the namespace's cumulative
 session data in that session and stores the new map in its place; a
 `null` value in the new map is not stored. The namespace stack,
 activation and the active entry are unchanged. The service delivers
-one session update (§6.3) with the new, reserved-key-stripped map.
+one session update (§6.3) with the new map.
 This exists because a producer that moves to another template has no
 other way to drop the earlier template's keys except a clear, which
 empties the stack and shows the resting display between the two
@@ -434,12 +433,14 @@ Emitted by a producer to present a template. The first entry of
 {
   "type": "gui.page.show",
   "data": {
-    "__from": "weather.example",
     "page_names": ["SYSTEM_weather"],
     "index": 0,
-    "__idle": 30
+    "persist": 30
   },
-  "context": { "session": { "session_id": "default" } }
+  "context": {
+    "skill_id": "weather.example",
+    "session": { "session_id": "default" }
+  }
 }
 ```
 
@@ -447,8 +448,7 @@ Emitted by a producer to present a template. The first entry of
 |-------|------|---------|
 | `page_names` | array of string | Templates to present; entry `0` (or the entry at `index`) is the active one. The first entry **MUST** be a `SYSTEM_*` template name. |
 | `index` | number | Which entry of `page_names` is the active template. Out-of-range values are clamped to the last entry. |
-| `__from` | string | The producing namespace (§4.1). |
-| `__idle` | boolean \| number \| omitted | Namespace persistence (§4.3). |
+| `persist` | boolean \| number \| omitted | Namespace persistence (§4.3). |
 
 A `gui.page.show` whose first `page_names` entry is **not** a
 `SYSTEM_*` template is not a template intent under this specification.
@@ -470,9 +470,10 @@ normative one.
 
 #### `gui.clear.namespace` — clear a namespace
 
-Emitted by a producer when it is done displaying. `data` carries
-`__from`. The GUI service removes the namespace from the session's
-active stack (§4.3) and notifies adapters of deactivation (§6.3).
+Emitted by a producer when it is done displaying. `data` is empty;
+the context's `skill_id` names the namespace (§4.1). The GUI service
+removes the namespace from the session's active stack (§4.3) and
+notifies adapters of deactivation (§6.3).
 
 ### 4.3 Namespace lifecycle
 
@@ -484,17 +485,17 @@ active namespaces.
   the template to every adapter (§6.4), and — if the namespace is not
   already on top — moves it to the top of that session's stack,
   invoking the activation hook on every adapter (§6.3).
-- **Persist.** `__idle` controls how long the activated namespace
+- **Persist.** `persist` controls how long the activated namespace
   stays on the stack before automatic removal:
 
-  | `__idle` | Behaviour |
-  |----------|-----------|
+  | `persist` | Behaviour |
+  |-----------|-----------|
   | `true` | Persistent — stays until cleared. |
   | `false` | Not persistent — the GUI service treats it as omitted. |
   | a number *N* | Visible for *N* seconds, then auto-removed. |
   | omitted / absent | A deployment default applies. RECOMMENDED default: `30` (auto-remove after 30 seconds). |
 
-  A namespace persisted with `__idle: true` stays on the stack until
+  A namespace persisted with `persist: true` stays on the stack until
   an explicit `gui.clear.namespace`, even if its producer terminates or
   crashes without emitting one — this specification defines no
   liveness check on producers, so a vanished producer's persistent
@@ -509,7 +510,7 @@ active namespaces.
   namespaces above it are removed, it is on top again, and the
   activation hook is invoked for it on every adapter (§6.3).
 - **Deactivate / clear.** On `gui.clear.namespace`, on auto-removal by
-  the `__idle` timer, or when it is superseded while not persistent,
+  the `persist` timer, or when it is superseded while not persistent,
   the namespace is removed from the session's active stack and the
   deactivation hook is invoked on every adapter (§6.3). When the stack
   becomes empty the session returns to its idle presentation, and the
@@ -653,9 +654,9 @@ event is one of:
 
 **Template events** (per-session). Carry `(skill_id, data,
 session_id)` where `skill_id` is the producing namespace, `data` is
-the namespace's full current session data with reserved keys stripped
-(§4.1), and `session_id` is the routing key (§5). One template event
-is delivered per active template named in a `gui.page.show`.
+the namespace's full current session data, and `session_id` is the
+routing key (§5). One template event is delivered per active template
+named in a `gui.page.show`.
 
 **Session-data updates** (per-session). Carry `(skill_id, data,
 session_id)` on every `gui.value.set` after the namespace data is
@@ -858,14 +859,13 @@ conformant way to emit or consume these templates.
 
 - name only templates from the closed vocabulary (§3); never invent
   template names;
-- use no `__`-prefixed key as session data, and set `__from` only to
-  its own namespace (§4.1);
 - provide, register or render no resting or home screen (§6.9);
 - send every `SYSTEM_table` row with the length of `columns`, and no
   `condition_code` outside the list in §3.4;
 - emit `gui.page.show` with a `SYSTEM_*` template as the first
   `page_names` entry (§4.2);
-- include `__from` on every GUI Message it emits (§4.1);
+- emit every GUI Message with its own identifier as the context's
+  `skill_id` (§4.1);
 - deliver image content as an `http(s)` URL or a `data:` URI, never a
   bare filesystem path (§3.5);
 - carry the `session_id` of the interaction in the Message context so
@@ -890,8 +890,8 @@ conformant way to emit or consume these templates.
 
 - recognise a template intent by the `SYSTEM_` prefix and dispatch
   only `SYSTEM_*` page names as templates (§3.2, §4.2);
-- strip reserved `__`-prefixed keys from session data before
-  delivering it to adapters (§4.1);
+- ignore, with an observable diagnostic, a GUI Message whose context
+  names no `skill_id` (§4.1);
 - remove a session-data key whose `gui.value.set` value is `null`
   rather than store the `null` (§3.3, §4.2);
 - on `gui.value.replace`, replace the namespace's session data in one
@@ -972,7 +972,7 @@ normative.
 A producer showing a weather card:
 
 ```python
-gui["current_temp"] = 22          # emits gui.value.set {__from, current_temp}
+gui["current_temp"] = 22          # emits gui.value.set {current_temp}
 gui.show_weather(                 # sets keys, then emits gui.page.show
     current_temp=22, min_temp=14, max_temp=24,
     condition="Sunny", location="Lisbon",
@@ -1022,3 +1022,5 @@ Registration via the adapter entry-point group (illustrative):
   rule a remote display relies on.
 - **OVOS-INTENT-3** — the `skill_id` an application uses as its
   namespace (§2.2).
+- **OVOS-INTENT-4** — `context.skill_id` as the attribution key a GUI
+  Message carries its namespace in (§4.1).

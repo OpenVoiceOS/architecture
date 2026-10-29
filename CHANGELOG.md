@@ -797,6 +797,26 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §4.1 — the producing namespace of a GUI Message is now the
+  `skill_id` of its Message context, and the `__from` data key is
+  dropped. `__idle` becomes `persist`, an ordinary `gui.page.show` field
+  with the same values, so no data key is reserved. The bus then has one
+  sender identifier, the one INTENT-4 §3.1 already fixes, instead of a
+  second one that only GUI Messages carry in `data`, and the namespace
+  travels in the context beside the session. A GUI Message whose
+  context names no `skill_id` is a producer error, which the GUI
+  service MUST ignore with an observable diagnostic. This changes the
+  wire for every producer. `appendix/divergences.md` §5.7 maps
+  `__from` to `context.skill_id` and `__idle` to `persist` with a
+  one-cycle window in which a producer MAY still send the old key and
+  a GUI service MAY read it when the new one is absent. New work:
+  `ovos-bus-client` `GUIInterface` can emit GUI Messages with the
+  originating context and its own `skill_id`, which also carries the
+  session it drops today by sending no context; `ovos-gui` can
+  read the namespace from the context; `GUIInterface.show_page` can
+  send `persist` and `ovos-gui` can read it. §4.2 `gui.value.replace` now
+  carries the new map flat, since there is no sender key to keep out
+  of it.
 - §2.3, §3.2, §3.4, §4.3, §5.3, §6.3, §6.5–§6.9, §8 — consistency
   fixes found by an independent review of the whole section.
   §4.3 said a superseded namespace is removed, yet a persistent one
