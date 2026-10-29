@@ -797,6 +797,27 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §7.2, §3.4 — the interaction reply leg. §7.2 sketched the leg but
+  gave it no topic and no payload, so `SYSTEM_confirm` and
+  `SYSTEM_select` could not be used, and a client with no bus access
+  of its own had no return channel. A render backend MAY now emit an
+  interaction event, and its adapter MUST emit it on the Message bus,
+  with the handle §6.2 already gives it, as one `gui.interaction`
+  Message carrying `namespace`, `event` and `data`, with the
+  originating `session_id` in the context. A client with no bus
+  access reaches the bus through its adapter. The type is fixed, so
+  no skill id enters a message type and the family can be filtered as
+  one. §3.4 defines `SYSTEM_confirm`, `SYSTEM_select` and the new
+  `SYSTEM_input`, whose replies are the `event` values `confirm`,
+  `select` and `input`; §3.2 no longer refers to reserved names. The
+  application MUST NOT block on a reply; the spoken path stays
+  authoritative. §8.4 gains the adapter row. The class stays 1: the
+  topic is new, and an adapter MAY also emit the predecessor form
+  `<namespace>.<event>` for one stable release cycle, which
+  `appendix/divergences.md` §5.7 maps. New work: render adapters emit
+  `gui.interaction`, and `GUIInterface.register_handler` in
+  `ovos-bus-client` subscribes to it and filters on its own namespace
+  and event.
 - §4.1 — the producing namespace of a GUI Message is now the
   `skill_id` of its Message context, and the `__from` data key is
   dropped. `__idle` becomes `persist`, an ordinary `gui.page.show` field
