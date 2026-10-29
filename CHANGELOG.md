@@ -797,6 +797,32 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §4.2, §6.3 — `gui.page.focus` (new). §4.2 holds the non-active
+  entries of `page_names` but gave a display no way to reach them, so
+  a backend that lets the user swipe across a namespace's pages had no
+  path in the specification. A render backend MAY now ask for another
+  held entry with `gui.page.focus` (`namespace`, `page_number`, the
+  field names of the predecessor `gui.page_gained_focus`), which its
+  adapter emits on the bus with the session of the client that asked.
+  The GUI service MUST change that namespace's active entry in that
+  session and dispatch the new entry to every adapter, through the
+  path §4.2 selects whether the entries are templates or not, so
+  every client of the session stays in step. Every template event now
+  carries the active entry's zero-based `index` and the namespace's
+  `page_count`, so a backend knows what it may ask for; the dispatch
+  after a request carries the new `index`, which is how the backend
+  learns it took effect, and a backend that lacks both values MUST NOT
+  send the request. Every valid request restarts the namespace's
+  removal timer, and a request naming the current entry is a touch
+  that does nothing else. An out-of-range entry or a namespace that is
+  not on top is ignored with a diagnostic. Only a producer changes the
+  index through `gui.page.show`. §8.3 and §8.4 gain the rows. The
+  class stays 1: the message and the two fields are new, and a GUI
+  service MAY also read the predecessors `gui.page_gained_focus` and
+  `gui.page_interaction` for one stable release cycle, which
+  `appendix/divergences.md` §5.7 maps. New work: `ovos-gui` handles
+  the request and passes the two fields, OPM's template handlers take
+  them, and render adapters emit the request.
 - §7.2, §3.4 — the interaction reply leg. §7.2 sketched the leg but
   gave it no topic and no payload, so `SYSTEM_confirm` and
   `SYSTEM_select` could not be used, and a client with no bus access
