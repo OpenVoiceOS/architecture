@@ -797,6 +797,32 @@ version 2: its `{{ … }}` sequences become substitution points, and its
 
 ### 1
 
+- §3.3, §3.4, §3.5, §6.9.1 — catalogue gaps that a render backend
+  implementing every template met, where each implementer would
+  otherwise guess. `items` is required on `SYSTEM_list` and
+  `SYSTEM_grid`. A table cell is a string, number, boolean or `null`
+  (empty); a backend pads a short row and truncates a long one. §3.3
+  lists the image-bearing keys once, `media_image` and every item
+  `image` included. A `data:` URI carries an `image/*` media type,
+  and a backend MUST refuse a bare filesystem path, or a `data:` URI
+  of another type, and report it. `SYSTEM_weather` gains
+  `unit` (`C` | `F`) and forecast `period_seconds`; `time` is Unix
+  seconds UTC. `SYSTEM_timer` gains `start_time`, and the display
+  before a count-up's and after a countdown's `end_time` is fixed.
+  `-1` means unknown or live on both duration keys, an omitted
+  duration means unknown, and a position is never `-1`. Playlist
+  entry durations are ms, `media_playlist_position` is a zero-based
+  index into `media_playlist`, `match_confidence` is 0 to 1, and a
+  state other than `stopped` shows now-playing. An ordinary
+  application MUST NOT send `SYSTEM_media_player`, and a GUI service
+  MUST still dispatch it. The ambient topics are GUI Messages, so the
+  service strips `__from`; their last value holds until replaced, and
+  a payload without its required keys is ignored. §8.1, §8.3, §8.3a
+  and §8.4 gain the matching rows; the §8.3a row needs the list the
+  editorial consistency change adds. The class stays 1: every new key is
+  optional and every rule covers a case the text left open. New work:
+  OCP scales its 0 to 100 confidence, and `ovos-gui` strips `__` keys
+  from ambient data.
 - §4.2, §6.3 — `gui.page.focus` (new). §4.2 holds the non-active
   entries of `page_names` but gave a display no way to reach them, so
   a backend that lets the user swipe across a namespace's pages had no

@@ -189,8 +189,11 @@ otherwise:
   that has never set a key omits it. The two are not interchangeable
   on the `persist` field of `gui.page.show` (§4.2): it is omitted when
   unset, never sent as `null`;
-- an image-bearing key (`image`, `icon`) carries **either** an
-  `http(s)` URL **or** a `data:` URI. A producer **MUST NOT** place a
+- an **image-bearing key** is `image`, `icon`, `media_image`, or the
+  `image` of any item or entry in an array (for example list and
+  grid items, playlist and search-result entries). It carries **either** an
+  `http(s)` URL **or** a `data:` URI whose media type is `image/*`
+  (§3.5). A producer **MUST NOT** place a
   local filesystem path on the wire; a render backend **MUST NOT** be
   required to read the producer's filesystem (§3.5).
 
@@ -232,9 +235,9 @@ and what that display shows is owned entirely by the render backend
 | `SYSTEM_text` | `text` (string, *req*), `title` (string) | A scrollable plain-text view with an optional heading. |
 | `SYSTEM_image` | `image` (string, *req*), `caption` (string), `title` (string), `fill` (string: `fit` \| `crop` \| `stretch`), `background_color` (string, hex) | A static image. `fill` is scaling guidance; `image` obeys §3.3 / §3.5. |
 | `SYSTEM_animated_image` | same as `SYSTEM_image` | An animated image (e.g. GIF / WebP). Carries identical keys to `SYSTEM_image`. |
-| `SYSTEM_list` | `title` (string), `items` (array of `{title (req), subtitle, image}`) | A scrollable list of labelled items; each item carries an optional thumbnail. |
-| `SYSTEM_grid` | `title` (string), `items` (array of `{image (req), title}`) | An image-primary tile grid; tiles are equal-weight and the backend chooses the column count. |
-| `SYSTEM_table` | `title` (string), `columns` (array of string, *req*), `rows` (array of array, *req*) | A columnar table. Each row **MUST** have the same length as `columns`. |
+| `SYSTEM_list` | `title` (string), `items` (array of `{title (req), subtitle, image}`, *req*) | A scrollable list of labelled items; each item carries an optional thumbnail. |
+| `SYSTEM_grid` | `title` (string), `items` (array of `{image (req), title}`, *req*) | An image-primary tile grid; tiles are equal-weight and the backend chooses the column count. |
+| `SYSTEM_table` | `title` (string), `columns` (array of string, *req*), `rows` (array of array of cell, *req*) | A columnar table. Each row **MUST** have the same length as `columns`. A cell is a string, a number, a boolean or `null`; `null` is an empty cell. An object or an array is not a valid cell, and a backend shows it as an empty cell. A backend pads a short row with empty cells and truncates a long row to the length of `columns`, and **MAY** report the row. |
 | `SYSTEM_html` | `html` (string, *req*), `resource_url` (string) | **Discouraged.** A raw-HTML escape hatch (§3.6). |
 | `SYSTEM_url` | `url` (string, *req*) | **Discouraged.** A full web-page escape hatch (§3.6). |
 
@@ -244,15 +247,23 @@ and what that display shows is owned entirely by the render backend
 |----------|------|---------|
 | `SYSTEM_audio_player` | `title` (string, *req*), `artist`, `album`, `image`, `position` (number, ms), `duration` (number, ms; `-1` = unknown/live), `playing` (boolean) | A now-playing card for audio. Visual only; the stream is owned by the media subsystem (§7.1). |
 | `SYSTEM_video_player` | `uri` (string, *req*), `title` (string), `playing` (boolean) | A video surface; the render backend renders the stream. |
-| `SYSTEM_media_player` | `media_title`, `media_artist`, `media_album`, `media_image`, `media_uri`, `media_position` (number, ms), `media_duration` (number, ms; `-1` = live), `media_playback_state` (string: `playing` \| `paused` \| `stopped` \| `loading` \| `error`), `media_playlist` (array of `{title, artist, image, uri, duration}`), `media_search_results` (array of `{title, artist, image, uri, skill_id, match_confidence}`), `media_playlist_position` (number) | The unified media-player UI (now-playing, queue, search results). Driven by the media subsystem, not by an ordinary application (§7.1). |
+| `SYSTEM_media_player` | `media_title`, `media_artist`, `media_album`, `media_image`, `media_uri`, `media_position` (number, ms), `media_duration` (number, ms; `-1` = unknown/live), `media_playback_state` (string: `playing` \| `paused` \| `stopped` \| `loading` \| `error`), `media_playlist` (array of `{title, artist, image, uri, duration (number, ms)}`), `media_search_results` (array of `{title, artist, image, uri, skill_id, match_confidence (number, 0–1)}`), `media_playlist_position` (number, zero-based index into `media_playlist`) | The unified media-player UI (now-playing, queue, search results). Driven by the media subsystem, not by an ordinary application (§7.1): an ordinary application **MUST NOT** send it. A `media_playback_state` other than `stopped` shows the now-playing view; a backend **MAY** let the user switch to the queue or the search results. With `stopped` or no state, the backend chooses the view. |
 
-The position/duration convention is **uniform across the player
-templates**: both `SYSTEM_audio_player` and `SYSTEM_media_player`
-count in **milliseconds**, with `-1` meaning unknown/live. Two
+The position/duration convention is **uniform across both templates
+that carry position and duration**: `SYSTEM_audio_player` and
+`SYSTEM_media_player` count in **milliseconds**, with `-1` meaning unknown/live on
+`duration` and `media_duration`. An omitted duration also means
+unknown. A position is never `-1`; an omitted position means unknown.
+Two
 templates sharing one screen role must not disagree on units — a
 producer targeting both, or an adapter rendering either, would
 otherwise need per-template unit tables for what is semantically
 the same pair of fields.
+
+This specification does not fix the media subsystem's namespace. A
+GUI service that knows it **SHOULD** emit an observable diagnostic
+when another namespace sends `SYSTEM_media_player`, and **MUST** still
+dispatch the template.
 
 #### Domain cards
 
@@ -263,8 +274,8 @@ criterion (§3.1).
 | Template | Keys | Meaning |
 |----------|------|---------|
 | `SYSTEM_clock` | — | A self-updating clock. Requires no session data; the backend derives the time from the device clock. |
-| `SYSTEM_timer` | `end_time` (number, Unix seconds, *req*), `label` (string), `count_up` (boolean) | A self-updating timer. `count_up` false counts down to `end_time`; true counts up from it. The backend derives the displayed value from the device clock — no polling by the producer. |
-| `SYSTEM_weather` | `current_temp` (number, *req*), `min_temp` (number), `max_temp` (number), `condition` (string, *req*), `condition_code` (string, enumerated below), `icon` (string), `location` (string), `forecast` (array of `{time (number, Unix seconds, req), min_temp, max_temp, condition_code}`) | A weather summary card. `condition` is display text; `condition_code` is the key a backend styles the condition from. `icon` is an optional producer-supplied override image (§3.3). `forecast` lists later periods in time order, each `time` the start of its period; a backend renders the entries it can show or ignores the key (§6.5). |
+| `SYSTEM_timer` | `end_time` (number, Unix seconds, *req*), `label` (string), `count_up` (boolean), `start_time` (number, Unix seconds) | A self-updating timer. `count_up` false counts down to `end_time`; true counts up from it. The backend derives the displayed value from the device clock — no polling by the producer. `start_time` is when a countdown began, so a backend that joins late can draw its progress. A count-up shows zero until `end_time`. A countdown past `end_time` shows the time elapsed since `end_time`, marked as expired. |
+| `SYSTEM_weather` | `current_temp` (number, *req*), `min_temp` (number), `max_temp` (number), `unit` (string: `C` \| `F`), `condition` (string, *req*), `condition_code` (string, enumerated below), `icon` (string), `location` (string), `forecast` (array of `{time (number, Unix seconds, req), period_seconds (number), min_temp, max_temp, condition_code}`) | A weather summary card. `unit` applies to every temperature in the card, `forecast` included; when it is omitted the backend assumes the unit of its own locale. `condition` is display text; `condition_code` is the key a backend styles the condition from. `icon` is an optional producer-supplied override image (§3.3). `forecast` lists later periods in time order, each `time` the start of its period in Unix seconds (UTC) and `period_seconds` its length; a backend renders the entries it can show or ignores the key (§6.5). |
 | `SYSTEM_map` | `latitude` (number, WGS-84, *req*), `longitude` (number, WGS-84, *req*), `zoom` (number, 1–20), `label` (string) | A geographic location; the backend chooses the map provider. |
 | `SYSTEM_face` | `sleeping` (boolean) | An avatar face. `sleeping` true is the resting/closed-eyes state, false the awake state. For backends that render a character rather than a screen layout. |
 
@@ -319,16 +330,19 @@ own.
 
 ### 3.5 Image delivery
 
-An image-bearing key (`image`, `icon`, and the per-item `image` of
-list / grid items) carries one of:
+An image-bearing key (§3.3) carries one of:
 
 - an `http(s)` URL, used as-is by the render backend; or
-- a `data:` URI (e.g. `data:image/png;base64,...`), used as-is.
+- a `data:` URI whose media type is `image/*` (e.g.
+  `data:image/png;base64,...`), used as-is.
 
 A producer that holds a **local** asset **MUST** resolve it to a
 `data:` URI before emission. A producer **MUST NOT** place a bare
 filesystem path on the wire, and a render backend **MUST NOT** be
-required to mount or read the producer's filesystem. This keeps the
+required to mount or read the producer's filesystem. A render backend
+**MUST** refuse a bare filesystem path in an image-bearing key, even
+when a file exists at that path, and report it; it treats a `data:` URI
+of any other media type the same way. This keeps the
 wire self-contained: every adapter receives renderable image content
 regardless of where it runs.
 
@@ -868,6 +882,16 @@ deliver it to every adapter as a status event (§5.3) when it arrives.
 | `gui.ambient.weather` | the `SYSTEM_weather` keys (§3.4) | Current conditions for the device's location. |
 | `gui.ambient.notifications` | `count` (number, *req*) | The number of pending notifications; `0` means none. |
 
+The ambient topics belong to no namespace, so §4.1 does not apply to
+them: the context need not name a `skill_id`, and the GUI service
+delivers the `data` as the status event's payload unchanged. Ambient
+data has no expiry. A
+backend keeps the last value on each topic for the life of its
+process and replaces it only with a later Message on the same topic.
+A backend ignores an ambient payload that lacks a required key, as it
+ignores an unknown status event (§5.3), and emits an observable
+diagnostic.
+
 Any component that holds the data **MAY** emit these topics — a
 weather application on its own schedule, a notification service when
 its count changes. Ambient data is not a template and not a namespace:
@@ -953,8 +977,10 @@ layer-2 trust-boundary concern as the producing namespace (§4.1).
   `page_names` entry (§4.2);
 - emit every GUI Message with its own identifier as the context's
   `skill_id` (§4.1);
-- deliver image content as an `http(s)` URL or a `data:` URI, never a
-  bare filesystem path (§3.5);
+- deliver image content as an `http(s)` URL or a `data:image/*` URI,
+  never a bare filesystem path (§3.5);
+- not send `SYSTEM_media_player` unless it is the media subsystem
+  (§3.4, §7.1);
 - carry the `session_id` of the interaction in the Message context so
   routing (§5) works;
 - omit optional keys it never set, and send an explicit `null` only
@@ -979,6 +1005,7 @@ layer-2 trust-boundary concern as the producing namespace (§4.1).
   only `SYSTEM_*` page names as templates (§3.2, §4.2);
 - ignore, with an observable diagnostic, a GUI Message whose context
   names no `skill_id` (§4.1);
+- dispatch `SYSTEM_media_player` whichever namespace sends it (§3.4);
 - remove a session-data key whose `gui.value.set` value is `null`
   rather than store the `null` (§3.3, §4.2);
 - on `gui.value.replace`, replace the namespace's session data in one
@@ -1007,6 +1034,8 @@ layer-2 trust-boundary concern as the producing namespace (§4.1).
 
 ### 8.3a A conforming GUI service SHOULD
 
+- emit an observable diagnostic when a namespace it does not know as
+  the media subsystem's sends `SYSTEM_media_player` (§3.4);
 - keep the most recent Message on each ambient topic and deliver it
   to every adapter as a status event (§6.9.1).
 
@@ -1033,7 +1062,10 @@ layer-2 trust-boundary concern as the producing namespace (§4.1).
 - emit each interaction event as one `gui.interaction` Message with
   `namespace`, `event` and `data`, and the originating `session_id`
   in the context; a companion's reply uses the `event` name and
-  payload §3.4 defines for it (§7.2).
+  payload §3.4 defines for it (§7.2);
+- refuse a bare filesystem path, or a `data:` URI whose media type is
+  not `image/*`, in an image-bearing key (§3.3), and report it
+  (§3.5).
 
 ### 8.5 A conforming adapter SHOULD
 
